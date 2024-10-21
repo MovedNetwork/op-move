@@ -5,7 +5,10 @@ use {
         block::{Block, BlockHash, BlockRepository, ExtendedBlock, GasFee, Header},
         genesis::config::GenesisConfig,
         merkle_tree::MerkleRootExt,
-        move_execution::{execute_transaction, CreateL1GasFee, L1GasFee, L1GasFeeInput, LogsBloom},
+        move_execution::{
+            execute_transaction, BaseTokenAccounts, CreateL1GasFee, L1GasFee, L1GasFeeInput,
+            LogsBloom,
+        },
         primitives::{ToSaturatedU64, B256, U256, U64},
         storage::State,
         types::{
@@ -36,6 +39,7 @@ pub struct StateActor<
     R: BlockRepository,
     G: GasFee,
     L1G: CreateL1GasFee,
+    B: BaseTokenAccounts,
 > {
     genesis_config: GenesisConfig,
     rx: Receiver<StateMessage>,
@@ -50,6 +54,7 @@ pub struct StateActor<
     state: S,
     block_repository: R,
     l1_fee: L1G,
+    base_token: B,
 }
 
 impl<
@@ -59,7 +64,8 @@ impl<
         R: BlockRepository + Send + Sync + 'static,
         G: GasFee + Send + Sync + 'static,
         L1G: CreateL1GasFee + Send + Sync + 'static,
-    > StateActor<S, P, H, R, G, L1G>
+        B: BaseTokenAccounts + Send + Sync + 'static,
+    > StateActor<S, P, H, R, G, L1G, B>
 {
     pub fn spawn(mut self) -> JoinHandle<()> {
         tokio::spawn(async move {
@@ -77,7 +83,8 @@ impl<
         R: BlockRepository,
         G: GasFee,
         L1G: CreateL1GasFee,
-    > StateActor<S, P, H, R, G, L1G>
+        B: BaseTokenAccounts,
+    > StateActor<S, P, H, R, G, L1G, B>
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -90,6 +97,7 @@ impl<
         block_repository: R,
         base_fee_per_gas: G,
         l1_fee: L1G,
+        base_token: B,
     ) -> Self {
         Self {
             genesis_config,
@@ -105,6 +113,7 @@ impl<
             block_repository,
             gas_fee: base_fee_per_gas,
             l1_fee,
+            base_token,
         }
     }
 
@@ -248,6 +257,7 @@ impl<
                     .as_ref()
                     .map(|v| v.l1_fee(l1_cost_input).to_saturated_u64())
                     .unwrap_or(0),
+                &self.base_token,
             ) {
                 Ok(outcome) => outcome,
                 Err(User(_)) => unreachable!("User errors are handled in execution"),

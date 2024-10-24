@@ -3,7 +3,7 @@ use {
         genesis::config::GenesisConfig,
         move_execution::{
             create_move_vm, create_vm_session,
-            eth_token::{self, TransferArgs},
+            eth_token::{BaseTokenAccounts, TransferArgs},
             execute::{deploy_module, execute_entry_function, execute_script},
             gas::{new_gas_meter, total_gas_used},
             nonces::check_nonce,
@@ -32,7 +32,8 @@ pub(super) fn execute_canonical_transaction(
     tx_hash: &B256,
     state: &(impl MoveResolver<PartialVMError> + TableResolver),
     genesis_config: &GenesisConfig,
-    _l1_cost: u64,
+    l1_cost: u64,
+    base_token: &impl BaseTokenAccounts,
 ) -> crate::Result<TransactionExecutionOutcome> {
     if let Some(chain_id) = tx.chain_id {
         if chain_id != genesis_config.chain_id {
@@ -63,6 +64,14 @@ pub(super) fn execute_canonical_transaction(
             InvalidTransactionCause::InsufficientIntrinsicGas,
         ));
     }
+
+    base_token.charge_l1_cost(
+        &sender_move_address,
+        l1_cost,
+        &mut session,
+        &mut traversal_context,
+        &mut gas_meter,
+    )?;
 
     check_nonce(
         tx.nonce,
@@ -100,7 +109,7 @@ pub(super) fn execute_canonical_transaction(
                 amount,
             };
 
-            eth_token::transfer_eth(args, &mut session, &mut traversal_context, &mut gas_meter)
+            base_token.transfer(args, &mut session, &mut traversal_context, &mut gas_meter)
         }
     };
 

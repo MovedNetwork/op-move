@@ -124,6 +124,7 @@ mod tests {
             repository,
             Eip1559GasFee::default(),
             U256::ZERO,
+            (),
         );
         let state_handle = state.spawn();
 

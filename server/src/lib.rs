@@ -2,6 +2,7 @@ use {
     clap::Parser,
     flate2::read::GzDecoder,
     jsonwebtoken::{DecodingKey, Validation},
+    move_core_types::account_address::AccountAddress,
     moved::{
         block::{
             Block, BlockHash, BlockRepository, Eip1559GasFee, ExtendedBlock, Header,
@@ -9,7 +10,7 @@ use {
         },
         genesis::{config::GenesisConfig, init_state},
         json_utils, methods,
-        move_execution::CreateEcotoneL1GasFee,
+        move_execution::{CreateEcotoneL1GasFee, MovedBaseTokenAccounts},
         primitives::{B256, U256},
         state_actor::StatePayloadId,
         storage::InMemoryState,
@@ -55,6 +56,7 @@ struct Claims {
 
 const EIP1559_ELASTICITY_MULTIPLIER: u64 = 6;
 const EIP1559_BASE_FEE_MAX_CHANGE_DENOMINATOR: U256 = U256::from_limbs([250, 0, 0, 0]);
+const TREASURY: AccountAddress = AccountAddress::ZERO; // todo what is the real address?
 const JWT_VALID_DURATION_IN_SECS: u64 = 60;
 /// JWT secret key is either passed in as an env var `JWT_SECRET` or file path arg `--jwtsecret`
 static JWTSECRET: Lazy<Vec<u8>> = Lazy::new(|| {
@@ -93,6 +95,7 @@ pub async fn run() {
             EIP1559_BASE_FEE_MAX_CHANGE_DENOMINATOR,
         ),
         CreateEcotoneL1GasFee,
+        MovedBaseTokenAccounts::new(TREASURY),
     );
 
     let http_state_channel = state_channel.clone();

@@ -28,6 +28,68 @@ pub struct TransferArgs<'a> {
     pub amount: u64,
 }
 
+pub trait BaseTokenAccounts {
+    fn charge_l1_cost<G: GasMeter>(
+        &self,
+        from: &AccountAddress,
+        amount: u64,
+        session: &mut Session,
+        traversal_context: &mut TraversalContext,
+        gas_meter: &mut G,
+    ) -> Result<(), crate::Error>;
+
+    fn transfer<G: GasMeter>(
+        &self,
+        args: TransferArgs<'_>,
+        session: &mut Session,
+        traversal_context: &mut TraversalContext,
+        gas_meter: &mut G,
+    ) -> Result<(), crate::Error>;
+}
+
+#[derive(Debug)]
+pub struct MovedBaseTokenAccounts {
+    eth_treasury: AccountAddress,
+}
+
+impl MovedBaseTokenAccounts {
+    pub fn new(eth_treasury: AccountAddress) -> Self {
+        Self { eth_treasury }
+    }
+}
+
+impl BaseTokenAccounts for MovedBaseTokenAccounts {
+    fn charge_l1_cost<G: GasMeter>(
+        &self,
+        from: &AccountAddress,
+        amount: u64,
+        session: &mut Session,
+        traversal_context: &mut TraversalContext,
+        gas_meter: &mut G,
+    ) -> Result<(), crate::Error> {
+        transfer_eth(
+            TransferArgs {
+                from,
+                to: &self.eth_treasury,
+                amount,
+            },
+            session,
+            traversal_context,
+            gas_meter,
+        )
+    }
+
+    fn transfer<G: GasMeter>(
+        &self,
+        args: TransferArgs<'_>,
+        session: &mut Session,
+        traversal_context: &mut TraversalContext,
+        gas_meter: &mut G,
+    ) -> Result<(), crate::Error> {
+        transfer_eth(args, session, traversal_context, gas_meter)
+    }
+}
+
 pub fn mint_eth<G: GasMeter>(
     to: &AccountAddress,
     amount: u64,
@@ -153,4 +215,32 @@ pub fn quick_get_eth_balance(
         &mut gas_meter,
     )
     .unwrap()
+}
+
+#[cfg(test)]
+mod tests {
+    use {super::*, crate::Error};
+
+    impl BaseTokenAccounts for () {
+        fn charge_l1_cost<G: GasMeter>(
+            &self,
+            _from: &AccountAddress,
+            _amount: u64,
+            _session: &mut Session,
+            _traversal_context: &mut TraversalContext,
+            _gas_meter: &mut G,
+        ) -> Result<(), Error> {
+            Ok(())
+        }
+
+        fn transfer<G: GasMeter>(
+            &self,
+            _args: TransferArgs<'_>,
+            _session: &mut Session,
+            _traversal_context: &mut TraversalContext,
+            _gas_meter: &mut G,
+        ) -> Result<(), Error> {
+            Ok(())
+        }
+    }
 }

@@ -15,9 +15,10 @@ use {
         transaction_context::NativeTransactionContext,
     },
     aptos_gas_schedule::{MiscGasParameters, NativeGasParameters, LATEST_GAS_FEATURE_VERSION},
+    aptos_native_interface::SafeNativeBuilder,
     aptos_table_natives::{NativeTableContext, TableResolver},
     aptos_types::on_chain_config::{Features, TimedFeaturesBuilder},
-    aptos_vm::natives::aptos_natives,
+    aptos_vm::natives::aptos_natives_with_builder,
     canonical::execute_canonical_transaction,
     deposited::execute_deposited_transaction,
     move_binary_format::errors::PartialVMError,
@@ -30,6 +31,7 @@ use {
 mod canonical;
 mod deposited;
 mod eth_token;
+mod evm_native;
 mod execute;
 mod gas;
 mod nonces;
@@ -39,13 +41,15 @@ mod tag_validation;
 mod tests;
 
 pub fn create_move_vm() -> crate::Result<MoveVM> {
-    let natives = aptos_natives(
+    let mut builder = SafeNativeBuilder::new(
         LATEST_GAS_FEATURE_VERSION,
         NativeGasParameters::zeros(),
         MiscGasParameters::zeros(),
         TimedFeaturesBuilder::enable_all().build(),
         Features::default(),
     );
+    let mut natives = aptos_natives_with_builder(&mut builder);
+    evm_native::append_evm_natives(&mut natives, &builder);
     let vm = MoveVM::new(natives)?;
     Ok(vm)
 }
@@ -80,6 +84,9 @@ where
 
     // Tables can be used
     native_extensions.add(NativeTableContext::new(txn_hash, state));
+
+    // EVM native extension
+    native_extensions.add(evm_native::NativeEVMContext::new(state));
 
     vm.new_session_with_extensions(state, native_extensions)
 }

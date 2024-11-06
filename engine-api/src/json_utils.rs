@@ -28,5 +28,5 @@ pub fn deserialize<T: DeserializeOwned>(x: &serde_json::Value) -> Result<T, Json
 }
 
 pub fn access_state_error<E: fmt::Debug>(e: E) -> JsonRpcError {
-    JsonRpcError::without_data(-1, format!("Failed to access state: {e:?}"))
+    JsonRpcError::access_state_error(e)
 }

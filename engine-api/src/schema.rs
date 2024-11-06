@@ -1,6 +1,10 @@
 //! See https://github.com/ethereum/execution-apis/blob/main/src/engine/
 //! for specification of types.
 
+mod block;
+
+pub use block::*;
+
 use {
     moved::{
         primitives::{Address, Bytes, B2048, B256, U256, U64},

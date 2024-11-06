@@ -52,5 +52,7 @@ async fn inner_handle_request(
         ForkChoiceUpdatedV2 => todo!(),
         GetPayloadV2 => todo!(),
         NewPayloadV2 => todo!(),
+        GetBlockByHash => get_block_by_hash::execute(request, state_channel).await,
+        GetBlockByNumber => get_block_by_number::execute(request, state_channel).await,
     }
 }

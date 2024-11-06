@@ -184,6 +184,23 @@ impl<
                 let balance = quick_get_eth_balance(&account, self.state.resolver());
                 response_channel.send(balance).ok();
             }
+            StateMessage::GetBlockByHash {
+                block_hash,
+                include_transactions: _,
+                response_channel,
+            } => {
+                let response = self.block_repository.by_hash(block_hash).map(Into::into);
+
+                response_channel.send(response).ok();
+            }
+            StateMessage::GetBlockByNumber {
+                number: _,
+                include_transactions: _,
+                response_channel,
+            } => {
+                // todo
+                response_channel.send(None).ok();
+            }
         }
     }
 

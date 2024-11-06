@@ -8,6 +8,7 @@ use {
         block::{ExtendedBlock, Header},
         primitives::{Address, Bytes, ToU64, B2048, B256, U256, U64},
         state_actor::NewPayloadIdInput,
+        types::transactions::ExtendedTxEnvelope,
     },
     alloy::{consensus::transaction::TxEnvelope, eips::BlockNumberOrTag},
     alloy_rlp::Encodable,
@@ -89,6 +90,16 @@ pub enum StateMessage {
         block_hash: B256,
         response_channel: oneshot::Sender<Option<PayloadResponse>>,
     },
+    GetBlockByHash {
+        block_hash: B256,
+        include_transactions: bool,
+        response_channel: oneshot::Sender<Option<BlockResponse>>,
+    },
+    GetBlockByNumber {
+        number: u64,
+        include_transactions: bool,
+        response_channel: oneshot::Sender<Option<BlockResponse>>,
+    },
     AddTransaction {
         tx: TxEnvelope,
     },
@@ -100,6 +111,85 @@ pub enum StateMessage {
         block_number: BlockNumberOrTag,
         response_channel: oneshot::Sender<u64>,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlockResponse {
+    /// the block number. null when its pending block.
+    pub number: u64,
+    /// hash of the block. null when its pending block.
+    pub hash: B256,
+    /// hash of the parent block.
+    pub parent_hash: B256,
+    /// hash of the generated proof-of-work. null when its pending block.
+    pub nonce: Option<u64>,
+    /// SHA3 of the uncles data in the block.
+    pub sha3_uncles: B256,
+    /// the bloom filter for the logs of the block. null when its pending block.
+    pub logs_bloom: B2048,
+    /// the root of the transaction trie of the block.
+    pub transactions_root: B256,
+    /// the root of the final state trie of the block.
+    pub state_root: B256,
+    /// the root of the receipts trie of the block.
+    pub receipts_root: B256,
+    /// the address of the beneficiary to whom the mining rewards were given.
+    pub miner: Address,
+    /// integer of the difficulty for this block.
+    pub difficulty: u64,
+    /// integer of the total difficulty of the chain until this block.
+    pub total_difficulty: u64,
+    /// the "extra data" field of this block.
+    pub extra_data: Bytes,
+    /// integer the size of this block in bytes.
+    pub size: u64,
+    /// the maximum gas allowed in this block.
+    pub gas_limit: u64,
+    /// the total used gas by all transactions in this block.
+    pub gas_used: u64,
+    /// the unix timestamp for when the block was collated.
+    pub timestamp: u64,
+    /// Array of transaction objects, or 32 Bytes transaction hashes depending on the last given parameter.
+    pub transactions: Vec<TransactionResponse>,
+    /// Array of uncle hashes.
+    pub uncles: Vec<B256>,
+}
+
+impl From<ExtendedBlock> for BlockResponse {
+    fn from(value: ExtendedBlock) -> Self {
+        Self {
+            number: value.block.header.number,
+            hash: value.hash,
+            parent_hash: value.block.header.parent_hash,
+            nonce: Some(value.block.header.nonce),
+            sha3_uncles: B256::ZERO,
+            logs_bloom: value.block.header.logs_bloom,
+            transactions_root: value.block.header.transactions_root,
+            state_root: value.block.header.state_root,
+            receipts_root: value.block.header.receipts_root,
+            miner: Address::ZERO,
+            difficulty: 0,
+            total_difficulty: 0,
+            extra_data: value.block.header.extra_data,
+            size: 0, // todo: block size in bytes
+            gas_limit: value.block.header.gas_limit,
+            gas_used: value.block.header.gas_used,
+            timestamp: value.block.header.timestamp,
+            transactions: value
+                .block
+                .transactions
+                .into_iter()
+                .map(|v| TransactionResponse::Body(v))
+                .collect(),
+            uncles: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TransactionResponse {
+    Body(ExtendedTxEnvelope),
+    Hash(B256),
 }
 
 #[derive(Debug)]

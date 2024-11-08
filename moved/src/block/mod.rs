@@ -12,6 +12,6 @@ mod root;
 pub use {
     gas::{Eip1559GasFee, GasFee},
     hash::{BlockHash, MovedBlockHash},
-    in_memory::InMemoryBlockRepository,
+    in_memory::{BlockMemory, InMemoryBlockRepository},
     root::{Block, BlockRepository, ExtendedBlock, Header, HeaderForExecution},
 };

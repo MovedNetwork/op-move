@@ -1,4 +1,7 @@
-pub use payload::{NewPayloadId, NewPayloadIdInput, StatePayloadId};
+pub use {
+    payload::{NewPayloadId, NewPayloadIdInput, StatePayloadId},
+    queries::{InMemoryQueries, Queries},
+};
 
 use crate::block::HeaderForExecution;
 
@@ -33,6 +36,7 @@ use {
 };
 
 mod payload;
+mod queries;
 
 #[derive(Debug)]
 pub struct StateActor<
@@ -43,6 +47,7 @@ pub struct StateActor<
     G: GasFee,
     L1G: CreateL1GasFee,
     B: BaseTokenAccounts,
+    Q: Queries,
 > {
     genesis_config: GenesisConfig,
     rx: Receiver<StateMessage>,
@@ -58,6 +63,7 @@ pub struct StateActor<
     block_repository: R,
     l1_fee: L1G,
     base_token: B,
+    queries: Q,
 }
 
 impl<
@@ -68,7 +74,8 @@ impl<
         G: GasFee + Send + Sync + 'static,
         L1G: CreateL1GasFee + Send + Sync + 'static,
         B: BaseTokenAccounts + Send + Sync + 'static,
-    > StateActor<S, P, H, R, G, L1G, B>
+        Q: Queries + Send + Sync + 'static,
+    > StateActor<S, P, H, R, G, L1G, B, Q>
 {
     pub fn spawn(mut self) -> JoinHandle<()> {
         tokio::spawn(async move {
@@ -87,7 +94,8 @@ impl<
         G: GasFee,
         L1G: CreateL1GasFee,
         B: BaseTokenAccounts,
-    > StateActor<S, P, H, R, G, L1G, B>
+        Q: Queries,
+    > StateActor<S, P, H, R, G, L1G, B, Q>
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -101,6 +109,7 @@ impl<
         base_fee_per_gas: G,
         l1_fee: L1G,
         base_token: B,
+        queries: Q,
     ) -> Self {
         Self {
             genesis_config,
@@ -117,6 +126,7 @@ impl<
             gas_fee: base_fee_per_gas,
             l1_fee,
             base_token,
+            queries,
         }
     }
 
@@ -189,17 +199,18 @@ impl<
                 include_transactions: _,
                 response_channel,
             } => {
-                let response = self.block_repository.by_hash(block_hash).map(Into::into);
-
-                response_channel.send(response).ok();
+                response_channel
+                    .send(self.queries.block_by_hash(block_hash))
+                    .ok();
             }
             StateMessage::GetBlockByNumber {
-                number: _,
+                number,
                 include_transactions: _,
                 response_channel,
             } => {
-                // todo
-                response_channel.send(None).ok();
+                response_channel
+                    .send(self.queries.block_by_number(number))
+                    .ok();
             }
         }
     }

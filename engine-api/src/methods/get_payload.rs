@@ -65,11 +65,13 @@ mod tests {
         crate::methods::forkchoice_updated,
         alloy::primitives::hex,
         moved::{
-            block::{Block, BlockRepository, Eip1559GasFee, InMemoryBlockRepository},
+            block::{Block, BlockMemory, BlockRepository, Eip1559GasFee, InMemoryBlockRepository},
             genesis::{config::GenesisConfig, init_state},
             primitives::{B256, U256},
+            state_actor::InMemoryQueries,
             storage::InMemoryState,
         },
+        std::sync::Arc,
     };
 
     #[test]
@@ -106,7 +108,8 @@ mod tests {
         ));
         let genesis_block = Block::default().with_hash(head_hash).with_value(U256::ZERO);
 
-        let mut repository = InMemoryBlockRepository::new();
+        let block_memory = Arc::new(BlockMemory::default());
+        let mut repository = InMemoryBlockRepository::new(block_memory.clone());
         repository.add(genesis_block);
 
         let mut state = InMemoryState::new();
@@ -123,6 +126,7 @@ mod tests {
             Eip1559GasFee::default(),
             U256::ZERO,
             (),
+            InMemoryQueries::new(block_memory),
         );
         let state_handle = state.spawn();
 

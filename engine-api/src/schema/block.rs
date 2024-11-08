@@ -89,3 +89,5 @@ impl From<BlockResponse> for GetBlockResponse {
         }
     }
 }
+
+pub use alloy::eips::BlockNumberOrTag;

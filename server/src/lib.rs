@@ -5,13 +5,13 @@ use {
     jsonwebtoken::{DecodingKey, Validation},
     moved::{
         block::{
-            Block, BlockHash, BlockRepository, Eip1559GasFee, ExtendedBlock, Header,
+            Block, BlockHash, BlockMemory, BlockRepository, Eip1559GasFee, ExtendedBlock, Header,
             InMemoryBlockRepository, MovedBlockHash,
         },
         genesis::{config::GenesisConfig, init_state},
         move_execution::{CreateEcotoneL1GasFee, MovedBaseTokenAccounts},
         primitives::{B256, U256},
-        state_actor::StatePayloadId,
+        state_actor::{InMemoryQueries, StatePayloadId},
         storage::InMemoryState,
         types::state::StateMessage,
     },
@@ -20,6 +20,7 @@ use {
         fs,
         io::Read,
         net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+        sync::Arc,
         time::SystemTime,
     },
     tokio::sync::mpsc,
@@ -70,12 +71,15 @@ pub async fn run() {
 
     let block_hash = MovedBlockHash;
     let genesis_block = create_genesis_block(&block_hash, &genesis_config);
-    let mut repository = InMemoryBlockRepository::new();
+    let block_memory = Arc::new(BlockMemory::default());
+    let mut repository = InMemoryBlockRepository::new(block_memory.clone());
     let head = genesis_block.hash;
     repository.add(genesis_block);
 
     let mut state = InMemoryState::new();
     init_state(&genesis_config, &mut state);
+
+    let queries = InMemoryQueries::new(block_memory);
 
     let base_token = MovedBaseTokenAccounts::new(genesis_config.treasury);
     let state = moved::state_actor::StateActor::new(
@@ -92,6 +96,7 @@ pub async fn run() {
         ),
         CreateEcotoneL1GasFee,
         base_token,
+        queries,
     );
 
     let http_state_channel = state_channel.clone();

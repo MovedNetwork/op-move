@@ -63,17 +63,19 @@ mod tests {
     use {
         super::*,
         moved::{
-            block::{Eip1559GasFee, InMemoryBlockRepository},
+            block::{BlockMemory, Eip1559GasFee, InMemoryBlockRepository},
             primitives::U256,
-            state_actor::StatePayloadId,
+            state_actor::{InMemoryQueries, StatePayloadId},
             storage::InMemoryState,
         },
+        std::sync::Arc,
     };
 
     #[tokio::test]
     async fn test_execute() {
         let genesis_config = moved::genesis::config::GenesisConfig::default();
         let (state_channel, rx) = mpsc::channel(10);
+        let block_memory = Arc::new(BlockMemory::default());
         let state = moved::state_actor::StateActor::new(
             rx,
             InMemoryState::new(),
@@ -81,10 +83,11 @@ mod tests {
             genesis_config,
             StatePayloadId,
             B256::ZERO,
-            InMemoryBlockRepository::default(),
+            InMemoryBlockRepository::new(block_memory.clone()),
             Eip1559GasFee::default(),
             U256::ZERO,
             (),
+            InMemoryQueries::new(block_memory),
         );
         let state_handle = state.spawn();
 

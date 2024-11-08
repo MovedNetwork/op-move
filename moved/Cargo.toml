@@ -38,6 +38,7 @@ sui-framework.workspace = true
 sui-types.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+dashmap = "6"
 
 [dev-dependencies]
 anyhow.workspace = true

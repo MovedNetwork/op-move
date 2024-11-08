@@ -1,6 +1,10 @@
 use {
-    crate::{json_utils, jsonrpc::JsonRpcError, schema::GetBlockResponse},
-    moved::{primitives::B256, types::state::StateMessage},
+    crate::{
+        json_utils,
+        jsonrpc::JsonRpcError,
+        schema::{BlockNumberOrTag, GetBlockResponse},
+    },
+    moved::types::state::StateMessage,
     tokio::sync::{mpsc, oneshot},
 };
 
@@ -8,34 +12,42 @@ pub async fn execute(
     request: serde_json::Value,
     state_channel: mpsc::Sender<StateMessage>,
 ) -> Result<serde_json::Value, JsonRpcError> {
-    let (block_hash, include_transactions) = parse_params(request)?;
-    let response = inner_execute(block_hash, include_transactions, state_channel).await?;
+    let (number, include_transactions) = parse_params(request)?;
+    let response = inner_execute(number, include_transactions, state_channel).await?;
     Ok(serde_json::to_value(response).expect("Must be able to JSON-serialize response"))
 }
 
 async fn inner_execute(
-    block_hash: B256,
+    number: BlockNumberOrTag,
     include_transactions: bool,
     state_channel: mpsc::Sender<StateMessage>,
 ) -> Result<Option<GetBlockResponse>, JsonRpcError> {
     let (tx, rx) = oneshot::channel();
-    let msg = StateMessage::GetBlockByHash {
-        block_hash,
-        include_transactions,
-        response_channel: tx,
+    let msg = match number {
+        BlockNumberOrTag::Number(number) => StateMessage::GetBlockByNumber {
+            number,
+            include_transactions,
+            response_channel: tx,
+        },
+        BlockNumberOrTag::Earliest => StateMessage::GetBlockByNumber {
+            number: 0,
+            include_transactions,
+            response_channel: tx,
+        },
+        _ => return Ok(None),
     };
     state_channel.send(msg).await?;
     Ok(rx.await.map(|v| v.map(Into::into))?)
 }
 
-fn parse_params(request: serde_json::Value) -> Result<(B256, bool), JsonRpcError> {
+fn parse_params(request: serde_json::Value) -> Result<(BlockNumberOrTag, bool), JsonRpcError> {
     let params = json_utils::get_params_list(&request);
     match params {
         [] | [_] => Err(JsonRpcError::parse_error(request, "Not enough params")),
         [x, y] => {
-            let block_hash: B256 = json_utils::deserialize(x)?;
+            let number: BlockNumberOrTag = json_utils::deserialize(x)?;
             let include_transactions: bool = json_utils::deserialize(y)?;
-            Ok((block_hash, include_transactions))
+            Ok((number, include_transactions))
         }
         _ => Err(JsonRpcError::parse_error(request, "Too many params")),
     }
@@ -47,11 +59,13 @@ mod tests {
         super::*,
         alloy::hex,
         moved::{
-            block::{Block, BlockRepository, Eip1559GasFee, InMemoryBlockRepository},
+            block::{Block, BlockMemory, BlockRepository, Eip1559GasFee, InMemoryBlockRepository},
             genesis::{config::GenesisConfig, init_state},
-            primitives::U256,
+            primitives::{B256, U256},
+            state_actor::InMemoryQueries,
             storage::InMemoryState,
         },
+        std::sync::Arc,
     };
 
     pub fn example_request() -> serde_json::Value {
@@ -62,7 +76,7 @@ mod tests {
                 "jsonrpc": "2.0",
                 "method": "eth_getBlockByHash",
                 "params": [
-                    "0xe56ec7ba741931e8c55b7f654a6e56ed61cf8b8279bf5e3ef6ac86a11eb33a9d",
+                    "0x0",
                     false
                 ]
             }
@@ -81,7 +95,8 @@ mod tests {
         ));
         let genesis_block = Block::default().with_hash(head_hash).with_value(U256::ZERO);
 
-        let mut repository = InMemoryBlockRepository::new();
+        let block_memory = Arc::new(BlockMemory::default());
+        let mut repository = InMemoryBlockRepository::new(block_memory.clone());
         repository.add(genesis_block);
 
         let mut state = InMemoryState::new();
@@ -98,6 +113,7 @@ mod tests {
             Eip1559GasFee::default(),
             U256::ZERO,
             (),
+            InMemoryQueries::new(block_memory),
         );
         let state_handle = state.spawn();
         let request = example_request();

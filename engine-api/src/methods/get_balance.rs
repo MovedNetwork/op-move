@@ -59,13 +59,13 @@ mod tests {
     use {
         super::*,
         moved::{
-            block::{Eip1559GasFee, InMemoryBlockRepository},
+            block::{BlockMemory, Eip1559GasFee, InMemoryBlockRepository},
             genesis::init_state,
             primitives::{B256, U256, U64},
-            state_actor::StatePayloadId,
+            state_actor::{InMemoryQueries, StatePayloadId},
             storage::InMemoryState,
         },
-        std::str::FromStr,
+        std::{str::FromStr, sync::Arc},
         test_case::test_case,
     };
 
@@ -108,6 +108,7 @@ mod tests {
         init_state(&genesis_config, &mut state);
 
         let (state_channel, rx) = mpsc::channel(10);
+        let block_memory = Arc::new(BlockMemory::default());
         let state_actor = moved::state_actor::StateActor::new(
             rx,
             state,
@@ -115,10 +116,11 @@ mod tests {
             genesis_config,
             StatePayloadId,
             B256::ZERO,
-            InMemoryBlockRepository::default(),
+            InMemoryBlockRepository::new(block_memory.clone()),
             Eip1559GasFee::default(),
             U256::ZERO,
             (),
+            InMemoryQueries::new(block_memory),
         );
 
         let state_handle = state_actor.spawn();

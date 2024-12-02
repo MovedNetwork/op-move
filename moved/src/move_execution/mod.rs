@@ -48,6 +48,7 @@ pub(crate) mod gas;
 mod nonces;
 mod tag_validation;
 
+mod state;
 #[cfg(test)]
 mod tests;
 

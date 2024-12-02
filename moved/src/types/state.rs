@@ -117,14 +117,14 @@ pub enum Query {
     ChainId {
         response_channel: oneshot::Sender<u64>,
     },
-    GetBalance {
+    BalanceByHeight {
         address: Address,
-        block_number: BlockNumberOrTag,
+        height: BlockNumberOrTag,
         response_channel: oneshot::Sender<U256>,
     },
-    GetNonce {
+    NonceByHeight {
         address: Address,
-        block_number: BlockNumberOrTag,
+        height: BlockNumberOrTag,
         response_channel: oneshot::Sender<u64>,
     },
     BlockByHash {

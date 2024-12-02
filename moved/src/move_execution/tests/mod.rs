@@ -4,7 +4,7 @@ use {
     super::*,
     crate::{
         block::HeaderForExecution,
-        genesis::{config::CHAIN_ID, init_state, L2_CROSS_DOMAIN_MESSENGER_ADDRESS},
+        genesis::{config::CHAIN_ID, init_and_apply, L2_CROSS_DOMAIN_MESSENGER_ADDRESS},
         move_execution::eth_token::quick_get_eth_balance,
         primitives::{ToMoveAddress, ToMoveU256, B256, U256, U64},
         storage::{InMemoryState, State},

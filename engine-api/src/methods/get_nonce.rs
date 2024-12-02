@@ -48,9 +48,9 @@ async fn inner_execute(
     state_channel: mpsc::Sender<StateMessage>,
 ) -> Result<u64, JsonRpcError> {
     let (tx, rx) = oneshot::channel();
-    let msg = Query::GetNonce {
+    let msg = Query::NonceByHeight {
         address,
-        block_number,
+        height: block_number,
         response_channel: tx,
     }
     .into();

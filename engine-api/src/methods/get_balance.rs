@@ -47,9 +47,9 @@ async fn inner_execute(
     state_channel: mpsc::Sender<StateMessage>,
 ) -> Result<U256, JsonRpcError> {
     let (tx, rx) = oneshot::channel();
-    let msg = Query::GetBalance {
+    let msg = Query::BalanceByHeight {
         address,
-        block_number,
+        height: block_number,
         response_channel: tx,
     }
     .into();

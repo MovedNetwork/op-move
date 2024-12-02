@@ -83,7 +83,9 @@ pub fn load_sui_framework_snapshot() -> &'static BTreeMap<ObjectID, SystemPackag
 }
 
 /// Initializes the blockchain state with Aptos and Sui frameworks.
-pub fn init_state(state: &mut impl State<Err = PartialVMError>) {
+pub fn init_state(
+    state: &impl State<Err = PartialVMError>,
+) -> (ChangeSet, move_table_extension::TableChangeSet) {
     let (change_set, table_change_set) =
         deploy_framework(state).expect("All bundle modules should be valid");
 
@@ -115,18 +117,16 @@ pub fn init_state(state: &mut impl State<Err = PartialVMError>) {
             .collect(),
     };
 
-    state
-        .apply_with_tables(change_set, table_change_set)
-        .unwrap();
+    (change_set, table_change_set)
 }
 
 fn deploy_framework(
-    storage: &mut impl State<Err = PartialVMError>,
+    state: &impl State<Err = PartialVMError>,
 ) -> crate::Result<(ChangeSet, TableChangeSet)> {
     let vm = create_move_vm()?;
     let mut extensions = NativeContextExtensions::default();
-    extensions.add(NativeTableContext::new([0u8; 32], storage.resolver()));
-    let mut session = vm.new_session_with_extensions(storage.resolver(), extensions);
+    extensions.add(NativeTableContext::new([0u8; 32], state.resolver()));
+    let mut session = vm.new_session_with_extensions(state.resolver(), extensions);
     let traversal_storage = TraversalStorage::new();
     let mut traversal_context = TraversalContext::new(&traversal_storage);
 

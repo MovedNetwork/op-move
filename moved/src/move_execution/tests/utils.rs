@@ -66,7 +66,7 @@ impl TestContext {
     pub fn new() -> Self {
         let genesis_config = GenesisConfig::default();
         let mut state = InMemoryState::new();
-        init_state(&genesis_config, &mut state);
+        init_and_apply(&genesis_config, &mut state);
 
         Self {
             state,

@@ -9,8 +9,8 @@ use {
         genesis::config::GenesisConfig,
         merkle_tree::MerkleRootExt,
         move_execution::{
-            execute_transaction, quick_get_eth_balance, quick_get_nonce, BaseTokenAccounts,
-            CreateL1GasFee, L1GasFee, L1GasFeeInput, LogsBloom,
+            execute_transaction, quick_get_nonce, BaseTokenAccounts, CreateL1GasFee, L1GasFee,
+            L1GasFeeInput, LogsBloom, StateQueries,
         },
         primitives::{self, ToEthAddress, ToMoveAddress, ToSaturatedU64, B256, U256, U64},
         storage::State,
@@ -29,7 +29,7 @@ use {
     },
     alloy::{
         consensus::Receipt,
-        eips::BlockNumberOrTag::*,
+        eips::{BlockNumberOrTag, BlockNumberOrTag::*},
         primitives::{keccak256, Bloom},
         rlp::{Decodable, Encodable},
         rpc::types::{FeeHistory, TransactionReceipt as AlloyTxReceipt, TransactionRequest},
@@ -56,6 +56,7 @@ pub type InMemStateActor = StateActor<
     crate::move_execution::MovedBaseTokenAccounts,
     crate::block::InMemoryBlockQueries,
     crate::block::BlockMemory,
+    crate::move_execution::InMemoryStateQueries,
 >;
 
 #[derive(Debug)]
@@ -69,6 +70,7 @@ pub struct StateActor<
     B: BaseTokenAccounts,
     Q: BlockQueries<Storage = M>,
     M,
+    SQ,
 > {
     genesis_config: GenesisConfig,
     rx: Receiver<StateMessage>,
@@ -86,6 +88,7 @@ pub struct StateActor<
     l1_fee: L1G,
     base_token: B,
     block_memory: M,
+    state_queries: SQ,
     // tx_hash -> (tx_with_receipt, block_hash)
     tx_receipts: HashMap<B256, (TransactionWithReceipt, B256)>,
 }
@@ -100,7 +103,8 @@ impl<
         B: BaseTokenAccounts + Send + Sync + 'static,
         Q: BlockQueries<Storage = M> + Send + Sync + 'static,
         M: Send + Sync + 'static,
-    > StateActor<S, P, H, R, G, L1G, B, Q, M>
+        SQ: StateQueries + Send + Sync + 'static,
+    > StateActor<S, P, H, R, G, L1G, B, Q, M, SQ>
 {
     pub fn spawn(mut self) -> JoinHandle<()> {
         tokio::spawn(async move {
@@ -124,7 +128,8 @@ impl<
         B: BaseTokenAccounts,
         Q: BlockQueries<Storage = M>,
         M,
-    > StateActor<S, P, H, R, G, L1G, B, Q, M>
+        SQ: StateQueries,
+    > StateActor<S, P, H, R, G, L1G, B, Q, M, SQ>
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -140,6 +145,7 @@ impl<
         base_token: B,
         block_queries: Q,
         block_memory: M,
+        state_queries: SQ,
     ) -> Self {
         Self {
             genesis_config,
@@ -158,35 +164,36 @@ impl<
             base_token,
             block_queries,
             block_memory,
+            state_queries,
             tx_receipts: HashMap::new(),
+        }
+    }
+
+    pub fn resolve_height(&self, height: BlockNumberOrTag) -> u64 {
+        match height {
+            Number(height) => height,
+            Finalized | Pending | Latest | Safe => self.height,
+            Earliest => 0,
         }
     }
 
     pub fn handle_query(&self, msg: Query) {
         match msg {
-            Query::ChainId { response_channel } => {
-                response_channel.send(self.genesis_config.chain_id).ok()
-            }
-            Query::GetBalance {
+            Query::ChainId { response_channel } => response_channel.send(self.genesis_config.chain_id).ok(),
+            Query::BalanceByHeight {
                 address,
                 response_channel,
-                ..
-            } => {
-                // TODO: Support balance from arbitrary blocks
-                let account = address.to_move_address();
-                let balance = quick_get_eth_balance(&account, self.state.resolver());
-                response_channel.send(balance).ok()
-            }
-            Query::GetNonce {
+                height,
+            } => response_channel
+                .send(self.state_queries.balance_at(address.to_move_address(), self.resolve_height(height)))
+                .ok(),
+            Query::NonceByHeight {
                 address,
                 response_channel,
-                ..
-            } => {
-                // TODO: Support nonce from arbitrary blocks
-                let address = address.to_move_address();
-                let nonce = quick_get_nonce(&address, self.state.resolver());
-                response_channel.send(nonce).ok()
-            }
+                height,
+            } => response_channel
+                .send(self.state_queries.nonce_at(address.to_move_address(), self.resolve_height(height)))
+                .ok(),
             Query::BlockByHash {
                 hash,
                 response_channel,
@@ -198,14 +205,9 @@ impl<
                 height,
                 response_channel,
                 include_transactions,
-            } => {
-                let block_height = match height {
-                    Number(height) => height,
-                    Finalized | Pending | Latest | Safe => self.height,
-                    Earliest => 0,
-                };
-                response_channel.send(self.block_queries.by_height(&self.block_memory, block_height, include_transactions)).ok()
-            }
+            } => response_channel
+                .send(self.block_queries.by_height(&self.block_memory, self.resolve_height(height), include_transactions))
+                .ok(),
             Query::BlockNumber {
                 response_channel,
             } => response_channel

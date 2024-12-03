@@ -12,9 +12,9 @@ use {
     std::ops::Bound,
 };
 
-type Balance = U256;
-type Nonce = u64;
-type BlockHeight = u64;
+pub type Balance = U256;
+pub type Nonce = u64;
+pub type BlockHeight = u64;
 
 pub trait StateQueries {
     /// The associated storage type for querying the blockchain state.

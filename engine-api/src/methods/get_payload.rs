@@ -125,6 +125,7 @@ mod tests {
             rx,
             state,
             head_hash,
+            0,
             genesis_config,
             0x03421ee50df45cacu64,
             head_hash,

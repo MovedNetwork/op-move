@@ -297,6 +297,7 @@ mod tests {
             rx,
             state,
             head_hash,
+            0,
             genesis_config,
             0x0306d51fc5aa1533u64,
             B256::from(hex!(

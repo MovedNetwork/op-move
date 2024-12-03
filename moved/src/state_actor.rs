@@ -136,6 +136,7 @@ impl<
         rx: Receiver<StateMessage>,
         state: S,
         head: B256,
+        height: u64,
         genesis_config: GenesisConfig,
         payload_id: P,
         block_hash: H,
@@ -151,7 +152,7 @@ impl<
             genesis_config,
             rx,
             head,
-            height: 0,
+            height,
             payload_id,
             execution_payloads: HashMap::new(),
             pending_payload: None,
@@ -553,5 +554,176 @@ impl<
             l1_block_info: rx.l1_block_info.unwrap_or_default(),
         };
         Some(result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use {
+        super::*,
+        crate::{
+            block::{
+                BlockMemory, Eip1559GasFee, InMemoryBlockQueries, InMemoryBlockRepository,
+                MovedBlockHash,
+            },
+            genesis,
+            move_execution::{BlockHeight, MovedBaseTokenAccounts},
+            storage::InMemoryState,
+        },
+        alloy::hex,
+        move_core_types::account_address::AccountAddress,
+        test_case::test_case,
+        tokio::sync::{
+            mpsc::{self, Sender},
+            oneshot,
+        },
+    };
+
+    struct MockStateQueries(BlockHeight);
+
+    impl StateQueries for MockStateQueries {
+        type Storage = ();
+
+        fn balance(&self, _account: AccountAddress) -> crate::move_execution::Balance {
+            unimplemented!()
+        }
+
+        fn balance_at(
+            &self,
+            account: AccountAddress,
+            height: BlockHeight,
+        ) -> crate::move_execution::Balance {
+            assert_eq!(height, self.0);
+            assert_eq!(
+                account,
+                primitives::Address::new(hex!("44223344556677889900ffeeaabbccddee111111"))
+                    .to_move_address()
+            );
+
+            U256::from(5)
+        }
+
+        fn nonce(&self, _account: AccountAddress) -> crate::move_execution::Nonce {
+            unimplemented!()
+        }
+
+        fn nonce_at(
+            &self,
+            account: AccountAddress,
+            height: BlockHeight,
+        ) -> crate::move_execution::Nonce {
+            assert_eq!(height, self.0);
+            assert_eq!(
+                account,
+                primitives::Address::new(hex!("11223344556677889900ffeeaabbccddee111111"))
+                    .to_move_address()
+            );
+
+            3
+        }
+    }
+
+    pub fn create_state_actor<SQ: StateQueries>(
+        height: u64,
+        state_queries: SQ,
+    ) -> (
+        StateActor<
+            impl State<Err = PartialVMError>,
+            impl NewPayloadId,
+            impl BlockHash,
+            impl BlockRepository<Storage = BlockMemory>,
+            impl GasFee,
+            impl CreateL1GasFee,
+            impl BaseTokenAccounts,
+            impl BlockQueries<Storage = BlockMemory>,
+            BlockMemory,
+            SQ,
+        >,
+        Sender<StateMessage>,
+    ) {
+        let genesis_config = GenesisConfig::default();
+        let (state_channel, rx) = mpsc::channel(10);
+
+        let head_hash = B256::new(hex!(
+            "e56ec7ba741931e8c55b7f654a6e56ed61cf8b8279bf5e3ef6ac86a11eb33a9d"
+        ));
+        let genesis_block = Block::default().with_hash(head_hash).with_value(U256::ZERO);
+
+        let mut block_memory = BlockMemory::new();
+        let mut repository = InMemoryBlockRepository::new();
+        repository.add(&mut block_memory, genesis_block);
+
+        let mut state = InMemoryState::new();
+        genesis::init_and_apply(&genesis_config, &mut state);
+
+        let state = StateActor::new(
+            rx,
+            state,
+            head_hash,
+            height,
+            genesis_config,
+            0x03421ee50df45cacu64,
+            MovedBlockHash,
+            repository,
+            Eip1559GasFee::default(),
+            U256::ZERO,
+            MovedBaseTokenAccounts::new(AccountAddress::ONE),
+            InMemoryBlockQueries,
+            block_memory,
+            state_queries,
+        );
+        (state, state_channel)
+    }
+
+    #[test_case(Latest, 4, 4; "Latest")]
+    #[test_case(Finalized, 4, 4; "Finalized")]
+    #[test_case(Safe, 4, 4; "Safe")]
+    #[test_case(Earliest, 4, 0; "Earliest")]
+    #[test_case(Pending, 4, 4; "Pending")]
+    #[test_case(Number(2), 4, 2; "Number")]
+    fn test_nonce_is_fetched_by_height_successfully(
+        height: BlockNumberOrTag,
+        head_height: BlockHeight,
+        expected_height: BlockHeight,
+    ) {
+        let (state_actor, _) = create_state_actor(head_height, MockStateQueries(expected_height));
+        let (tx, rx) = oneshot::channel();
+
+        state_actor.handle_query(Query::NonceByHeight {
+            height,
+            address: primitives::Address::new(hex!("11223344556677889900ffeeaabbccddee111111")),
+            response_channel: tx,
+        });
+
+        let actual_height = rx.blocking_recv().unwrap();
+        let expected_height = 3;
+
+        assert_eq!(actual_height, expected_height);
+    }
+
+    #[test_case(Latest, 2, 2; "Latest")]
+    #[test_case(Finalized, 2, 2; "Finalized")]
+    #[test_case(Safe, 2, 2; "Safe")]
+    #[test_case(Earliest, 2, 0; "Earliest")]
+    #[test_case(Pending, 2, 2; "Pending")]
+    #[test_case(Number(1), 2, 1; "Number")]
+    fn test_balance_is_fetched_by_height_successfully(
+        height: BlockNumberOrTag,
+        head_height: BlockHeight,
+        expected_height: BlockHeight,
+    ) {
+        let (state_actor, _) = create_state_actor(head_height, MockStateQueries(expected_height));
+        let (tx, rx) = oneshot::channel();
+
+        state_actor.handle_query(Query::BalanceByHeight {
+            height,
+            address: primitives::Address::new(hex!("44223344556677889900ffeeaabbccddee111111")),
+            response_channel: tx,
+        });
+
+        let actual_height = rx.blocking_recv().unwrap();
+        let expected_height = U256::from(5);
+
+        assert_eq!(actual_height, expected_height);
     }
 }

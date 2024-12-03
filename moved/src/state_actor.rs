@@ -1,3 +1,4 @@
+use move_core_types::effects::ChangeSet;
 pub use payload::{NewPayloadId, NewPayloadIdInput, StatePayloadId};
 
 use {
@@ -380,6 +381,7 @@ impl<
         let mut logs_bloom = Bloom::ZERO;
         let mut tx_index = 0;
         let mut log_offset = 0;
+        let mut all_changes = ChangeSet::new();
 
         // https://github.com/ethereum-optimism/specs/blob/9dbc6b0/specs/protocol/deposits.md#kinds-of-deposited-transactions
         let l1_fee = transactions
@@ -405,13 +407,16 @@ impl<
                 block_header.clone(),
             ) {
                 Ok(outcome) => outcome,
-                Err(User(_)) => unreachable!("User errors are handled in execution"),
+                Err(User(e)) => unreachable!("User errors are handled in execution {e:?}"),
                 Err(InvalidTransaction(_)) => continue,
                 Err(InvariantViolation(e)) => panic!("ERROR: execution error {e:?}"),
             };
 
             let l1_block_info = l1_fee.as_ref().and_then(|x| x.l1_block_info(l1_cost_input));
 
+            all_changes
+                .squash(outcome.changes.clone())
+                .unwrap_or_else(|_| panic!("ERROR: state update failed for transaction {tx:?}"));
             self.state
                 .apply(outcome.changes)
                 .unwrap_or_else(|_| panic!("ERROR: state update failed for transaction {tx:?}"));
@@ -451,6 +456,8 @@ impl<
 
             tx_index += 1;
         }
+
+        self.state_queries.add(all_changes);
 
         let receipts_root = receipts
             .iter()
@@ -566,12 +573,23 @@ mod tests {
                 BlockMemory, Eip1559GasFee, InMemoryBlockQueries, InMemoryBlockRepository,
                 MovedBlockHash,
             },
-            genesis,
-            move_execution::{BlockHeight, MovedBaseTokenAccounts},
+            genesis::{self, config::CHAIN_ID},
+            move_execution::{
+                create_move_vm, create_vm_session, BlockHeight, InMemoryStateQueries,
+                MovedBaseTokenAccounts, StateMemory,
+            },
             storage::InMemoryState,
+            tests::{signer::Signer, EVM_ADDRESS, PRIVATE_KEY},
+            types::session_id::SessionId,
         },
-        alloy::hex,
-        move_core_types::account_address::AccountAddress,
+        alloy::{
+            consensus::{SignableTransaction, TxEip1559, TxEnvelope},
+            hex,
+            network::TxSignerSync,
+        },
+        move_core_types::{account_address::AccountAddress, effects::ChangeSet},
+        move_vm_runtime::module_traversal::{TraversalContext, TraversalStorage},
+        move_vm_types::gas::UnmeteredGasMeter,
         test_case::test_case,
         tokio::sync::{
             mpsc::{self, Sender},
@@ -621,9 +639,13 @@ mod tests {
 
             3
         }
+
+        fn add(&mut self, _changes: ChangeSet) {
+            unimplemented!()
+        }
     }
 
-    pub fn create_state_actor<SQ: StateQueries>(
+    fn create_state_actor_with_given_queries<SQ: StateQueries>(
         height: u64,
         state_queries: SQ,
     ) -> (
@@ -675,6 +697,91 @@ mod tests {
         (state, state_channel)
     }
 
+    fn mint_eth(
+        state: &impl State<Err = PartialVMError>,
+        addr: AccountAddress,
+        amount: U256,
+    ) -> ChangeSet {
+        let move_vm = create_move_vm().unwrap();
+        let mut session = create_vm_session(&move_vm, state.resolver(), SessionId::default());
+        let traversal_storage = TraversalStorage::new();
+        let mut traversal_context = TraversalContext::new(&traversal_storage);
+        let mut gas_meter = UnmeteredGasMeter;
+
+        crate::move_execution::mint_eth(
+            &addr,
+            amount,
+            &mut session,
+            &mut traversal_context,
+            &mut gas_meter,
+        )
+        .unwrap();
+
+        session.finish().unwrap()
+    }
+
+    fn create_state_actor_with_fake_queries(
+        addr: AccountAddress,
+        initial_balance: U256,
+    ) -> (
+        StateActor<
+            impl State<Err = PartialVMError>,
+            impl NewPayloadId,
+            impl BlockHash,
+            impl BlockRepository<Storage = BlockMemory>,
+            impl GasFee,
+            impl CreateL1GasFee,
+            impl BaseTokenAccounts,
+            impl BlockQueries<Storage = BlockMemory>,
+            BlockMemory,
+            impl StateQueries,
+        >,
+        Sender<StateMessage>,
+    ) {
+        let genesis_config = GenesisConfig::default();
+        let (state_channel, rx) = mpsc::channel(10);
+
+        let head_hash = B256::new(hex!(
+            "e56ec7ba741931e8c55b7f654a6e56ed61cf8b8279bf5e3ef6ac86a11eb33a9d"
+        ));
+        let height = 0;
+        let genesis_block = Block::default().with_hash(head_hash).with_value(U256::ZERO);
+
+        let mut block_memory = BlockMemory::new();
+        let mut repository = InMemoryBlockRepository::new();
+        repository.add(&mut block_memory, genesis_block);
+
+        let mut state = InMemoryState::new();
+        let (mut changes, table_changes) = genesis::init(&genesis_config, &state);
+        let mut state_memory = StateMemory::new();
+        state
+            .apply_with_tables(changes.clone(), table_changes)
+            .unwrap();
+        let changes_addition = mint_eth(&state, addr, initial_balance);
+        changes.squash(changes_addition.clone()).unwrap();
+        state_memory.add(changes);
+        state.apply(changes_addition).unwrap();
+        let state_queries = InMemoryStateQueries::new(state_memory);
+
+        let state = StateActor::new(
+            rx,
+            state,
+            head_hash,
+            height,
+            genesis_config,
+            0x03421ee50df45cacu64,
+            MovedBlockHash,
+            repository,
+            Eip1559GasFee::default(),
+            U256::ZERO,
+            MovedBaseTokenAccounts::new(AccountAddress::ONE),
+            InMemoryBlockQueries,
+            block_memory,
+            state_queries,
+        );
+        (state, state_channel)
+    }
+
     #[test_case(Latest, 4, 4; "Latest")]
     #[test_case(Finalized, 4, 4; "Finalized")]
     #[test_case(Safe, 4, 4; "Safe")]
@@ -686,7 +793,8 @@ mod tests {
         head_height: BlockHeight,
         expected_height: BlockHeight,
     ) {
-        let (state_actor, _) = create_state_actor(head_height, MockStateQueries(expected_height));
+        let (state_actor, _) =
+            create_state_actor_with_given_queries(head_height, MockStateQueries(expected_height));
         let (tx, rx) = oneshot::channel();
 
         state_actor.handle_query(Query::NonceByHeight {
@@ -695,10 +803,10 @@ mod tests {
             response_channel: tx,
         });
 
-        let actual_height = rx.blocking_recv().unwrap();
-        let expected_height = 3;
+        let actual_nonce = rx.blocking_recv().unwrap();
+        let expected_nonce = 3;
 
-        assert_eq!(actual_height, expected_height);
+        assert_eq!(actual_nonce, expected_nonce);
     }
 
     #[test_case(Latest, 2, 2; "Latest")]
@@ -712,7 +820,8 @@ mod tests {
         head_height: BlockHeight,
         expected_height: BlockHeight,
     ) {
-        let (state_actor, _) = create_state_actor(head_height, MockStateQueries(expected_height));
+        let (state_actor, _) =
+            create_state_actor_with_given_queries(head_height, MockStateQueries(expected_height));
         let (tx, rx) = oneshot::channel();
 
         state_actor.handle_query(Query::BalanceByHeight {
@@ -721,9 +830,127 @@ mod tests {
             response_channel: tx,
         });
 
-        let actual_height = rx.blocking_recv().unwrap();
-        let expected_height = U256::from(5);
+        let actual_balance = rx.blocking_recv().unwrap();
+        let expected_balance = U256::from(5);
 
-        assert_eq!(actual_height, expected_height);
+        assert_eq!(actual_balance, expected_balance);
+    }
+
+    #[test]
+    fn test_fetched_balances_reflect_transfer_of_funds_post_transaction_successfully() {
+        let to = primitives::Address::new(hex!("44223344556677889900ffeeaabbccddee111111"));
+        let initial_balance = U256::from(5);
+        let amount = U256::from(4);
+        let (mut state_actor, _) =
+            create_state_actor_with_fake_queries(EVM_ADDRESS.to_move_address(), initial_balance);
+
+        let signer = Signer::new(&PRIVATE_KEY);
+        let mut tx = TxEip1559 {
+            chain_id: CHAIN_ID,
+            nonce: signer.nonce,
+            gas_limit: u64::MAX,
+            max_fee_per_gas: 0,
+            max_priority_fee_per_gas: 0,
+            to: TxKind::Call(to),
+            value: amount,
+            access_list: Default::default(),
+            input: Default::default(),
+        };
+        let signature = signer.inner.sign_transaction_sync(&mut tx).unwrap();
+        let tx = TxEnvelope::Eip1559(tx.into_signed(signature));
+
+        state_actor.handle_command(Command::AddTransaction { tx });
+
+        let (tx, _rx) = oneshot::channel();
+
+        state_actor.handle_command(Command::StartBlockBuild {
+            payload_attributes: Default::default(),
+            response_channel: tx,
+        });
+
+        let (tx, rx) = oneshot::channel();
+
+        state_actor.handle_query(Query::BalanceByHeight {
+            height: Latest,
+            address: to,
+            response_channel: tx,
+        });
+
+        let actual_recipient_balance = rx.blocking_recv().unwrap();
+        let expected_recipient_balance = amount;
+
+        assert_eq!(actual_recipient_balance, expected_recipient_balance);
+
+        let (tx, rx) = oneshot::channel();
+
+        state_actor.handle_query(Query::BalanceByHeight {
+            height: Latest,
+            address: EVM_ADDRESS,
+            response_channel: tx,
+        });
+
+        let actual_sender_balance = rx.blocking_recv().unwrap();
+        let expected_sender_balance = initial_balance - amount;
+
+        assert_eq!(actual_sender_balance, expected_sender_balance);
+    }
+
+    #[test]
+    fn test_fetched_nonces_reflect_values_post_transaction_successfully() {
+        let to = primitives::Address::new(hex!("44223344556677889900ffeeaabbccddee111111"));
+        let initial_balance = U256::from(5);
+        let amount = U256::from(4);
+        let (mut state_actor, _) =
+            create_state_actor_with_fake_queries(EVM_ADDRESS.to_move_address(), initial_balance);
+
+        let signer = Signer::new(&PRIVATE_KEY);
+        let mut tx = TxEip1559 {
+            chain_id: CHAIN_ID,
+            nonce: signer.nonce,
+            gas_limit: u64::MAX,
+            max_fee_per_gas: 0,
+            max_priority_fee_per_gas: 0,
+            to: TxKind::Call(to),
+            value: amount,
+            access_list: Default::default(),
+            input: Default::default(),
+        };
+        let signature = signer.inner.sign_transaction_sync(&mut tx).unwrap();
+        let tx = TxEnvelope::Eip1559(tx.into_signed(signature));
+
+        state_actor.handle_command(Command::AddTransaction { tx });
+
+        let (tx, _rx) = oneshot::channel();
+
+        state_actor.handle_command(Command::StartBlockBuild {
+            payload_attributes: Default::default(),
+            response_channel: tx,
+        });
+
+        let (tx, rx) = oneshot::channel();
+
+        state_actor.handle_query(Query::NonceByHeight {
+            height: Latest,
+            address: to,
+            response_channel: tx,
+        });
+
+        let actual_recipient_balance = rx.blocking_recv().unwrap();
+        let expected_recipient_balance = 0;
+
+        assert_eq!(actual_recipient_balance, expected_recipient_balance);
+
+        let (tx, rx) = oneshot::channel();
+
+        state_actor.handle_query(Query::NonceByHeight {
+            height: Latest,
+            address: EVM_ADDRESS,
+            response_channel: tx,
+        });
+
+        let actual_sender_balance = rx.blocking_recv().unwrap();
+        let expected_sender_balance = 1;
+
+        assert_eq!(actual_sender_balance, expected_sender_balance);
     }
 }

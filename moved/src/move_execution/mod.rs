@@ -1,5 +1,5 @@
 pub use {
-    eth_token::{quick_get_eth_balance, BaseTokenAccounts, MovedBaseTokenAccounts},
+    eth_token::{mint_eth, quick_get_eth_balance, BaseTokenAccounts, MovedBaseTokenAccounts},
     evm_native::genesis_state_changes,
     gas::{CreateEcotoneL1GasFee, CreateL1GasFee, EcotoneL1GasFee, L1GasFee, L1GasFeeInput},
     nonces::quick_get_nonce,

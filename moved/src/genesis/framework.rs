@@ -227,8 +227,8 @@ mod tests {
             .count();
         assert_eq!(sui_framework_len, SUI_MODULES_LEN);
 
-        let mut state = InMemoryState::new();
-        let (change_set, _) = deploy_framework(&mut state).unwrap();
+        let state = InMemoryState::new();
+        let (change_set, _) = deploy_framework(&state).unwrap();
         assert_eq!(change_set.modules().count(), TOTAL_MODULES_LEN);
     }
 }

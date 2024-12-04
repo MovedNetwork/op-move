@@ -1,4 +1,3 @@
-use move_core_types::effects::ChangeSet;
 pub use payload::{NewPayloadId, NewPayloadIdInput, StatePayloadId};
 
 use {
@@ -36,6 +35,7 @@ use {
         rpc::types::{FeeHistory, TransactionReceipt as AlloyTxReceipt, TransactionRequest},
     },
     move_binary_format::errors::PartialVMError,
+    move_core_types::effects::ChangeSet,
     revm::primitives::TxKind,
     std::{
         collections::HashMap,
@@ -60,7 +60,6 @@ pub type InMemStateActor = StateActor<
     crate::move_execution::InMemoryStateQueries,
 >;
 
-#[derive(Debug)]
 pub struct StateActor<
     S: State,
     P: NewPayloadId,
@@ -89,9 +88,15 @@ pub struct StateActor<
     l1_fee: L1G,
     base_token: B,
     block_memory: M,
-    state_queries: SQ,
+    pub state_queries: SQ,
     // tx_hash -> (tx_with_receipt, block_hash)
     tx_receipts: HashMap<B256, (TransactionWithReceipt, B256)>,
+    on_tx_batch: Box<
+        dyn Fn() -> Box<dyn Fn(&mut Self, ChangeSet) + Send + Sync + 'static>
+            + Send
+            + Sync
+            + 'static,
+    >,
 }
 
 impl<
@@ -148,6 +153,12 @@ impl<
         block_queries: Q,
         block_memory: M,
         state_queries: SQ,
+        on_tx_batch: Box<
+            dyn Fn() -> Box<dyn Fn(&mut Self, ChangeSet) + Send + Sync + 'static>
+                + Send
+                + Sync
+                + 'static,
+        >,
     ) -> Self {
         Self {
             genesis_config,
@@ -168,6 +179,7 @@ impl<
             block_memory,
             state_queries,
             tx_receipts: HashMap::new(),
+            on_tx_batch,
         }
     }
 
@@ -383,81 +395,87 @@ impl<
         let mut log_offset = 0;
         let mut all_changes = ChangeSet::new();
 
-        // https://github.com/ethereum-optimism/specs/blob/9dbc6b0/specs/protocol/deposits.md#kinds-of-deposited-transactions
-        let l1_fee = transactions
-            .peek()
-            .and_then(|(_, v, _)| v.as_deposited())
-            .map(|v| self.l1_fee.for_deposit(v.data.as_ref()));
+        {
+            // https://github.com/ethereum-optimism/specs/blob/9dbc6b0/specs/protocol/deposits.md#kinds-of-deposited-transactions
+            let l1_fee = transactions
+                .peek()
+                .and_then(|(_, v, _)| v.as_deposited())
+                .map(|v| self.l1_fee.for_deposit(v.data.as_ref()));
 
-        // TODO: parallel transaction processing?
-        for (tx_hash, tx, l1_cost_input) in transactions {
-            let Ok(normalized_tx) = tx.clone().try_into() else {
-                continue;
-            };
-            let outcome = match execute_transaction(
-                &normalized_tx,
-                &tx_hash,
-                self.state.resolver(),
-                &self.genesis_config,
-                l1_fee
-                    .as_ref()
-                    .map(|v| v.l1_fee(l1_cost_input.clone()).to_saturated_u64())
-                    .unwrap_or(0),
-                &self.base_token,
-                block_header.clone(),
-            ) {
-                Ok(outcome) => outcome,
-                Err(User(e)) => unreachable!("User errors are handled in execution {e:?}"),
-                Err(InvalidTransaction(_)) => continue,
-                Err(InvariantViolation(e)) => panic!("ERROR: execution error {e:?}"),
-            };
+            // TODO: parallel transaction processing?
+            for (tx_hash, tx, l1_cost_input) in transactions {
+                let Ok(normalized_tx) = tx.clone().try_into() else {
+                    continue;
+                };
+                let outcome = match execute_transaction(
+                    &normalized_tx,
+                    &tx_hash,
+                    self.state.resolver(),
+                    &self.genesis_config,
+                    l1_fee
+                        .as_ref()
+                        .map(|v| v.l1_fee(l1_cost_input.clone()).to_saturated_u64())
+                        .unwrap_or(0),
+                    &self.base_token,
+                    block_header.clone(),
+                ) {
+                    Ok(outcome) => outcome,
+                    Err(User(e)) => unreachable!("User errors are handled in execution {e:?}"),
+                    Err(InvalidTransaction(_)) => continue,
+                    Err(InvariantViolation(e)) => panic!("ERROR: execution error {e:?}"),
+                };
 
-            let l1_block_info = l1_fee.as_ref().and_then(|x| x.l1_block_info(l1_cost_input));
+                let l1_block_info = l1_fee.as_ref().and_then(|x| x.l1_block_info(l1_cost_input));
 
-            all_changes
-                .squash(outcome.changes.clone())
-                .unwrap_or_else(|_| panic!("ERROR: state update failed for transaction {tx:?}"));
-            self.state
-                .apply(outcome.changes)
-                .unwrap_or_else(|_| panic!("ERROR: state update failed for transaction {tx:?}"));
+                all_changes
+                    .squash(outcome.changes.clone())
+                    .unwrap_or_else(|_| {
+                        panic!("ERROR: state update failed for transaction {tx:?}")
+                    });
+                self.state.apply(outcome.changes).unwrap_or_else(|_| {
+                    panic!("ERROR: state update failed for transaction {tx:?}")
+                });
 
-            cumulative_gas_used = cumulative_gas_used.saturating_add(outcome.gas_used as u128);
+                cumulative_gas_used = cumulative_gas_used.saturating_add(outcome.gas_used as u128);
 
-            let bloom = outcome.logs.iter().logs_bloom();
-            logs_bloom.accrue_bloom(&bloom);
+                let bloom = outcome.logs.iter().logs_bloom();
+                logs_bloom.accrue_bloom(&bloom);
 
-            let tx_log_offset = log_offset;
-            log_offset += outcome.logs.len() as u64;
-            let receipt = Receipt {
-                status: outcome.vm_outcome.is_ok().into(),
-                cumulative_gas_used,
-                logs: outcome.logs,
-            };
+                let tx_log_offset = log_offset;
+                log_offset += outcome.logs.len() as u64;
+                let receipt = Receipt {
+                    status: outcome.vm_outcome.is_ok().into(),
+                    cumulative_gas_used,
+                    logs: outcome.logs,
+                };
 
-            let receipt = tx.wrap_receipt(receipt, bloom);
+                let receipt = tx.wrap_receipt(receipt, bloom);
 
-            total_tip = total_tip.saturating_add(
-                U256::from(outcome.gas_used).saturating_mul(normalized_tx.tip_per_gas(base_fee)),
-            );
+                total_tip = total_tip.saturating_add(
+                    U256::from(outcome.gas_used)
+                        .saturating_mul(normalized_tx.tip_per_gas(base_fee)),
+                );
 
-            receipts.push(TransactionWithReceipt {
-                tx_hash,
-                tx,
-                normalized_tx,
-                receipt,
-                l1_block_info,
-                gas_used: outcome.gas_used,
-                tx_index,
-                contract_address: outcome
-                    .deployment
-                    .map(|(address, _)| address.to_eth_address()),
-                logs_offset: tx_log_offset,
-            });
+                receipts.push(TransactionWithReceipt {
+                    tx_hash,
+                    tx,
+                    normalized_tx,
+                    receipt,
+                    l1_block_info,
+                    gas_used: outcome.gas_used,
+                    tx_index,
+                    contract_address: outcome
+                        .deployment
+                        .map(|(address, _)| address.to_eth_address()),
+                    logs_offset: tx_log_offset,
+                });
 
-            tx_index += 1;
+                tx_index += 1;
+            }
         }
 
-        self.state_queries.add(all_changes);
+        let on_tx_batch = (self.on_tx_batch)();
+        (on_tx_batch)(self, all_changes);
 
         let receipts_root = receipts
             .iter()
@@ -574,7 +592,7 @@ mod test_doubles {
             move_execution::{BlockHeight, StateQueries},
             primitives::U256,
         },
-        move_core_types::{account_address::AccountAddress, effects::ChangeSet},
+        move_core_types::account_address::AccountAddress,
     };
 
     pub struct MockStateQueries(pub BlockHeight, pub AccountAddress);
@@ -610,10 +628,6 @@ mod test_doubles {
             assert_eq!(account, self.1);
 
             3
-        }
-
-        fn add(&mut self, _changes: ChangeSet) {
-            unimplemented!()
         }
     }
 }
@@ -699,6 +713,7 @@ mod tests {
             InMemoryBlockQueries,
             block_memory,
             state_queries,
+            Box::new(|| Box::new(|_, _| {})),
         );
         (state, state_channel)
     }
@@ -784,6 +799,7 @@ mod tests {
             InMemoryBlockQueries,
             block_memory,
             state_queries,
+            Box::new(|| Box::new(|state, changes| state.state_queries.add(changes))),
         );
         (state, state_channel)
     }

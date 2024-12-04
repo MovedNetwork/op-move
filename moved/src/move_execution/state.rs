@@ -33,8 +33,6 @@ pub trait StateQueries {
     /// Queries the blockchain state version corresponding with block `height` for the nonce value
     /// associated with `account`.
     fn nonce_at(&self, account: AccountAddress, height: BlockHeight) -> Nonce;
-
-    fn add(&mut self, changes: ChangeSet);
 }
 
 #[derive(Debug)]
@@ -91,6 +89,10 @@ impl InMemoryStateQueries {
     pub fn new(storage: StateMemory) -> Self {
         Self { storage }
     }
+
+    pub fn add(&mut self, change: ChangeSet) {
+        self.storage.add(change);
+    }
 }
 
 impl StateQueries for InMemoryStateQueries {
@@ -118,10 +120,6 @@ impl StateQueries for InMemoryStateQueries {
         let resolver = self.storage.resolver(Bound::Included(height as usize));
 
         quick_get_nonce(&account, &resolver)
-    }
-
-    fn add(&mut self, change: ChangeSet) {
-        self.storage.add(change);
     }
 }
 

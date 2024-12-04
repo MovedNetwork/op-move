@@ -310,6 +310,7 @@ mod tests {
             InMemoryBlockQueries,
             block_memory,
             InMemoryStateQueries::new(state_memory),
+            Box::new(|| Box::new(|_, _| {})),
         );
         let state_handle = state.spawn();
 

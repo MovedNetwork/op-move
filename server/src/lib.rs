@@ -113,6 +113,7 @@ pub async fn run() {
         InMemoryBlockQueries,
         block_memory,
         state_query,
+        Box::new(|| Box::new(|state, changes| state.state_queries.add(changes))),
     );
 
     let http_state_channel = state_channel.clone();

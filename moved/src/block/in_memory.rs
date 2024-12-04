@@ -124,3 +124,30 @@ impl BlockQueries for InMemoryBlockQueries {
         }
     }
 }
+
+#[cfg(any(feature = "test-doubles", test))]
+mod test_doubles {
+    use super::*;
+
+    impl BlockQueries for () {
+        type Storage = ();
+
+        fn by_hash(&self, _: &Self::Storage, _: B256, _: bool) -> Option<BlockResponse> {
+            None
+        }
+
+        fn by_height(&self, _: &Self::Storage, _: u64, _: bool) -> Option<BlockResponse> {
+            None
+        }
+    }
+
+    impl BlockRepository for () {
+        type Storage = ();
+
+        fn add(&mut self, _storage: &mut Self::Storage, _block: ExtendedBlock) {}
+
+        fn by_hash(&self, _storage: &Self::Storage, _hash: B256) -> Option<ExtendedBlock> {
+            None
+        }
+    }
+}

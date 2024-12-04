@@ -62,8 +62,13 @@ async fn inner_execute(
 #[cfg(test)]
 mod tests {
     use {
-        super::*, crate::methods::tests::create_state_actor, moved::primitives::U64,
-        std::str::FromStr, test_case::test_case,
+        super::*,
+        crate::methods::tests::{create_state_actor, create_state_actor_with_mock_state_queries},
+        alloy::hex,
+        move_core_types::account_address::AccountAddress,
+        moved::primitives::U64,
+        std::str::FromStr,
+        test_case::test_case,
     };
 
     #[test_case("0x1")]
@@ -114,6 +119,36 @@ mod tests {
         });
 
         let expected_response: serde_json::Value = serde_json::from_str(r#""0x0""#).unwrap();
+        let response = execute(request, state_channel).await.unwrap();
+
+        assert_eq!(response, expected_response);
+        state_handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_endpoint_returns_json_encoded_nonce_query_result_successfully() {
+        let expected_nonce = 3;
+        let height = 2;
+        let (state_actor, state_channel) = create_state_actor_with_mock_state_queries(
+            height,
+            AccountAddress::new(hex!(
+                "0000000000000000000000002222222222222223333333333333333333111100"
+            )),
+        );
+        let address = "2222222222222223333333333333333333111100";
+
+        let state_handle = state_actor.spawn();
+        let request: serde_json::Value = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "eth_getNonce",
+            "params": [
+                format!("0x{address}"),
+                format!("0x{height}"),
+            ],
+            "id": 1
+        });
+
+        let expected_response = serde_json::Value::String(format!("0x{expected_nonce}"));
         let response = execute(request, state_channel).await.unwrap();
 
         assert_eq!(response, expected_response);

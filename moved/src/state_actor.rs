@@ -564,6 +564,60 @@ impl<
     }
 }
 
+#[cfg(any(feature = "test-doubles", test))]
+pub use test_doubles::*;
+
+#[cfg(any(feature = "test-doubles", test))]
+mod test_doubles {
+    use {
+        crate::{
+            move_execution::{BlockHeight, StateQueries},
+            primitives::U256,
+        },
+        move_core_types::{account_address::AccountAddress, effects::ChangeSet},
+    };
+
+    pub struct MockStateQueries(pub BlockHeight, pub AccountAddress);
+
+    impl StateQueries for MockStateQueries {
+        type Storage = ();
+
+        fn balance(&self, _account: AccountAddress) -> crate::move_execution::Balance {
+            unimplemented!()
+        }
+
+        fn balance_at(
+            &self,
+            account: AccountAddress,
+            height: BlockHeight,
+        ) -> crate::move_execution::Balance {
+            assert_eq!(height, self.0);
+            assert_eq!(account, self.1);
+
+            U256::from(5)
+        }
+
+        fn nonce(&self, _account: AccountAddress) -> crate::move_execution::Nonce {
+            unimplemented!()
+        }
+
+        fn nonce_at(
+            &self,
+            account: AccountAddress,
+            height: BlockHeight,
+        ) -> crate::move_execution::Nonce {
+            assert_eq!(height, self.0);
+            assert_eq!(account, self.1);
+
+            3
+        }
+
+        fn add(&mut self, _changes: ChangeSet) {
+            unimplemented!()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use {
@@ -596,54 +650,6 @@ mod tests {
             oneshot,
         },
     };
-
-    struct MockStateQueries(BlockHeight);
-
-    impl StateQueries for MockStateQueries {
-        type Storage = ();
-
-        fn balance(&self, _account: AccountAddress) -> crate::move_execution::Balance {
-            unimplemented!()
-        }
-
-        fn balance_at(
-            &self,
-            account: AccountAddress,
-            height: BlockHeight,
-        ) -> crate::move_execution::Balance {
-            assert_eq!(height, self.0);
-            assert_eq!(
-                account,
-                primitives::Address::new(hex!("44223344556677889900ffeeaabbccddee111111"))
-                    .to_move_address()
-            );
-
-            U256::from(5)
-        }
-
-        fn nonce(&self, _account: AccountAddress) -> crate::move_execution::Nonce {
-            unimplemented!()
-        }
-
-        fn nonce_at(
-            &self,
-            account: AccountAddress,
-            height: BlockHeight,
-        ) -> crate::move_execution::Nonce {
-            assert_eq!(height, self.0);
-            assert_eq!(
-                account,
-                primitives::Address::new(hex!("11223344556677889900ffeeaabbccddee111111"))
-                    .to_move_address()
-            );
-
-            3
-        }
-
-        fn add(&mut self, _changes: ChangeSet) {
-            unimplemented!()
-        }
-    }
 
     fn create_state_actor_with_given_queries<SQ: StateQueries>(
         height: u64,
@@ -793,13 +799,16 @@ mod tests {
         head_height: BlockHeight,
         expected_height: BlockHeight,
     ) {
-        let (state_actor, _) =
-            create_state_actor_with_given_queries(head_height, MockStateQueries(expected_height));
+        let address = primitives::Address::new(hex!("11223344556677889900ffeeaabbccddee111111"));
+        let (state_actor, _) = create_state_actor_with_given_queries(
+            head_height,
+            MockStateQueries(expected_height, address.to_move_address()),
+        );
         let (tx, rx) = oneshot::channel();
 
         state_actor.handle_query(Query::NonceByHeight {
             height,
-            address: primitives::Address::new(hex!("11223344556677889900ffeeaabbccddee111111")),
+            address,
             response_channel: tx,
         });
 
@@ -820,13 +829,16 @@ mod tests {
         head_height: BlockHeight,
         expected_height: BlockHeight,
     ) {
-        let (state_actor, _) =
-            create_state_actor_with_given_queries(head_height, MockStateQueries(expected_height));
+        let address = primitives::Address::new(hex!("44223344556677889900ffeeaabbccddee111111"));
+        let (state_actor, _) = create_state_actor_with_given_queries(
+            head_height,
+            MockStateQueries(expected_height, address.to_move_address()),
+        );
         let (tx, rx) = oneshot::channel();
 
         state_actor.handle_query(Query::BalanceByHeight {
             height,
-            address: primitives::Address::new(hex!("44223344556677889900ffeeaabbccddee111111")),
+            address,
             response_channel: tx,
         });
 

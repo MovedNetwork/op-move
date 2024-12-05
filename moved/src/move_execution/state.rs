@@ -9,7 +9,6 @@ use {
     },
     move_table_extension::TableResolver,
     move_vm_test_utils::InMemoryStorage,
-    std::ops::Bound,
 };
 
 pub type Balance = U256;
@@ -20,15 +19,9 @@ pub trait StateQueries {
     /// The associated storage type for querying the blockchain state.
     type Storage;
 
-    /// Queries the current blockchain state for amount of base token associated with `account`.
-    fn balance(&self, account: AccountAddress) -> Balance;
-
     /// Queries the blockchain state version corresponding with block `height` for amount of base
     /// token associated with `account`.
     fn balance_at(&self, account: AccountAddress, height: BlockHeight) -> Balance;
-
-    /// Queries the current blockchain state for the nonce value associated with `account`.
-    fn nonce(&self, account: AccountAddress) -> Nonce;
 
     /// Queries the blockchain state version corresponding with block `height` for the nonce value
     /// associated with `account`.
@@ -63,17 +56,17 @@ impl StateMemory {
         self.changes.push(change);
     }
 
-    pub fn resolver(
-        &self,
-        upper: Bound<usize>,
-    ) -> impl MoveResolver<PartialVMError> + TableResolver {
+    pub fn resolver(&self, height: usize) -> impl MoveResolver<PartialVMError> + TableResolver {
         let mut state = InMemoryStorage::new();
-        let upper = upper.map(|n| n.min(self.changes.len().saturating_sub(1)));
 
-        for change in self.changes[(Bound::Included(0), upper)].iter() {
-            state.apply(change.clone()).expect(
-                "The changeset should be applicable as it was previously applied in write storage",
-            );
+        if let Some(last_index) = self.changes.len().checked_sub(1) {
+            let height = height.min(last_index);
+
+            for change in self.changes[0..=height].iter() {
+                state.apply(change.clone()).expect(
+                    "The changeset should be applicable as it was previously applied in write storage",
+                );
+            }
         }
 
         state
@@ -98,26 +91,14 @@ impl InMemoryStateQueries {
 impl StateQueries for InMemoryStateQueries {
     type Storage = StateMemory;
 
-    fn balance(&self, account: AccountAddress) -> Balance {
-        let resolver = self.storage.resolver(Bound::Unbounded);
-
-        quick_get_eth_balance(&account, &resolver)
-    }
-
     fn balance_at(&self, account: AccountAddress, height: BlockHeight) -> Balance {
-        let resolver = self.storage.resolver(Bound::Included(height as usize));
+        let resolver = self.storage.resolver(height as usize);
 
         quick_get_eth_balance(&account, &resolver)
-    }
-
-    fn nonce(&self, account: AccountAddress) -> Nonce {
-        let resolver = self.storage.resolver(Bound::Unbounded);
-
-        quick_get_nonce(&account, &resolver)
     }
 
     fn nonce_at(&self, account: AccountAddress, height: BlockHeight) -> Nonce {
-        let resolver = self.storage.resolver(Bound::Included(height as usize));
+        let resolver = self.storage.resolver(height as usize);
 
         quick_get_nonce(&account, &resolver)
     }
@@ -215,7 +196,7 @@ mod tests {
 
         let query = InMemoryStateQueries::new(storage);
 
-        let actual_balance = query.balance(addr);
+        let actual_balance = query.balance_at(addr, 999);
         let expected_balance = U256::from(1u64);
 
         assert_eq!(actual_balance, expected_balance);
@@ -267,7 +248,7 @@ mod tests {
 
         let query = InMemoryStateQueries::new(storage);
 
-        let actual_balance = query.balance(addr);
+        let actual_balance = query.balance_at(addr, 0);
         let expected_balance = U256::ZERO;
 
         assert_eq!(actual_balance, expected_balance);
@@ -319,7 +300,7 @@ mod tests {
 
         let query = InMemoryStateQueries::new(storage);
 
-        let actual_nonce = query.nonce(addr);
+        let actual_nonce = query.nonce_at(addr, 999);
         let expected_nonce = 1u64;
 
         assert_eq!(actual_nonce, expected_nonce);
@@ -371,7 +352,7 @@ mod tests {
 
         let query = InMemoryStateQueries::new(storage);
 
-        let actual_nonce = query.nonce(addr);
+        let actual_nonce = query.nonce_at(addr, 0);
         let expected_nonce = 0u64;
 
         assert_eq!(actual_nonce, expected_nonce);

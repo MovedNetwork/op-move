@@ -80,7 +80,7 @@ pub mod tests {
             InMemoryBlockQueries,
             block_memory,
             InMemoryStateQueries::new(state_memory),
-            Box::new(|| Box::new(|_, _| {})),
+            StateActor::on_tx_batch_noop(),
         );
         (state, state_channel)
     }
@@ -149,7 +149,7 @@ pub mod tests {
             (),
             (),
             MockStateQueries(height, address),
-            Box::new(|| Box::new(|_, _| {})),
+            StateActor::on_tx_batch_noop(),
         );
         (state, state_channel)
     }

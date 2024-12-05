@@ -60,6 +60,9 @@ pub type InMemStateActor = StateActor<
     crate::move_execution::InMemoryStateQueries,
 >;
 
+type OnTxBatch<S> =
+    Box<dyn Fn() -> Box<dyn Fn(&mut S, ChangeSet) + Send + Sync + 'static> + Send + Sync + 'static>;
+
 pub struct StateActor<
     S: State,
     P: NewPayloadId,
@@ -88,15 +91,10 @@ pub struct StateActor<
     l1_fee: L1G,
     base_token: B,
     block_memory: M,
-    pub state_queries: SQ,
+    state_queries: SQ,
     // tx_hash -> (tx_with_receipt, block_hash)
     tx_receipts: HashMap<B256, (TransactionWithReceipt, B256)>,
-    on_tx_batch: Box<
-        dyn Fn() -> Box<dyn Fn(&mut Self, ChangeSet) + Send + Sync + 'static>
-            + Send
-            + Sync
-            + 'static,
-    >,
+    on_tx_batch: OnTxBatch<Self>,
 }
 
 impl<
@@ -153,12 +151,7 @@ impl<
         block_queries: Q,
         block_memory: M,
         state_queries: SQ,
-        on_tx_batch: Box<
-            dyn Fn() -> Box<dyn Fn(&mut Self, ChangeSet) + Send + Sync + 'static>
-                + Send
-                + Sync
-                + 'static,
-        >,
+        on_tx_batch: OnTxBatch<Self>,
     ) -> Self {
         Self {
             genesis_config,
@@ -580,6 +573,27 @@ impl<
         };
         Some(result)
     }
+
+    pub fn on_tx_batch_noop() -> OnTxBatch<Self> {
+        Box::new(|| Box::new(|_, _| {}))
+    }
+}
+
+impl<
+        S: State<Err = PartialVMError>,
+        P: NewPayloadId,
+        H: BlockHash,
+        R: BlockRepository<Storage = M>,
+        G: GasFee,
+        L1G: CreateL1GasFee,
+        B: BaseTokenAccounts,
+        Q: BlockQueries<Storage = M>,
+        M,
+    > StateActor<S, P, H, R, G, L1G, B, Q, M, crate::move_execution::InMemoryStateQueries>
+{
+    pub fn on_tx_batch_in_memory() -> OnTxBatch<Self> {
+        Box::new(|| Box::new(|state, changes| state.state_queries.add(changes)))
+    }
 }
 
 #[cfg(any(feature = "test-doubles", test))]
@@ -713,7 +727,7 @@ mod tests {
             InMemoryBlockQueries,
             block_memory,
             state_queries,
-            Box::new(|| Box::new(|_, _| {})),
+            StateActor::on_tx_batch_noop(),
         );
         (state, state_channel)
     }
@@ -799,7 +813,7 @@ mod tests {
             InMemoryBlockQueries,
             block_memory,
             state_queries,
-            Box::new(|| Box::new(|state, changes| state.state_queries.add(changes))),
+            StateActor::on_tx_batch_in_memory(),
         );
         (state, state_channel)
     }

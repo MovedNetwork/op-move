@@ -136,7 +136,7 @@ mod tests {
             InMemoryBlockQueries,
             block_memory,
             InMemoryStateQueries::new(state_memory),
-            Box::new(|| Box::new(|_, _| {})),
+            moved::state_actor::StateActor::on_tx_batch_noop(),
         );
         let state_handle = state.spawn();
 

@@ -47,7 +47,7 @@ pub fn quick_get_nonce(
     .unwrap_or_default()
 }
 
-pub(super) fn check_nonce<G: GasMeter>(
+pub fn check_nonce<G: GasMeter>(
     tx_nonce: u64,
     signer: &AccountAddress,
     session: &mut Session,

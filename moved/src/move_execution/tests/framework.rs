@@ -32,9 +32,10 @@ fn test_execute_object_playground_contract() {
     let dest_arg = MoveValue::Address(move_address);
     ctx.execute(&module_id, "create_and_transfer", vec![&signer, &dest_arg]);
 
-    // The object address is deterministic based on the transaction
+    // The object address is deterministic based on the transaction. If the object address
+    // changes, the new one shows up is in the `create_and_transfer` execution outcome
     let object_address = AccountAddress::new(hex!(
-        "81383494fba7aa2410337bc4f16e3d0a196105b22d3317a56d6cbd613c061f5f"
+        "48043a7459c6464fa889f5e686e74636a73dfdc395b80bfbab15de1513f9a37e"
     ));
 
     // Calls with correct object address work

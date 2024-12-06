@@ -8,7 +8,7 @@ use {
         primitives::{ToEthAddress, ToMoveAddress, ToMoveU256},
         storage::{InMemoryState, State},
         tests::{ALT_EVM_ADDRESS, EVM_ADDRESS},
-        types::session_id::SessionId,
+        types::{session_id::SessionId, transactions::TransactionData},
     },
     alloy::{
         primitives::utils::parse_ether,
@@ -103,7 +103,7 @@ fn test_evm() {
     let (tx_hash, tx) = create_transaction(
         &mut ctx.signer,
         TxKind::Call(EVM_NATIVE_ADDRESS.to_eth_address()),
-        bcs::to_bytes(&entry_fn).unwrap(),
+        bcs::to_bytes(&TransactionData::EntryFunction(entry_fn)).unwrap(),
     );
 
     let transaction = TestTransaction::new(tx, tx_hash);
@@ -165,7 +165,7 @@ fn test_solidity_fixed_bytes() {
         let (tx_hash, tx) = create_transaction(
             &mut ctx.signer,
             TxKind::Call(EVM_ADDRESS),
-            bcs::to_bytes(&entry_fn).unwrap(),
+            bcs::to_bytes(&TransactionData::EntryFunction(entry_fn)).unwrap(),
         );
         execute_transaction(
             &tx,

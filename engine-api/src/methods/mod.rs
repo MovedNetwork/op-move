@@ -18,9 +18,12 @@ pub mod tests {
     use {
         crate::json_utils::access_state_error,
         alloy::{
+            consensus::{SignableTransaction, TxEip1559, TxEnvelope},
             hex::FromHex,
-            primitives::{hex, utils::parse_ether, FixedBytes},
+            network::TxSignerSync,
+            primitives::{hex, utils::parse_ether, Bytes, FixedBytes, TxKind},
             rlp::Encodable,
+            signers::local::PrivateKeySigner,
         },
         move_core_types::account_address::AccountAddress,
         moved::{
@@ -28,7 +31,10 @@ pub mod tests {
                 Block, BlockMemory, BlockRepository, Eip1559GasFee, InMemoryBlockQueries,
                 InMemoryBlockRepository, MovedBlockHash,
             },
-            genesis::{config::GenesisConfig, init_state},
+            genesis::{
+                config::{GenesisConfig, CHAIN_ID},
+                init_state,
+            },
             move_execution::MovedBaseTokenAccounts,
             primitives::{Address, B256, U256, U64},
             storage::InMemoryState,
@@ -42,6 +48,9 @@ pub mod tests {
             oneshot,
         },
     };
+
+    /// The address corresponding to this private key is 0x8fd379246834eac74B8419FfdA202CF8051F7A03
+    pub const PRIVATE_KEY: [u8; 32] = [0xaa; 32];
 
     pub fn create_state_actor() -> (moved::state_actor::InMemStateActor, Sender<StateMessage>) {
         let genesis_config = GenesisConfig::default();
@@ -77,7 +86,6 @@ pub mod tests {
     }
 
     pub async fn deposit_eth(to: &str, channel: &Sender<StateMessage>) {
-        let (sender, receiver) = oneshot::channel();
         let to = Address::from_hex(to).unwrap();
         let tx = ExtendedTxEnvelope::DepositedTx(DepositedTx {
             to,
@@ -95,6 +103,40 @@ pub mod tests {
         let mut payload_attributes = Payload::default();
         payload_attributes.transactions.push(encoded.into());
 
+        let (sender, receiver) = oneshot::channel();
+        let msg = Command::StartBlockBuild {
+            payload_attributes,
+            response_channel: sender,
+        }
+        .into();
+        channel.send(msg).await.map_err(access_state_error).unwrap();
+        receiver.await.map_err(access_state_error).unwrap();
+    }
+
+    pub async fn deploy_contract(contract_bytes: Bytes, channel: &Sender<StateMessage>) {
+        let mut tx = TxEip1559 {
+            chain_id: CHAIN_ID,
+            nonce: 0,
+            max_fee_per_gas: 0,
+            max_priority_fee_per_gas: 0,
+            gas_limit: u64::MAX,
+            to: TxKind::Create,
+            value: U256::ZERO,
+            input: contract_bytes,
+            access_list: Default::default(),
+        };
+
+        let signer = PrivateKeySigner::from_bytes(&PRIVATE_KEY.into()).unwrap();
+        let signature = signer.sign_transaction_sync(&mut tx).unwrap();
+        let signed_tx = TxEnvelope::Eip1559(tx.into_signed(signature));
+        let tx = ExtendedTxEnvelope::Canonical(signed_tx);
+
+        let mut encoded = Vec::new();
+        tx.encode(&mut encoded);
+        let mut payload_attributes = Payload::default();
+        payload_attributes.transactions.push(encoded.into());
+
+        let (sender, receiver) = oneshot::channel();
         let msg = Command::StartBlockBuild {
             payload_attributes,
             response_channel: sender,

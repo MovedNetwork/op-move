@@ -48,6 +48,8 @@ pub trait State {
         table_changes: TableChangeSet,
     ) -> Result<(), Self::Err>;
 
+    fn db(&self) -> &(impl TreeReader<StateKey> + Sync);
+
     /// Returns a reference to a [`MoveResolver`] that can resolve both resources and modules.
     fn resolver(&self) -> &(impl MoveResolver<Self::Err> + TableResolver);
 
@@ -100,6 +102,10 @@ impl State for InMemoryState {
         self.insert_change_set_into_merkle_trie(&changes);
         self.resolver.apply_extended(changes, table_changes)?;
         Ok(())
+    }
+
+    fn db(&self) -> &(impl TreeReader<StateKey> + Sync) {
+        &self.db
     }
 
     fn resolver(&self) -> &(impl MoveResolver<Self::Err> + TableResolver) {

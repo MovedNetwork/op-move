@@ -192,14 +192,14 @@ impl<
                 response_channel,
                 height,
             } => response_channel
-                .send(self.state_queries.balance_at(address.to_move_address(), self.resolve_height(height)))
+                .send(self.state_queries.balance_at(self.state.db(), address.to_move_address(), self.resolve_height(height)))
                 .ok(),
             Query::NonceByHeight {
                 address,
                 response_channel,
                 height,
             } => response_channel
-                .send(self.state_queries.nonce_at(address.to_move_address(), self.resolve_height(height)))
+                .send(self.state_queries.nonce_at(self.state.db(), address.to_move_address(), self.resolve_height(height)))
                 .ok(),
             Query::BlockByHash {
                 hash,
@@ -592,7 +592,7 @@ impl<
     > StateActor<S, P, H, R, G, L1G, B, Q, M, crate::move_execution::InMemoryStateQueries>
 {
     pub fn on_tx_batch_in_memory() -> OnTxBatch<Self> {
-        Box::new(|| Box::new(|state, changes| state.state_queries.add(changes)))
+        Box::new(|| Box::new(|state, changes| state.state_queries.add(changes, 0)))
     }
 }
 
@@ -606,6 +606,8 @@ mod test_doubles {
             move_execution::{BlockHeight, StateQueries},
             primitives::U256,
         },
+        aptos_jellyfish_merkle::TreeReader,
+        aptos_types::state_store::state_key::StateKey,
         move_core_types::account_address::AccountAddress,
     };
 
@@ -616,6 +618,7 @@ mod test_doubles {
 
         fn balance_at(
             &self,
+            _db: &(impl TreeReader<StateKey> + Sync),
             account: AccountAddress,
             height: BlockHeight,
         ) -> crate::move_execution::Balance {
@@ -627,6 +630,7 @@ mod test_doubles {
 
         fn nonce_at(
             &self,
+            _db: &(impl TreeReader<StateKey> + Sync),
             account: AccountAddress,
             height: BlockHeight,
         ) -> crate::move_execution::Nonce {
@@ -786,7 +790,7 @@ mod tests {
             .unwrap();
         let changes_addition = mint_eth(&state, addr, initial_balance);
         changes.squash(changes_addition.clone()).unwrap();
-        state_memory.add(changes);
+        state_memory.add(changes, 0);
         state.apply(changes_addition).unwrap();
         let state_queries = InMemoryStateQueries::new(state_memory);
 

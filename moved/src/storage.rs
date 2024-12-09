@@ -60,7 +60,7 @@ pub trait State {
 pub struct InMemoryState {
     resolver: InMemoryStorage,
     db: MockTreeStore<StateKey>,
-    version: Version,
+    version: Option<Version>,
 }
 
 impl Default for InMemoryState {
@@ -76,7 +76,7 @@ impl InMemoryState {
         Self {
             resolver: InMemoryStorage::new(),
             db: MockTreeStore::new(Self::ALLOW_OVERWRITE),
-            version: 0,
+            version: None,
         }
     }
 
@@ -114,7 +114,7 @@ impl State for InMemoryState {
 
     fn state_root(&self) -> B256 {
         self.tree()
-            .get_root_hash(self.version)
+            .get_root_hash(self.version.unwrap())
             .map(ToB256::to_h256)
             .unwrap()
     }
@@ -122,8 +122,9 @@ impl State for InMemoryState {
 
 impl InMemoryState {
     fn next_version(&mut self) -> Version {
-        self.version += 1;
-        self.version
+        let version = self.version.map(|v| v + 1).unwrap_or_default();
+        self.version = Some(version);
+        version
     }
 
     fn insert_change_set_into_merkle_trie(&mut self, change_set: &ChangeSet) -> B256 {
@@ -242,20 +243,20 @@ where
 {
     fn create_update_batch(
         &self,
-        values_per_shard: HashMap<u8, Vec<(TreeKey, TreeValueRef)>>,
+        mut values_per_shard: HashMap<u8, Vec<(TreeKey, TreeValueRef)>>,
         version: Version,
     ) -> Result<(HashValue, TreeUpdateBatch<StateKey>), AptosDbError> {
         let mut tree_update_batch = TreeUpdateBatch::new();
         const NIL: Node<StateKey> = Node::Null;
         let mut shard_root_nodes = [NIL; 16];
-        let persisted_versions = self.get_shard_persisted_versions(None)?;
 
-        for (shard_id, values) in values_per_shard {
+        for shard_id in 0..16 {
+            let values = values_per_shard.remove(&shard_id).unwrap_or_default();
             let (shard_root_node, batch) = self.batch_put_value_set_for_shard(
                 shard_id,
                 values,
                 None,
-                persisted_versions[shard_id as usize],
+                version.checked_sub(1),
                 version,
             )?;
 
@@ -263,7 +264,9 @@ where
             shard_root_nodes[shard_id as usize] = shard_root_node;
         }
 
-        self.put_top_levels_nodes(shard_root_nodes.to_vec(), version.checked_sub(1), version)
+        let (root_hash, root_batch) = self.put_top_levels_nodes(shard_root_nodes.to_vec(), version.checked_sub(1), version)?;
+        tree_update_batch.combine(root_batch);
+        Ok((root_hash, tree_update_batch))
     }
 }
 

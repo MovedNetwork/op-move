@@ -50,7 +50,7 @@ pub trait StateQueries {
 #[derive(Debug)]
 pub struct StateMemory {
     mem: InMemoryVersionedState,
-    height_to_version: HashMap<usize, u64>,
+    height_to_version: HashMap<u64, u64>,
 }
 
 impl Default for StateMemory {
@@ -80,10 +80,14 @@ impl StateMemory {
         }
     }
 
+    pub fn set_height_version(&mut self, height: u64, version: u64) {
+        self.height_to_version.insert(height, version);
+    }
+
     pub fn resolver<'a>(
         &'a self,
         db: &'a (impl TreeReader<StateKey> + Sync),
-        height: usize,
+        height: u64,
     ) -> impl MoveResolver<PartialVMError> + TableResolver + 'a {
         HistoricResolver::new(
             db,
@@ -146,7 +150,7 @@ impl StateQueries for InMemoryStateQueries {
         account: AccountAddress,
         height: BlockHeight,
     ) -> Balance {
-        let resolver = self.storage.resolver(db, height as usize);
+        let resolver = self.storage.resolver(db, height);
 
         quick_get_eth_balance(&account, &resolver)
     }
@@ -157,7 +161,7 @@ impl StateQueries for InMemoryStateQueries {
         account: AccountAddress,
         height: BlockHeight,
     ) -> Nonce {
-        let resolver = self.storage.resolver(db, height as usize);
+        let resolver = self.storage.resolver(db, height);
 
         quick_get_nonce(&account, &resolver)
     }
@@ -233,12 +237,12 @@ impl<'a, R: TreeReader<StateKey> + Sync, H: VersionedState> ModuleResolver
         eprintln!("{:#?}", tree.get_leaf_count(1));
         eprintln!("{:#?}", tree.get_leaf_count(2));
         eprintln!("{:#?}", tree.get_leaf_count(3));
-        eprintln!("{:#?}", tree.get_all_nodes_referenced(0));
+        /*eprintln!("{:#?}", tree.get_all_nodes_referenced(0));
         eprintln!("{:#?}", tree.get_all_nodes_referenced(1));
         eprintln!("{:#?}", tree.get_all_nodes_referenced(2));
-        eprintln!("{:#?}", tree.get_all_nodes_referenced(3));
+        eprintln!("{:#?}", tree.get_all_nodes_referenced(3));*/
 
-        let (maybe_leaf, _) = tree.get_with_proof(state_key.hash(), 2).unwrap();
+        let (maybe_leaf, _) = tree.get_with_proof(state_key.hash(), self.version).unwrap();
         let (_, history_key) = maybe_leaf.unwrap();
         let value = self.historic_state.get(&history_key);
 
@@ -261,7 +265,7 @@ impl<'a, R: TreeReader<StateKey> + Sync, H: VersionedState> ResourceResolver
         let tree = JellyfishMerkleTree::new(self.db);
         let state_key = StateKey::resource(address, struct_tag).unwrap();
         let (maybe_leaf, _) = tree.get_with_proof(state_key.hash(), self.version).unwrap();
-        let (_, history_key) = maybe_leaf.unwrap();
+        let Some((_, history_key)) = maybe_leaf else { return Ok((None, 0)); };
         let value = self.historic_state.get(&history_key);
         let len = value.as_ref().map(|v| v.len()).unwrap_or_default();
 
@@ -526,11 +530,11 @@ mod tests {
         let changes_2 = inc_one_nonce(1, &mut state, addr);
         let changes_3 = inc_one_nonce(2, &mut state, addr);
 
-        let mut tree = InMemoryState::new();
+        /*let mut tree = InMemoryState::new();
         tree.apply(genesis_changes.clone()).unwrap();
         tree.apply(changes_1.clone()).unwrap();
         tree.apply(changes_2.clone()).unwrap();
-        tree.apply(changes_3.clone()).unwrap();
+        tree.apply(changes_3.clone()).unwrap();*/
 
         let mut storage = StateMemory::default();
 
@@ -538,10 +542,11 @@ mod tests {
         storage.add(changes_1, 1);
         storage.add(changes_2, 2);
         storage.add(changes_3, 3);
+        storage.set_height_version(1, 1);
 
         let query = InMemoryStateQueries::new(storage);
 
-        let actual_nonce = query.nonce_at(tree.db(), addr, 1);
+        let actual_nonce = query.nonce_at(state.db(), addr, 1);
         let expected_nonce = 1u64;
 
         assert_eq!(actual_nonce, expected_nonce);

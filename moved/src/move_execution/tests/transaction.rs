@@ -67,7 +67,7 @@ fn test_transaction_incorrect_destination() {
     let (tx_hash, tx) = create_transaction(
         &mut ctx.signer,
         TxKind::Call(Default::default()), // Wrong address!
-        bcs::to_bytes(&entry_fn).unwrap(),
+        bcs::to_bytes(&TransactionData::EntryFunction(entry_fn)).unwrap(),
     );
 
     let transaction = TestTransaction::new(tx, tx_hash);
@@ -81,12 +81,12 @@ fn test_transaction_chain_id() {
     let module_id = ctx.deploy_contract("natives");
 
     // Use a transaction to call a function but pass the wrong chain id
-    let entry_fn = EntryFunction::new(
+    let entry_fn = TransactionData::EntryFunction(EntryFunction::new(
         module_id,
         Identifier::new("hashing").unwrap(),
         Vec::new(),
         vec![],
-    );
+    ));
     let mut tx = TxEip1559 {
         // Intentionally setting the wrong chain id
         chain_id: ctx.genesis_config.chain_id + 1,
@@ -115,12 +115,12 @@ fn test_out_of_gas() {
     let module_id = ctx.deploy_contract("natives");
 
     // Use a transaction to call a function but pass in too little gas
-    let entry_fn = EntryFunction::new(
+    let entry_fn = TransactionData::EntryFunction(EntryFunction::new(
         module_id,
         Identifier::new("hashing").unwrap(),
         Vec::new(),
         vec![],
-    );
+    ));
     let mut tx = TxEip1559 {
         chain_id: ctx.genesis_config.chain_id,
         nonce: ctx.signer.nonce,

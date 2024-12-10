@@ -397,7 +397,7 @@ pub fn create_test_tx(
     create_transaction(
         signer,
         TxKind::Call(EVM_ADDRESS),
-        bcs::to_bytes(&entry_fn).unwrap(),
+        bcs::to_bytes(&TransactionData::EntryFunction(entry_fn)).unwrap(),
     )
 }
 

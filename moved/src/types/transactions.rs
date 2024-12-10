@@ -361,11 +361,12 @@ pub enum ScriptOrModule {
 }
 
 /// Possible parsings of transaction data from a non-deposit transaction.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Deserialize, Serialize)]
 pub enum TransactionData {
     EoaBaseTokenTransfer(Address),
-    EntryFunction(EntryFunction),
     ScriptOrModule(ScriptOrModule),
+    // Entry function should be the 3rd option to match the SDK TransactionPayload
+    EntryFunction(EntryFunction),
 }
 
 impl TransactionData {
@@ -377,11 +378,17 @@ impl TransactionData {
                     // transaction as a base token transfer between EOAs.
                     Ok(Self::EoaBaseTokenTransfer(to))
                 } else {
-                    let entry_fn: EntryFunction = bcs::from_bytes(&tx.data)?;
+                    let tx_data: TransactionData = bcs::from_bytes(&tx.data)?;
+                    // Inner value should be an entry function type
+                    let Some(entry_fn) = tx_data.maybe_entry_fn() else {
+                        Err(InvalidTransactionCause::InvalidPayload(bcs::Error::Custom(
+                            "Not an entry function".to_string(),
+                        )))?
+                    };
                     if entry_fn.module().address() != &to.to_move_address() {
                         Err(InvalidTransactionCause::InvalidDestination)?
                     }
-                    Ok(Self::EntryFunction(entry_fn))
+                    Ok(tx_data)
                 }
             }
             TxKind::Create => {

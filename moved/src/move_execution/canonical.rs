@@ -22,12 +22,63 @@ use {
         Error::{InvalidTransaction, User},
         InvalidTransactionCause,
     },
-    aptos_gas_meter::AptosGasMeter,
+    aptos_gas_meter::{AptosGasMeter, StandardGasAlgebra, StandardGasMeter},
     aptos_table_natives::TableResolver,
     move_binary_format::errors::PartialVMError,
     move_core_types::resolver::MoveResolver,
-    move_vm_runtime::module_traversal::{TraversalContext, TraversalStorage},
+    move_vm_runtime::{
+        module_traversal::{TraversalContext, TraversalStorage},
+        session::Session,
+    },
 };
+
+pub(super) fn verify_transaction(
+    tx: &NormalizedEthTransaction,
+    session: &mut Session,
+    traversal_context: &mut TraversalContext,
+    gas_meter: &mut StandardGasMeter<StandardGasAlgebra>,
+    genesis_config: &GenesisConfig,
+    l1_cost: u64,
+    base_token: &impl BaseTokenAccounts,
+) -> crate::Result<()> {
+    if let Some(chain_id) = tx.chain_id {
+        if chain_id != genesis_config.chain_id {
+            return Err(InvalidTransactionCause::IncorrectChainId.into());
+        }
+    }
+
+    let sender_move_address = tx.signer.to_move_address();
+
+    // Charge gas for the transaction itself.
+    // Immediately exit if there is not enough.
+    let txn_size = (tx.data.len() as u64).into();
+    let charge_gas = gas_meter
+        .charge_intrinsic_gas_for_transaction(txn_size)
+        .and_then(|_| gas_meter.charge_io_gas_for_transaction(txn_size));
+    if charge_gas.is_err() {
+        return Err(InvalidTransaction(
+            InvalidTransactionCause::InsufficientIntrinsicGas,
+        ));
+    }
+
+    base_token.charge_l1_cost(
+        &sender_move_address,
+        l1_cost,
+        session,
+        traversal_context,
+        gas_meter,
+    )?;
+
+    check_nonce(
+        tx.nonce,
+        &sender_move_address,
+        session,
+        traversal_context,
+        gas_meter,
+    )?;
+
+    Ok(())
+}
 
 pub(super) fn execute_canonical_transaction(
     tx: &NormalizedEthTransaction,
@@ -38,12 +89,6 @@ pub(super) fn execute_canonical_transaction(
     base_token: &impl BaseTokenAccounts,
     block_header: HeaderForExecution,
 ) -> crate::Result<TransactionExecutionOutcome> {
-    if let Some(chain_id) = tx.chain_id {
-        if chain_id != genesis_config.chain_id {
-            return Err(InvalidTransactionCause::IncorrectChainId.into());
-        }
-    }
-
     let sender_move_address = tx.signer.to_move_address();
 
     let tx_data = TransactionData::parse_from(tx)?;
@@ -63,32 +108,14 @@ pub(super) fn execute_canonical_transaction(
     let mut gas_meter = new_gas_meter(genesis_config, tx.gas_limit());
     let mut deployment = None;
 
-    // Charge gas for the transaction itself.
-    // Immediately exit if there is not enough.
-    let txn_size = (tx.data.len() as u64).into();
-    let charge_gas = gas_meter
-        .charge_intrinsic_gas_for_transaction(txn_size)
-        .and_then(|_| gas_meter.charge_io_gas_for_transaction(txn_size));
-    if charge_gas.is_err() {
-        return Err(InvalidTransaction(
-            InvalidTransactionCause::InsufficientIntrinsicGas,
-        ));
-    }
-
-    base_token.charge_l1_cost(
-        &sender_move_address,
+    verify_transaction(
+        tx,
+        &mut session,
+        &mut traversal_context,
+        &mut gas_meter,
+        genesis_config,
         l1_cost,
-        &mut session,
-        &mut traversal_context,
-        &mut gas_meter,
-    )?;
-
-    check_nonce(
-        tx.nonce,
-        &sender_move_address,
-        &mut session,
-        &mut traversal_context,
-        &mut gas_meter,
+        base_token,
     )?;
 
     let vm_outcome = match tx_data {

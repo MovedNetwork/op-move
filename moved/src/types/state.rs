@@ -212,7 +212,7 @@ pub enum Query {
     Call {
         transaction: TransactionRequest,
         block_number: BlockNumberOrTag,
-        response_channel: oneshot::Sender<Vec<u8>>,
+        response_channel: oneshot::Sender<crate::Result<Vec<u8>>>,
     },
     TransactionReceipt {
         tx_hash: B256,

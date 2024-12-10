@@ -9,7 +9,7 @@ use {
         primitives::{ToMoveAddress, ToMoveU256, B256, U256, U64},
         storage::{InMemoryState, State},
         tests::{signer::Signer, ALT_EVM_ADDRESS, ALT_PRIVATE_KEY, EVM_ADDRESS, PRIVATE_KEY},
-        types::transactions::{DepositedTx, ExtendedTxEnvelope, ScriptOrModule},
+        types::transactions::{DepositedTx, ExtendedTxEnvelope, ScriptOrModule, TransactionData},
     },
     alloy::{
         consensus::{transaction::TxEip1559, SignableTransaction, TxEnvelope},

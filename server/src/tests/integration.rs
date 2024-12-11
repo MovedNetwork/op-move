@@ -274,6 +274,7 @@ fn init_and_start_op_geth() -> Result<Child> {
         .output()
         .context("Call to state dump failed")?;
     check_output(output);
+    let op_geth_logs = std::fs::File::create("op_geth.log").unwrap();
     // Run geth as a child process, so we can continue with the test
     let op_geth_process = Command::new("op-geth")
         // Geth fails to start IPC when the directory name is too long, so simply keeping it short
@@ -320,6 +321,7 @@ fn init_and_start_op_geth() -> Result<Child> {
             "deployments/jwt.txt",
             "--rollup.disabletxpoolgossip",
         ])
+        .stderr(op_geth_logs)
         .spawn()?;
     // Give some time for op-geth to settle
     pause(Some(Duration::from_secs(GETH_START_IN_SECS)));
@@ -327,6 +329,7 @@ fn init_and_start_op_geth() -> Result<Child> {
 }
 
 fn run_op() -> Result<(Child, Child, Child)> {
+    let op_node_logs = std::fs::File::create("op_node.log").unwrap();
     let op_node_process = Command::new("op-node")
         .current_dir("src/tests/optimism/packages/contracts-bedrock")
         .args([
@@ -355,8 +358,10 @@ fn run_op() -> Result<(Child, Child, Child)> {
             "--l1.rpckind",
             "basic",
         ])
+        .stdout(op_node_logs)
         .spawn()?;
 
+    let op_batcher_logs = std::fs::File::create("op_batcher.log").unwrap();
     let op_batcher_process = Command::new("op-batcher")
         .args([
             "--l2-eth-rpc",
@@ -385,8 +390,10 @@ fn run_op() -> Result<(Child, Child, Child)> {
             "--l1-eth-rpc",
             &var("L1_RPC_URL").expect("Missing Ethereum L1 RPC URL"),
         ])
+        .stdout(op_batcher_logs)
         .spawn()?;
 
+    let op_proposer_logs = std::fs::File::create("op_proposer.log").unwrap();
     let op_proposer_process = Command::new("op-proposer")
         .args([
             "--poll-interval",
@@ -402,6 +409,7 @@ fn run_op() -> Result<(Child, Child, Child)> {
             "--l1-eth-rpc",
             &var("L1_RPC_URL").expect("Missing Ethereum L1 RPC URL"),
         ])
+        .stdout(op_proposer_logs)
         .spawn()?;
     Ok((op_node_process, op_batcher_process, op_proposer_process))
 }

@@ -139,13 +139,13 @@ impl L1GasFee for EcotoneL1GasFee {
 pub trait CreateL1GasFee {
     /// Extracts parameters from deposit transaction and creates the algorithm for calculating L1
     /// gas cost.
-    fn for_deposit(&self, data: &[u8]) -> impl L1GasFee + '_;
+    fn for_deposit(&self, data: &[u8]) -> impl L1GasFee + 'static;
 }
 
 pub struct CreateEcotoneL1GasFee;
 
 impl CreateL1GasFee for CreateEcotoneL1GasFee {
-    fn for_deposit(&self, data: &[u8]) -> impl L1GasFee + '_ {
+    fn for_deposit(&self, data: &[u8]) -> impl L1GasFee + 'static {
         let l1_base_fee = U256::from_be_slice(&data[36..68]);
         let l1_blob_base_fee = U256::from_be_slice(&data[68..100]);
         let l1_base_fee_scalar =
@@ -177,7 +177,7 @@ mod tests {
     }
 
     impl CreateL1GasFee for U256 {
-        fn for_deposit(&self, _data: &[u8]) -> impl L1GasFee + '_ {
+        fn for_deposit(&self, _data: &[u8]) -> impl L1GasFee + 'static {
             *self
         }
     }

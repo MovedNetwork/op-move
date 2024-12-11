@@ -120,12 +120,12 @@ pub enum Query {
     BalanceByHeight {
         address: Address,
         height: BlockNumberOrTag,
-        response_channel: oneshot::Sender<U256>,
+        response_channel: oneshot::Sender<Option<U256>>,
     },
     NonceByHeight {
         address: Address,
         height: BlockNumberOrTag,
-        response_channel: oneshot::Sender<u64>,
+        response_channel: oneshot::Sender<Option<u64>>,
     },
     BlockByHash {
         hash: B256,

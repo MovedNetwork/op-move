@@ -1,4 +1,9 @@
-pub use payload::{NewPayloadId, NewPayloadIdInput, StatePayloadId};
+pub use {
+    payload::{NewPayloadId, NewPayloadIdInput, StatePayloadId},
+    queries::{
+        Balance, BlockHeight, InMemoryStateQueries, Nonce, StateMemory, StateQueries, Version,
+    },
+};
 
 use {
     crate::{
@@ -10,7 +15,7 @@ use {
         merkle_tree::MerkleRootExt,
         move_execution::{
             execute_transaction, quick_get_nonce, BaseTokenAccounts, CreateL1GasFee, L1GasFee,
-            L1GasFeeInput, LogsBloom, StateQueries,
+            L1GasFeeInput, LogsBloom,
         },
         primitives::{self, ToEthAddress, ToMoveAddress, ToSaturatedU64, B256, U256, U64},
         storage::State,
@@ -45,6 +50,7 @@ use {
 };
 
 mod payload;
+mod queries;
 
 #[cfg(any(feature = "test-doubles", test))]
 pub type InMemStateActor = StateActor<
@@ -57,10 +63,15 @@ pub type InMemStateActor = StateActor<
     crate::move_execution::MovedBaseTokenAccounts,
     crate::block::InMemoryBlockQueries,
     crate::block::BlockMemory,
-    crate::move_execution::InMemoryStateQueries,
+    InMemoryStateQueries,
 >;
 
+/// A function invoked on a completion of new transaction execution batch.
 type OnTxBatch<S> =
+    Box<dyn Fn() -> Box<dyn Fn(&mut S) + Send + Sync + 'static> + Send + Sync + 'static>;
+
+/// A function invoked on an execution of a new transaction.
+type OnTx<S> =
     Box<dyn Fn() -> Box<dyn Fn(&mut S, ChangeSet) + Send + Sync + 'static> + Send + Sync + 'static>;
 
 pub struct StateActor<
@@ -95,6 +106,7 @@ pub struct StateActor<
     // tx_hash -> (tx_with_receipt, block_hash)
     tx_receipts: HashMap<B256, (TransactionWithReceipt, B256)>,
     on_tx_batch: OnTxBatch<Self>,
+    on_tx: OnTx<Self>,
 }
 
 impl<
@@ -151,6 +163,7 @@ impl<
         block_queries: Q,
         block_memory: M,
         state_queries: SQ,
+        on_tx: OnTx<Self>,
         on_tx_batch: OnTxBatch<Self>,
     ) -> Self {
         Self {
@@ -172,6 +185,7 @@ impl<
             block_memory,
             state_queries,
             tx_receipts: HashMap::new(),
+            on_tx,
             on_tx_batch,
         }
     }
@@ -379,6 +393,7 @@ impl<
         base_fee: U256,
         block_header: &HeaderForExecution,
     ) -> (ExecutionOutcome, Vec<TransactionWithReceipt>) {
+        let on_tx = (self.on_tx)();
         let mut total_tip = U256::ZERO;
         let mut receipts = Vec::new();
         let mut transactions = transactions.peekable();
@@ -386,89 +401,82 @@ impl<
         let mut logs_bloom = Bloom::ZERO;
         let mut tx_index = 0;
         let mut log_offset = 0;
-        let mut all_changes = ChangeSet::new();
 
-        {
-            // https://github.com/ethereum-optimism/specs/blob/9dbc6b0/specs/protocol/deposits.md#kinds-of-deposited-transactions
-            let l1_fee = transactions
-                .peek()
-                .and_then(|(_, v, _)| v.as_deposited())
-                .map(|v| self.l1_fee.for_deposit(v.data.as_ref()));
+        // https://github.com/ethereum-optimism/specs/blob/9dbc6b0/specs/protocol/deposits.md#kinds-of-deposited-transactions
+        let l1_fee = transactions
+            .peek()
+            .and_then(|(_, v, _)| v.as_deposited())
+            .map(|tx| self.l1_fee.for_deposit(tx.data.as_ref()));
 
-            // TODO: parallel transaction processing?
-            for (tx_hash, tx, l1_cost_input) in transactions {
-                let Ok(normalized_tx) = tx.clone().try_into() else {
-                    continue;
-                };
-                let outcome = match execute_transaction(
-                    &normalized_tx,
-                    &tx_hash,
-                    self.state.resolver(),
-                    &self.genesis_config,
-                    l1_fee
-                        .as_ref()
-                        .map(|v| v.l1_fee(l1_cost_input.clone()).to_saturated_u64())
-                        .unwrap_or(0),
-                    &self.base_token,
-                    block_header.clone(),
-                ) {
-                    Ok(outcome) => outcome,
-                    Err(User(e)) => unreachable!("User errors are handled in execution {e:?}"),
-                    Err(InvalidTransaction(_)) => continue,
-                    Err(InvariantViolation(e)) => panic!("ERROR: execution error {e:?}"),
-                };
+        // TODO: parallel transaction processing?
+        for (tx_hash, tx, l1_cost_input) in transactions {
+            let Ok(normalized_tx) = tx.clone().try_into() else {
+                continue;
+            };
+            let outcome = match execute_transaction(
+                &normalized_tx,
+                &tx_hash,
+                self.state.resolver(),
+                &self.genesis_config,
+                l1_fee
+                    .as_ref()
+                    .map(|v| v.l1_fee(l1_cost_input.clone()).to_saturated_u64())
+                    .unwrap_or(0),
+                &self.base_token,
+                block_header.clone(),
+            ) {
+                Ok(outcome) => outcome,
+                Err(User(e)) => unreachable!("User errors are handled in execution {e:?}"),
+                Err(InvalidTransaction(_)) => continue,
+                Err(InvariantViolation(e)) => panic!("ERROR: execution error {e:?}"),
+            };
 
-                let l1_block_info = l1_fee.as_ref().and_then(|x| x.l1_block_info(l1_cost_input));
+            let l1_block_info = l1_fee.as_ref().and_then(|x| x.l1_block_info(l1_cost_input));
 
-                all_changes
-                    .squash(outcome.changes.clone())
-                    .unwrap_or_else(|_| {
-                        panic!("ERROR: state update failed for transaction {tx:?}")
-                    });
-                self.state.apply(outcome.changes).unwrap_or_else(|_| {
-                    panic!("ERROR: state update failed for transaction {tx:?}")
-                });
+            on_tx(self, outcome.changes.clone());
 
-                cumulative_gas_used = cumulative_gas_used.saturating_add(outcome.gas_used as u128);
+            self.state
+                .apply(outcome.changes)
+                .unwrap_or_else(|_| panic!("ERROR: state update failed for transaction {tx:?}"));
 
-                let bloom = outcome.logs.iter().logs_bloom();
-                logs_bloom.accrue_bloom(&bloom);
+            cumulative_gas_used = cumulative_gas_used.saturating_add(outcome.gas_used as u128);
 
-                let tx_log_offset = log_offset;
-                log_offset += outcome.logs.len() as u64;
-                let receipt = Receipt {
-                    status: outcome.vm_outcome.is_ok().into(),
-                    cumulative_gas_used,
-                    logs: outcome.logs,
-                };
+            let bloom = outcome.logs.iter().logs_bloom();
+            logs_bloom.accrue_bloom(&bloom);
 
-                let receipt = tx.wrap_receipt(receipt, bloom);
+            let tx_log_offset = log_offset;
+            log_offset += outcome.logs.len() as u64;
+            let receipt = Receipt {
+                status: outcome.vm_outcome.is_ok().into(),
+                cumulative_gas_used,
+                logs: outcome.logs,
+            };
 
-                total_tip = total_tip.saturating_add(
-                    U256::from(outcome.gas_used)
-                        .saturating_mul(normalized_tx.tip_per_gas(base_fee)),
-                );
+            let receipt = tx.wrap_receipt(receipt, bloom);
 
-                receipts.push(TransactionWithReceipt {
-                    tx_hash,
-                    tx,
-                    normalized_tx,
-                    receipt,
-                    l1_block_info,
-                    gas_used: outcome.gas_used,
-                    tx_index,
-                    contract_address: outcome
-                        .deployment
-                        .map(|(address, _)| address.to_eth_address()),
-                    logs_offset: tx_log_offset,
-                });
+            total_tip = total_tip.saturating_add(
+                U256::from(outcome.gas_used).saturating_mul(normalized_tx.tip_per_gas(base_fee)),
+            );
 
-                tx_index += 1;
-            }
+            receipts.push(TransactionWithReceipt {
+                tx_hash,
+                tx,
+                normalized_tx,
+                receipt,
+                l1_block_info,
+                gas_used: outcome.gas_used,
+                tx_index,
+                contract_address: outcome
+                    .deployment
+                    .map(|(address, _)| address.to_eth_address()),
+                logs_offset: tx_log_offset,
+            });
+
+            tx_index += 1;
         }
 
         let on_tx_batch = (self.on_tx_batch)();
-        (on_tx_batch)(self, all_changes);
+        on_tx_batch(self);
 
         let receipts_root = receipts
             .iter()
@@ -575,6 +583,10 @@ impl<
     }
 
     pub fn on_tx_batch_noop() -> OnTxBatch<Self> {
+        Box::new(|| Box::new(|_| {}))
+    }
+
+    pub fn on_tx_noop() -> OnTx<Self> {
         Box::new(|| Box::new(|_, _| {}))
     }
 }
@@ -589,10 +601,14 @@ impl<
         B: BaseTokenAccounts,
         Q: BlockQueries<Storage = M>,
         M,
-    > StateActor<S, P, H, R, G, L1G, B, Q, M, crate::move_execution::InMemoryStateQueries>
+    > StateActor<S, P, H, R, G, L1G, B, Q, M, InMemoryStateQueries>
 {
+    pub fn on_tx_in_memory() -> OnTx<Self> {
+        Box::new(|| Box::new(|state, changes| state.state_queries.add(changes)))
+    }
+
     pub fn on_tx_batch_in_memory() -> OnTxBatch<Self> {
-        Box::new(|| Box::new(|state, changes| state.state_queries.add(changes, 0)))
+        Box::new(|| Box::new(|state| state.state_queries.tag()))
     }
 }
 
@@ -602,11 +618,7 @@ pub use test_doubles::*;
 #[cfg(any(feature = "test-doubles", test))]
 mod test_doubles {
     use {
-        crate::{
-            move_execution::{BlockHeight, StateQueries},
-            primitives::U256,
-        },
-        aptos_jellyfish_merkle::TreeReader,
+        super::*, crate::primitives::U256, aptos_jellyfish_merkle::TreeReader,
         aptos_types::state_store::state_key::StateKey,
         move_core_types::account_address::AccountAddress,
     };
@@ -621,11 +633,11 @@ mod test_doubles {
             _db: &(impl TreeReader<StateKey> + Sync),
             account: AccountAddress,
             height: BlockHeight,
-        ) -> crate::move_execution::Balance {
+        ) -> Option<Balance> {
             assert_eq!(height, self.0);
             assert_eq!(account, self.1);
 
-            U256::from(5)
+            Some(U256::from(5))
         }
 
         fn nonce_at(
@@ -633,11 +645,11 @@ mod test_doubles {
             _db: &(impl TreeReader<StateKey> + Sync),
             account: AccountAddress,
             height: BlockHeight,
-        ) -> crate::move_execution::Nonce {
+        ) -> Option<Nonce> {
             assert_eq!(height, self.0);
             assert_eq!(account, self.1);
 
-            3
+            Some(3)
         }
     }
 }
@@ -652,10 +664,7 @@ mod tests {
                 MovedBlockHash,
             },
             genesis::{self, config::CHAIN_ID},
-            move_execution::{
-                create_move_vm, create_vm_session, BlockHeight, InMemoryStateQueries,
-                MovedBaseTokenAccounts, StateMemory,
-            },
+            move_execution::{create_move_vm, create_vm_session, MovedBaseTokenAccounts},
             storage::InMemoryState,
             tests::{signer::Signer, EVM_ADDRESS, PRIVATE_KEY},
             types::session_id::SessionId,
@@ -723,6 +732,7 @@ mod tests {
             InMemoryBlockQueries,
             block_memory,
             state_queries,
+            StateActor::on_tx_noop(),
             StateActor::on_tx_batch_noop(),
         );
         (state, state_channel)
@@ -783,16 +793,15 @@ mod tests {
         repository.add(&mut block_memory, genesis_block);
 
         let mut state = InMemoryState::new();
-        let (mut changes, table_changes) = genesis::init(&genesis_config, &state);
-        let mut state_memory = StateMemory::new();
+        let (genesis_changes, table_changes) = genesis::init(&genesis_config, &state);
         state
-            .apply_with_tables(changes.clone(), table_changes)
+            .apply_with_tables(genesis_changes.clone(), table_changes)
             .unwrap();
         let changes_addition = mint_eth(&state, addr, initial_balance);
-        changes.squash(changes_addition.clone()).unwrap();
-        state_memory.add(changes, 0);
-        state.apply(changes_addition).unwrap();
-        let state_queries = InMemoryStateQueries::new(state_memory);
+        state.apply(changes_addition.clone()).unwrap();
+
+        let mut state_queries = InMemoryStateQueries::from_genesis(genesis_changes);
+        state_queries.add(changes_addition);
 
         let state = StateActor::new(
             rx,
@@ -809,6 +818,7 @@ mod tests {
             InMemoryBlockQueries,
             block_memory,
             state_queries,
+            StateActor::on_tx_in_memory(),
             StateActor::on_tx_batch_in_memory(),
         );
         (state, state_channel)
@@ -838,7 +848,7 @@ mod tests {
             response_channel: tx,
         });
 
-        let actual_nonce = rx.blocking_recv().unwrap();
+        let actual_nonce = rx.blocking_recv().unwrap().expect("Block should be found");
         let expected_nonce = 3;
 
         assert_eq!(actual_nonce, expected_nonce);
@@ -868,14 +878,14 @@ mod tests {
             response_channel: tx,
         });
 
-        let actual_balance = rx.blocking_recv().unwrap();
+        let actual_balance = rx.blocking_recv().unwrap().expect("Block should be found");
         let expected_balance = U256::from(5);
 
         assert_eq!(actual_balance, expected_balance);
     }
 
     #[test]
-    fn test_fetched_balances_reflect_transfer_of_funds_post_transaction_successfully() {
+    fn test_fetched_balances_are_updated_after_transfer_of_funds() {
         let to = primitives::Address::new(hex!("44223344556677889900ffeeaabbccddee111111"));
         let initial_balance = U256::from(5);
         let amount = U256::from(4);
@@ -897,13 +907,10 @@ mod tests {
         let signature = signer.inner.sign_transaction_sync(&mut tx).unwrap();
         let tx = TxEnvelope::Eip1559(tx.into_signed(signature));
 
-        state_actor.handle_command(Command::AddTransaction { tx });
-
-        let (tx, _rx) = oneshot::channel();
-
+        state_actor.handle_command(Command::AddTransaction { tx: tx.clone() });
         state_actor.handle_command(Command::StartBlockBuild {
             payload_attributes: Default::default(),
-            response_channel: tx,
+            response_channel: oneshot::channel().0,
         });
 
         let (tx, rx) = oneshot::channel();
@@ -914,7 +921,7 @@ mod tests {
             response_channel: tx,
         });
 
-        let actual_recipient_balance = rx.blocking_recv().unwrap();
+        let actual_recipient_balance = rx.blocking_recv().unwrap().expect("Block should be found");
         let expected_recipient_balance = amount;
 
         assert_eq!(actual_recipient_balance, expected_recipient_balance);
@@ -927,14 +934,14 @@ mod tests {
             response_channel: tx,
         });
 
-        let actual_sender_balance = rx.blocking_recv().unwrap();
+        let actual_sender_balance = rx.blocking_recv().unwrap().expect("Block should be found");
         let expected_sender_balance = initial_balance - amount;
 
         assert_eq!(actual_sender_balance, expected_sender_balance);
     }
 
     #[test]
-    fn test_fetched_nonces_reflect_values_post_transaction_successfully() {
+    fn test_fetched_nonces_are_updated_after_executing_transaction() {
         let to = primitives::Address::new(hex!("44223344556677889900ffeeaabbccddee111111"));
         let initial_balance = U256::from(5);
         let amount = U256::from(4);
@@ -973,7 +980,7 @@ mod tests {
             response_channel: tx,
         });
 
-        let actual_recipient_balance = rx.blocking_recv().unwrap();
+        let actual_recipient_balance = rx.blocking_recv().unwrap().expect("Block should be found");
         let expected_recipient_balance = 0;
 
         assert_eq!(actual_recipient_balance, expected_recipient_balance);
@@ -986,7 +993,7 @@ mod tests {
             response_channel: tx,
         });
 
-        let actual_sender_balance = rx.blocking_recv().unwrap();
+        let actual_sender_balance = rx.blocking_recv().unwrap().expect("Block should be found");
         let expected_sender_balance = 1;
 
         assert_eq!(actual_sender_balance, expected_sender_balance);

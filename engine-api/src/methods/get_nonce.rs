@@ -55,20 +55,19 @@ async fn inner_execute(
     }
     .into();
     state_channel.send(msg).await.map_err(access_state_error)?;
-    let response = rx.await.map_err(access_state_error)?;
+    let response = rx
+        .await?
+        .ok_or(JsonRpcError::block_not_found(block_number))?;
+
     Ok(response)
 }
 
 #[cfg(test)]
 mod tests {
     use {
-        super::*,
-        crate::methods::tests::{create_state_actor, create_state_actor_with_mock_state_queries},
-        alloy::hex,
-        move_core_types::account_address::AccountAddress,
-        moved::primitives::U64,
-        std::str::FromStr,
-        test_case::test_case,
+        super::*, crate::methods::tests::create_state_actor_with_mock_state_queries, alloy::hex,
+        move_core_types::account_address::AccountAddress, moved::primitives::U64,
+        std::str::FromStr, test_case::test_case,
     };
 
     #[test_case("0x1")]
@@ -105,7 +104,12 @@ mod tests {
     #[test_case("pending")]
     #[tokio::test]
     async fn test_execute(block: &str) {
-        let (state_actor, state_channel) = create_state_actor();
+        let (state_actor, state_channel) = create_state_actor_with_mock_state_queries(
+            1,
+            AccountAddress::new(hex!(
+                "0000000000000000000000000000000000000000000000000000000000000001"
+            )),
+        );
 
         let state_handle = state_actor.spawn();
         let request: serde_json::Value = serde_json::json!({
@@ -118,7 +122,7 @@ mod tests {
             "id": 1
         });
 
-        let expected_response: serde_json::Value = serde_json::from_str(r#""0x0""#).unwrap();
+        let expected_response: serde_json::Value = serde_json::from_str(r#""0x3""#).unwrap();
         let response = execute(request, state_channel).await.unwrap();
 
         assert_eq!(response, expected_response);

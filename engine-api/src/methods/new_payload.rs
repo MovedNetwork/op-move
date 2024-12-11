@@ -199,8 +199,8 @@ mod tests {
                 InMemoryBlockRepository,
             },
             genesis::{self, config::GenesisConfig},
-            move_execution::{InMemoryStateQueries, StateMemory},
             primitives::{Address, Bytes, B2048, U256, U64},
+            state_actor::InMemoryStateQueries,
             storage::InMemoryState,
         },
     };
@@ -290,8 +290,7 @@ mod tests {
 
         let mut state = InMemoryState::new();
         let (changes, table_changes) = genesis::init(&genesis_config, &state);
-        let state_memory = StateMemory::from_genesis(changes.clone());
-        genesis::apply(changes, table_changes, &genesis_config, &mut state);
+        genesis::apply(changes.clone(), table_changes, &genesis_config, &mut state);
 
         let state = moved::state_actor::StateActor::new(
             rx,
@@ -309,7 +308,8 @@ mod tests {
             (),
             InMemoryBlockQueries,
             block_memory,
-            InMemoryStateQueries::new(state_memory),
+            InMemoryStateQueries::from_genesis(changes),
+            moved::state_actor::StateActor::on_tx_noop(),
             moved::state_actor::StateActor::on_tx_batch_noop(),
         );
         let state_handle = state.spawn();

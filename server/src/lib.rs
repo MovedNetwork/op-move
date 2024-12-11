@@ -9,11 +9,9 @@ use {
             InMemoryBlockQueries, InMemoryBlockRepository, MovedBlockHash,
         },
         genesis::{self, config::GenesisConfig},
-        move_execution::{
-            CreateEcotoneL1GasFee, InMemoryStateQueries, MovedBaseTokenAccounts, StateMemory,
-        },
+        move_execution::{CreateEcotoneL1GasFee, MovedBaseTokenAccounts},
         primitives::{B256, U256},
-        state_actor::StatePayloadId,
+        state_actor::{InMemoryStateQueries, StatePayloadId},
         storage::InMemoryState,
         types::state::StateMessage,
     },
@@ -87,12 +85,10 @@ pub async fn run() {
     let head = genesis_block.hash;
     repository.add(&mut block_memory, genesis_block);
 
-    let mut state_query_storage = StateMemory::default();
     let mut state = InMemoryState::new();
-    let (changes, table_changes) = genesis::init(&genesis_config, &state);
-    state_query_storage.add(changes.clone());
-    let state_query = InMemoryStateQueries::new(state_query_storage);
-    genesis::apply(changes, table_changes, &genesis_config, &mut state);
+    let (genesis_changes, table_changes) = genesis::init(&genesis_config, &state);
+    let state_query = InMemoryStateQueries::from_genesis(genesis_changes.clone());
+    genesis::apply(genesis_changes, table_changes, &genesis_config, &mut state);
 
     let base_token = MovedBaseTokenAccounts::new(genesis_config.treasury);
     let state = moved::state_actor::StateActor::new(
@@ -113,6 +109,7 @@ pub async fn run() {
         InMemoryBlockQueries,
         block_memory,
         state_query,
+        moved::state_actor::StateActor::on_tx_in_memory(),
         moved::state_actor::StateActor::on_tx_batch_in_memory(),
     );
 

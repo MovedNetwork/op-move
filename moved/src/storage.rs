@@ -264,7 +264,8 @@ where
             shard_root_nodes[shard_id as usize] = shard_root_node;
         }
 
-        let (root_hash, root_batch) = self.put_top_levels_nodes(shard_root_nodes.to_vec(), version.checked_sub(1), version)?;
+        let (root_hash, root_batch) =
+            self.put_top_levels_nodes(shard_root_nodes.to_vec(), version.checked_sub(1), version)?;
         tree_update_batch.combine(root_batch);
         Ok((root_hash, tree_update_batch))
     }

@@ -20,22 +20,40 @@ use {
     std::{collections::HashMap, fmt::Debug},
 };
 
+/// A non-negative integer for indicating the amount of base token on an account.
 pub type Balance = U256;
+
+/// A non-negative integer for indicating the nonce used for sending transactions by an account.
 pub type Nonce = u64;
+
+/// A non-negative integer for indicating the order of a block in the blockchain, used as a tag for
+/// [`Version`].
 pub type BlockHeight = u64;
 
+/// A non-negative integer for versioning a set of changes in a historical order.
+///
+/// Typically, each version matches one transaction, but there is an exception for changes generated
+/// on genesis.
+pub type Version = u64;
+
+/// Accesses blockchain state in any particular point in history to fetch some account values.
+///
+/// It is defined by these operations:
+/// * [`Self::balance_at`] - To fetch an amount of base token in an account read in its smallest
+///   denomination at given block height.
+/// * [`Self::nonce_at`] - To fetch the nonce value set for an account at given block height.
 pub trait StateQueries {
     /// The associated storage type for querying the blockchain state.
     type Storage;
 
-    /// Queries the blockchain state version corresponding with block `height` for amount of base
-    /// token associated with `account`.
+    /// Queries the blockchain state version corresponding with block `height` for the amount of
+    /// base token associated with `account`.
     fn balance_at(
         &self,
         db: &(impl TreeReader<StateKey> + Sync),
         account: AccountAddress,
         height: BlockHeight,
-    ) -> Balance;
+    ) -> Option<Balance>;
 
     /// Queries the blockchain state version corresponding with block `height` for the nonce value
     /// associated with `account`.
@@ -44,67 +62,83 @@ pub trait StateQueries {
         db: &(impl TreeReader<StateKey> + Sync),
         account: AccountAddress,
         height: BlockHeight,
-    ) -> Nonce;
+    ) -> Option<Nonce>;
 }
 
 #[derive(Debug)]
 pub struct StateMemory {
     mem: InMemoryVersionedState,
-    height_to_version: HashMap<u64, u64>,
-}
-
-impl Default for StateMemory {
-    fn default() -> Self {
-        Self::new()
-    }
+    tags: Vec<Version>,
+    version: Version,
 }
 
 impl StateMemory {
-    pub fn from_genesis(changes: ChangeSet) -> Self {
+    /// Creates state memory with `genesis_changes` on `version` 0 tagged as block `height` 0.
+    pub fn from_genesis(genesis_changes: ChangeSet) -> Self {
         Self {
-            mem: InMemoryVersionedState::from_iter(Self::convert(changes, 0)),
-            height_to_version: HashMap::from([(0, 0)]),
+            mem: InMemoryVersionedState::from_iter(genesis_changes.into_versioned_kv(0)),
+            tags: vec![0],
+            version: 0,
         }
     }
 
-    pub fn new() -> Self {
-        Self {
-            mem: InMemoryVersionedState::new(),
-            height_to_version: HashMap::new(),
-        }
-    }
-
-    pub fn add(&mut self, change: ChangeSet, version: u64) {
-        for (k, v) in Self::convert(change, version) {
+    fn add(&mut self, changes: ChangeSet) {
+        let version = self.next_version();
+        for (k, v) in changes.into_versioned_kv(version) {
             self.mem.historic_state.insert(k, v);
         }
     }
 
-    pub fn set_height_version(&mut self, height: u64, version: u64) {
-        self.height_to_version.insert(height, version);
+    fn tag(&mut self) {
+        self.tags.push(self.version);
     }
 
-    pub fn resolver<'a>(
+    fn resolver<'a>(
         &'a self,
         db: &'a (impl TreeReader<StateKey> + Sync),
-        height: u64,
-    ) -> impl MoveResolver<PartialVMError> + TableResolver + 'a {
-        HistoricResolver::new(
+        height: BlockHeight,
+    ) -> Option<impl MoveResolver<PartialVMError> + TableResolver + 'a> {
+        Some(HistoricResolver::new(
             db,
-            self.height_to_version
-                .get(&height)
-                .copied()
-                .unwrap_or_default(),
+            self.tags.get(height as usize).copied()?,
             &self.mem,
-        )
+        ))
     }
 
-    fn convert(
-        changes: ChangeSet,
-        version: u64,
-    ) -> impl Iterator<Item = ((StateKey, u64), Option<StateValue>)> {
-        changes
-            .into_inner()
+    fn next_version(&mut self) -> Version {
+        self.version += 1;
+        self.version
+    }
+}
+
+/// The `IntoVersionedKv` trait is defined by a single operation [`Self::into_versioned_kv`]. See
+/// its documentation for details.
+trait IntoVersionedKv {
+    /// Converts a set of changes into an iterator of key-value pairs where:
+    ///
+    /// * *Key* is a pair of [`StateKey`] and [`Version`]. It is a fully qualified name of a module
+    ///   or a resource paired with a version that corresponds to a transaction where this change
+    ///   was made.
+    /// * *Value* is [`StateValue`] wrapped in an option. It contains no value in case of deletion.
+    ///   In case of addition or modification, it contains the raw contents of the module or
+    ///   resource being changed.
+    ///
+    /// The term "set of changes" assumes some representation of a list of account addresses
+    /// associated with a list of operations on its modules and resources.
+    ///
+    /// The term "operation" is a ternary value of either addition, modification or deletion.
+    fn into_versioned_kv(
+        self,
+        version: Version,
+    ) -> impl Iterator<Item = ((StateKey, Version), Option<StateValue>)>;
+}
+
+impl IntoVersionedKv for ChangeSet {
+    fn into_versioned_kv(
+        self,
+        version: Version,
+    ) -> impl Iterator<Item = ((StateKey, Version), Option<StateValue>)> {
+        self.into_inner()
             .into_iter()
             .map(|(address, changes)| (address, changes.into_inner()))
             .flat_map(move |(address, (modules, resources))| {
@@ -136,8 +170,23 @@ impl InMemoryStateQueries {
         Self { storage }
     }
 
-    pub fn add(&mut self, change: ChangeSet, version: u64) {
-        self.storage.add(change, version);
+    /// Creates state memory with `genesis_changes` on `version` 0 tagged as block `height` 0.
+    pub fn from_genesis(genesis_changes: ChangeSet) -> Self {
+        Self::new(StateMemory::from_genesis(genesis_changes))
+    }
+
+    /// Adds `change` into state memory.
+    ///
+    /// The internal version number is incremented by this operation.
+    pub fn add(&mut self, change: ChangeSet) {
+        self.storage.add(change);
+    }
+
+    /// Marks current version with current block height.
+    ///
+    /// The internal block height number is incremented by this operation.
+    pub fn tag(&mut self) {
+        self.storage.tag();
     }
 }
 
@@ -149,10 +198,10 @@ impl StateQueries for InMemoryStateQueries {
         db: &(impl TreeReader<StateKey> + Sync),
         account: AccountAddress,
         height: BlockHeight,
-    ) -> Balance {
-        let resolver = self.storage.resolver(db, height);
+    ) -> Option<Balance> {
+        let resolver = self.storage.resolver(db, height)?;
 
-        quick_get_eth_balance(&account, &resolver)
+        Some(quick_get_eth_balance(&account, &resolver))
     }
 
     fn nonce_at(
@@ -160,44 +209,47 @@ impl StateQueries for InMemoryStateQueries {
         db: &(impl TreeReader<StateKey> + Sync),
         account: AccountAddress,
         height: BlockHeight,
-    ) -> Nonce {
-        let resolver = self.storage.resolver(db, height);
+    ) -> Option<Nonce> {
+        let resolver = self.storage.resolver(db, height)?;
 
-        quick_get_nonce(&account, &resolver)
+        Some(quick_get_nonce(&account, &resolver))
     }
 }
 
+/// This is a [`MoveResolver`] that reads data generated at `version`.
 pub struct HistoricResolver<'a, R, H> {
     db: &'a R,
     version: u64,
     historic_state: &'a H,
 }
 
+/// Capable of fetching state value based on its key and version at which the change was registered.
+///
+/// Defined by a single operation [`Self::get`].
 pub trait VersionedState {
-    fn get(&self, key: &(StateKey, u64)) -> Option<Bytes>;
+    /// Fetches state value in case of addition or modification, or None in case of deletion,
+    /// corresponding to state key at given version.
+    fn get(&self, key: &(StateKey, Version)) -> Option<Bytes>;
 }
 
+/// A [`VersionedState`] that keeps all records locally in an owned unshared memory.
 #[derive(Debug)]
 pub struct InMemoryVersionedState {
-    historic_state: HashMap<(StateKey, u64), Option<StateValue>>,
+    historic_state: HashMap<(StateKey, Version), Option<StateValue>>,
 }
 
 impl InMemoryVersionedState {
-    pub fn from_iter(iter: impl Iterator<Item = ((StateKey, u64), Option<StateValue>)>) -> Self {
+    pub fn from_iter(
+        iter: impl Iterator<Item = ((StateKey, Version), Option<StateValue>)>,
+    ) -> Self {
         Self {
             historic_state: HashMap::from_iter(iter),
-        }
-    }
-
-    pub fn new() -> Self {
-        Self {
-            historic_state: HashMap::new(),
         }
     }
 }
 
 impl VersionedState for InMemoryVersionedState {
-    fn get(&self, key: &(StateKey, u64)) -> Option<Bytes> {
+    fn get(&self, key: &(StateKey, Version)) -> Option<Bytes> {
         self.historic_state
             .get(key)
             .cloned()
@@ -207,7 +259,7 @@ impl VersionedState for InMemoryVersionedState {
 }
 
 impl<'a, R, H> HistoricResolver<'a, R, H> {
-    pub fn new(db: &'a R, version: u64, historic_state: &'a H) -> Self {
+    pub fn new(db: &'a R, version: Version, historic_state: &'a H) -> Self {
         Self {
             db,
             version,
@@ -228,22 +280,10 @@ impl<'a, R: TreeReader<StateKey> + Sync, H: VersionedState> ModuleResolver
     fn get_module(&self, id: &ModuleId) -> Result<Option<Bytes>, Self::Error> {
         let tree = JellyfishMerkleTree::new(self.db);
         let state_key = StateKey::module(id.address(), id.name());
-
-        eprintln!("{:#?}", tree.get_root_hash(0));
-        eprintln!("{:#?}", tree.get_root_hash(1));
-        eprintln!("{:#?}", tree.get_root_hash(2));
-        eprintln!("{:#?}", tree.get_root_hash(3));
-        eprintln!("{:#?}", tree.get_leaf_count(0));
-        eprintln!("{:#?}", tree.get_leaf_count(1));
-        eprintln!("{:#?}", tree.get_leaf_count(2));
-        eprintln!("{:#?}", tree.get_leaf_count(3));
-        /*eprintln!("{:#?}", tree.get_all_nodes_referenced(0));
-        eprintln!("{:#?}", tree.get_all_nodes_referenced(1));
-        eprintln!("{:#?}", tree.get_all_nodes_referenced(2));
-        eprintln!("{:#?}", tree.get_all_nodes_referenced(3));*/
-
         let (maybe_leaf, _) = tree.get_with_proof(state_key.hash(), self.version).unwrap();
-        let (_, history_key) = maybe_leaf.unwrap();
+        let Some((_, history_key)) = maybe_leaf else {
+            return Ok(None);
+        };
         let value = self.historic_state.get(&history_key);
 
         Ok(value)
@@ -265,7 +305,9 @@ impl<'a, R: TreeReader<StateKey> + Sync, H: VersionedState> ResourceResolver
         let tree = JellyfishMerkleTree::new(self.db);
         let state_key = StateKey::resource(address, struct_tag).unwrap();
         let (maybe_leaf, _) = tree.get_with_proof(state_key.hash(), self.version).unwrap();
-        let Some((_, history_key)) = maybe_leaf else { return Ok((None, 0)); };
+        let Some((_, history_key)) = maybe_leaf else {
+            return Ok((None, 0));
+        };
         let value = self.historic_state.get(&history_key);
         let len = value.as_ref().map(|v| v.len()).unwrap_or_default();
 
@@ -292,9 +334,7 @@ mod tests {
         super::*,
         crate::{
             genesis::{config::GenesisConfig, init_and_apply},
-            move_execution::{
-                create_move_vm, create_vm_session, eth_token::mint_eth, nonces::check_nonce,
-            },
+            move_execution::{check_nonce, create_move_vm, create_vm_session, mint_eth},
             primitives::B256,
             storage::{InMemoryState, State},
             types::session_id::SessionId,
@@ -372,21 +412,18 @@ mod tests {
         init_and_apply(&genesis_config, &mut state);
 
         let (mut state, genesis_changes) = (state.0, state.1);
-
         let addr = AccountAddress::TWO;
 
-        let mut tree = InMemoryState::new();
-        tree.apply(genesis_changes.clone()).unwrap();
-        tree.apply(mint_one_eth(&mut state, addr)).unwrap();
+        let mut storage = StateMemory::from_genesis(genesis_changes);
 
-        let mut storage = StateMemory::default();
-
-        storage.add(genesis_changes, 0);
-        storage.add(mint_one_eth(&mut state, addr), 1);
+        storage.add(mint_one_eth(&mut state, addr));
+        storage.tag();
 
         let query = InMemoryStateQueries::new(storage);
 
-        let actual_balance = query.balance_at(tree.db(), addr, 999);
+        let actual_balance = query
+            .balance_at(state.db(), addr, 1)
+            .expect("Block height should exist");
         let expected_balance = U256::from(1u64);
 
         assert_eq!(actual_balance, expected_balance);
@@ -404,26 +441,19 @@ mod tests {
 
         let addr = AccountAddress::TWO;
 
-        let changes_1 = inc_one_nonce(0, &mut state, addr);
-        let changes_2 = inc_one_nonce(1, &mut state, addr);
-        let changes_3 = inc_one_nonce(2, &mut state, addr);
+        let mut storage = StateMemory::from_genesis(genesis_changes);
 
-        let mut tree = InMemoryState::new();
-        tree.apply(genesis_changes.clone()).unwrap();
-        tree.apply(changes_1.clone()).unwrap();
-        tree.apply(changes_2.clone()).unwrap();
-        tree.apply(changes_3.clone()).unwrap();
-
-        let mut storage = StateMemory::default();
-
-        storage.add(genesis_changes, 0);
-        storage.add(changes_1, 1);
-        storage.add(changes_2, 2);
-        storage.add(changes_3, 3);
+        storage.add(mint_one_eth(&mut state, addr));
+        storage.tag();
+        storage.add(mint_one_eth(&mut state, addr));
+        storage.add(mint_one_eth(&mut state, addr));
+        storage.tag();
 
         let query = InMemoryStateQueries::new(storage);
 
-        let actual_balance = query.balance_at(tree.db(), addr, 1);
+        let actual_balance = query
+            .balance_at(state.db(), addr, 1)
+            .expect("Block height should exist");
         let expected_balance = U256::from(1u64);
 
         assert_eq!(actual_balance, expected_balance);
@@ -437,22 +467,19 @@ mod tests {
         let genesis_config = GenesisConfig::default();
         init_and_apply(&genesis_config, &mut state);
 
-        let genesis_changes = state.1;
+        let (state, genesis_changes) = (state.0, state.1);
 
         let addr = AccountAddress::new(hex!(
             "123456136717634683648732647632874638726487fefefefefeefefefefefff"
         ));
 
-        let mut tree = InMemoryState::new();
-        tree.apply(genesis_changes.clone()).unwrap();
-
-        let mut storage = StateMemory::default();
-
-        storage.add(genesis_changes, 0);
+        let storage = StateMemory::from_genesis(genesis_changes);
 
         let query = InMemoryStateQueries::new(storage);
 
-        let actual_balance = query.balance_at(tree.db(), addr, 0);
+        let actual_balance = query
+            .balance_at(state.db(), addr, 0)
+            .expect("Block height should exist");
         let expected_balance = U256::ZERO;
 
         assert_eq!(actual_balance, expected_balance);
@@ -495,20 +522,17 @@ mod tests {
 
         let (mut state, genesis_changes) = (state.0, state.1);
         let addr = AccountAddress::TWO;
-        let changes_1 = inc_one_nonce(0, &mut state, addr);
 
-        let mut tree = InMemoryState::new();
-        tree.apply(genesis_changes.clone()).unwrap();
-        tree.apply(changes_1.clone()).unwrap();
+        let mut storage = StateMemory::from_genesis(genesis_changes);
 
-        let mut storage = StateMemory::default();
-
-        storage.add(genesis_changes, 0);
-        storage.add(changes_1, 1);
+        storage.add(inc_one_nonce(0, &mut state, addr));
+        storage.tag();
 
         let query = InMemoryStateQueries::new(storage);
 
-        let actual_nonce = query.nonce_at(tree.db(), addr, 999);
+        let actual_nonce = query
+            .nonce_at(state.db(), addr, 1)
+            .expect("Block height should exist");
         let expected_nonce = 1u64;
 
         assert_eq!(actual_nonce, expected_nonce);
@@ -526,27 +550,19 @@ mod tests {
 
         let addr = AccountAddress::TWO;
 
-        let changes_1 = inc_one_nonce(0, &mut state, addr);
-        let changes_2 = inc_one_nonce(1, &mut state, addr);
-        let changes_3 = inc_one_nonce(2, &mut state, addr);
+        let mut storage = StateMemory::from_genesis(genesis_changes);
 
-        /*let mut tree = InMemoryState::new();
-        tree.apply(genesis_changes.clone()).unwrap();
-        tree.apply(changes_1.clone()).unwrap();
-        tree.apply(changes_2.clone()).unwrap();
-        tree.apply(changes_3.clone()).unwrap();*/
-
-        let mut storage = StateMemory::default();
-
-        storage.add(genesis_changes, 0);
-        storage.add(changes_1, 1);
-        storage.add(changes_2, 2);
-        storage.add(changes_3, 3);
-        storage.set_height_version(1, 1);
+        storage.add(inc_one_nonce(0, &mut state, addr));
+        storage.tag();
+        storage.add(inc_one_nonce(1, &mut state, addr));
+        storage.add(inc_one_nonce(2, &mut state, addr));
+        storage.tag();
 
         let query = InMemoryStateQueries::new(storage);
 
-        let actual_nonce = query.nonce_at(state.db(), addr, 1);
+        let actual_nonce = query
+            .nonce_at(state.db(), addr, 1)
+            .expect("Block height should exist");
         let expected_nonce = 1u64;
 
         assert_eq!(actual_nonce, expected_nonce);
@@ -560,22 +576,19 @@ mod tests {
         let genesis_config = GenesisConfig::default();
         init_and_apply(&genesis_config, &mut state);
 
-        let genesis_changes = state.1;
+        let (state, genesis_changes) = (state.0, state.1);
 
         let addr = AccountAddress::new(hex!(
             "123456136717634683648732647632874638726487fefefefefeefefefefefff"
         ));
 
-        let mut tree = InMemoryState::new();
-        tree.apply(genesis_changes.clone()).unwrap();
-
-        let mut storage = StateMemory::default();
-
-        storage.add(genesis_changes, 0);
+        let storage = StateMemory::from_genesis(genesis_changes);
 
         let query = InMemoryStateQueries::new(storage);
 
-        let actual_nonce = query.nonce_at(tree.db(), addr, 0);
+        let actual_nonce = query
+            .nonce_at(state.db(), addr, 0)
+            .expect("Block height should exist");
         let expected_nonce = 0u64;
 
         assert_eq!(actual_nonce, expected_nonce);

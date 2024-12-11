@@ -29,12 +29,11 @@ pub mod tests {
                 GasFee, InMemoryBlockQueries, InMemoryBlockRepository, MovedBlockHash,
             },
             genesis::{self, config::GenesisConfig},
-            move_execution::{
-                BaseTokenAccounts, CreateL1GasFee, InMemoryStateQueries, MovedBaseTokenAccounts,
-                StateMemory, StateQueries,
-            },
+            move_execution::{BaseTokenAccounts, CreateL1GasFee, MovedBaseTokenAccounts},
             primitives::{Address, B256, U256, U64},
-            state_actor::{MockStateQueries, NewPayloadId, StateActor},
+            state_actor::{
+                InMemoryStateQueries, MockStateQueries, NewPayloadId, StateActor, StateQueries,
+            },
             storage::InMemoryState,
             types::{
                 state::{Command, Payload, StateMessage},
@@ -62,8 +61,7 @@ pub mod tests {
 
         let mut state = InMemoryState::new();
         let (changes, table_changes) = genesis::init(&genesis_config, &state);
-        let state_memory = StateMemory::from_genesis(changes.clone());
-        genesis::apply(changes, table_changes, &genesis_config, &mut state);
+        genesis::apply(changes.clone(), table_changes, &genesis_config, &mut state);
 
         let state = StateActor::new(
             rx,
@@ -79,7 +77,8 @@ pub mod tests {
             MovedBaseTokenAccounts::new(AccountAddress::ONE),
             InMemoryBlockQueries,
             block_memory,
-            InMemoryStateQueries::new(state_memory),
+            InMemoryStateQueries::from_genesis(changes),
+            StateActor::on_tx_noop(),
             StateActor::on_tx_batch_noop(),
         );
         (state, state_channel)
@@ -138,7 +137,7 @@ pub mod tests {
             B256::new(hex!(
                 "e56ec7ba741931e8c55b7f654a6e56ed61cf8b8279bf5e3ef6ac86a11eb33a9d"
             )),
-            0,
+            height,
             GenesisConfig::default(),
             0x03421ee50df45cacu64,
             MovedBlockHash,
@@ -149,6 +148,7 @@ pub mod tests {
             (),
             (),
             MockStateQueries(height, address),
+            StateActor::on_tx_noop(),
             StateActor::on_tx_batch_noop(),
         );
         (state, state_channel)

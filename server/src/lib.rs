@@ -251,9 +251,8 @@ async fn mirror(
         return Ok(warp::reply::Response::from_parts(geth_response_parts, body));
     }
 
-    // TODO(#47): use op-move response
-    let body = hyper::Body::from(geth_response_bytes);
-    Ok(warp::reply::Response::from_parts(geth_response_parts, body))
+    let body = hyper::Body::from(serde_json::to_vec(&op_move_response).unwrap());
+    Ok(warp::reply::Response::new(body))
 }
 
 async fn proxy(

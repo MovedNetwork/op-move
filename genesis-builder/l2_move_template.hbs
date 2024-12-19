@@ -1,0 +1,61 @@
+module {{name}}::{{slug name}} {
+    use aptos_framework::fungible_asset_u256::
+    {{~#if has_fungible_asset}}{FungibleAsset, zero}{{else}}zero{{/if}};
+    use EthToken::eth_token::get_metadata;
+    use Evm::evm::{abi_encode_params, emit_evm_logs, evm_call, is_result_success, EvmResult};
+    use std::error;
+
+    const ENOT_SUCCESS: u64 = 1;
+    {{#each structs}}
+
+    struct {{@key}} {
+        {{#each this}}
+        {{slug name}}: {{{ty}}},
+        {{/each}}
+    }
+    {{/each}}
+    {{#each functions}}
+
+    {{#if (len inputs)}}
+    struct {{capitalize name}}Args {
+        {{#each inputs}}
+        {{slug name}}: {{{ty}}},
+        {{/each}}
+    }
+    {{else}}
+    struct {{capitalize name}}Args {}
+    {{/if}}
+
+    public fun {{slug name}}(
+        caller: &signer,
+        {{#each inputs}}
+        {{slug name}}: {{{ty}}},
+        {{/each}}
+        {{#if has_value}}
+        _value: FungibleAsset,
+        {{/if}}
+    ): EvmResult {
+        {{#unless has_value}}
+        let _value = zero(get_metadata());
+        {{/unless}}
+        {{#if (len inputs)}}
+        let arg_struct = {{capitalize name}}Args {
+            {{#each inputs}}
+            {{slug name}},
+            {{/each}}
+        };
+        {{else}}
+        let arg_struct = {{capitalize name}}Args {};
+        {{/if}}
+
+        let data = abi_encode_params(
+            vector{{selector}},
+            arg_struct,
+        );
+        let result = evm_call(caller, @{{../name}}, _value, data);
+        assert!(is_result_success(&result), error::aborted(ENOT_SUCCESS));
+        emit_evm_logs(&result);
+        result
+    }
+    {{/each}}
+}

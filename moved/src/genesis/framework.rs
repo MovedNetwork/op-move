@@ -26,9 +26,12 @@ use {
 pub const CRATE_ROOT: &str = env!("CARGO_MANIFEST_DIR");
 pub const APTOS_SNAPSHOT_NAME: &str = "aptos.mrb";
 pub const SUI_SNAPSHOT_NAME: &str = "sui.mrb";
+pub const L2_PACKAGE_NAME: &str = "L2";
 pub const FRAMEWORK_ADDRESS: AccountAddress = AccountAddress::ONE;
-pub const L2_CROSS_DOMAIN_MESSENGER_ADDRESS: AccountAddress =
-    eth_address(&address!("4200000000000000000000000000000000000007").0 .0);
+pub const L2_LOWEST_ADDRESS: AccountAddress =
+    eth_address(&address!("4200000000000000000000000000000000000000").0 .0);
+pub const L2_HIGHEST_ADDRESS: AccountAddress =
+    eth_address(&address!("42000000000000000000000000000000000000ff").0 .0);
 pub const TOKEN_ADDRESS: AccountAddress = small_account_address(0x13);
 pub const TOKEN_OBJECT_ADDRESS: AccountAddress = small_account_address(0x14);
 pub const SUI_STDLIB_ADDRESS: AccountAddress = small_account_address(0x21);
@@ -166,24 +169,36 @@ fn deploy_aptos_framework(session: &mut Session) -> crate::Result<()> {
     // Iterate over the bundled packages in the Aptos framework
     for package in &framework.packages {
         let modules = package.sorted_code_and_modules();
-        // Address from the first module is sufficient as they're the same within the package
-        let sender = modules.first().expect("Package has at least one module");
-        let sender = *sender.1.self_id().address();
+        if package.name().eq(L2_PACKAGE_NAME) {
+            // L2 package have self-contained independent modules
+            for module in modules {
+                let code = module.0.to_vec();
+                let sender = module.1.self_id().address;
+                assert!(
+                    sender.ge(&L2_LOWEST_ADDRESS) && sender.le(&L2_HIGHEST_ADDRESS),
+                    "L2 module {sender} should be within the allowed address range."
+                );
+                session.publish_module(code, sender, &mut UnmeteredGasMeter)?;
+            }
+        } else {
+            // Address from the first module is sufficient as they're the same within the package
+            let sender = modules.first().expect("Package has at least one module");
+            let sender = *sender.1.self_id().address();
 
-        assert!(
-            sender == FRAMEWORK_ADDRESS
-                || sender == TOKEN_ADDRESS
-                || sender == TOKEN_OBJECT_ADDRESS
-                || sender == L2_CROSS_DOMAIN_MESSENGER_ADDRESS,
-            "The framework should be deployed to a statically known address. {sender} not known."
-        );
+            assert!(
+                sender == FRAMEWORK_ADDRESS
+                    || sender == TOKEN_ADDRESS
+                    || sender == TOKEN_OBJECT_ADDRESS,
+                "The framework should be deployed to a statically known address. {sender} not known."
+            );
 
-        let code = modules
-            .into_iter()
-            .map(|(code, _)| code.to_vec())
-            .collect::<Vec<_>>();
+            let code = modules
+                .into_iter()
+                .map(|(code, _)| code.to_vec())
+                .collect::<Vec<_>>();
 
-        session.publish_module_bundle(code, sender, &mut UnmeteredGasMeter)?;
+            session.publish_module_bundle(code.clone(), sender, &mut UnmeteredGasMeter)?;
+        }
     }
     Ok(())
 }
@@ -210,8 +225,8 @@ fn deploy_sui_framework(session: &mut Session) -> crate::Result<()> {
 mod tests {
     use {super::*, crate::storage::InMemoryState};
 
-    // Aptos framework has 118 modules and Sui has 69. They are kept mutually exclusive.
-    const APTOS_MODULES_LEN: usize = 118;
+    // Aptos framework has 133 modules and Sui has 69. They are kept mutually exclusive.
+    const APTOS_MODULES_LEN: usize = 133;
     const SUI_MODULES_LEN: usize = 69;
     const TOTAL_MODULES_LEN: usize = APTOS_MODULES_LEN + SUI_MODULES_LEN;
 

@@ -1,0 +1,11 @@
+[package]
+name = "l2_script"
+version = "0.0.0"
+
+[addresses]
+
+[dependencies]
+AptosFramework = { local = "../../../../../target/aptos-core/aptos-move/framework/aptos-framework" }
+EthToken = { local = "../../../../../genesis-builder/framework/eth-token" }
+Evm = { local = "../../../../../genesis-builder/framework/evm" }
+L2 = { local = "../../../../../genesis-builder/framework/l2" }

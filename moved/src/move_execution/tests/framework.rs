@@ -54,3 +54,9 @@ fn test_execute_object_playground_contract() {
         "Object must already exist to pass as an entry function argument",
     );
 }
+
+#[test]
+fn test_l2_contracts() {
+    let mut ctx = TestContext::new();
+    ctx.run_script("l2_script", &[], vec![]);
+}

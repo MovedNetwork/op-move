@@ -1,4 +1,5 @@
 use {
+    crate::generate::l2_abi_to_move,
     aptos_framework::{BuildOptions, BuiltPackage, ReleaseBundle, ReleasePackage},
     move_package::{
         package_hooks::register_package_hooks, BuildConfig as MoveBuildConfig, LintFlag,
@@ -15,6 +16,8 @@ use {
     sui_move_build::{BuildConfig, SuiPackageHooks},
     sui_types::base_types::ObjectID,
 };
+
+mod generate;
 
 pub const APTOS_SNAPSHOT_NAME: &str = "aptos.mrb";
 pub const SUI_SNAPSHOT_NAME: &str = "sui.mrb";
@@ -51,7 +54,7 @@ static APTOS_PACKAGE_PATHS: Lazy<Vec<PathBuf>> = Lazy::new(|| {
         APTOS_FRAMEWORK_DIR.join("aptos-token-objects"),
         MOVED_FRAMEWORK_DIR.join("eth-token"),
         MOVED_FRAMEWORK_DIR.join("evm"),
-        MOVED_FRAMEWORK_DIR.join("l2-cross-domain-messenger"),
+        MOVED_FRAMEWORK_DIR.join("l2"),
     ]
 });
 static APTOS_ADDRESS_MAPPING: Lazy<BTreeMap<&str, &str>> = Lazy::new(|| {
@@ -89,6 +92,7 @@ fn main() -> anyhow::Result<()> {
     clone_repos()?;
 
     fix_aptos_packages()?;
+    l2_abi_to_move()?;
     build_aptos_packages()?;
 
     fix_sui_packages()?;

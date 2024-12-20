@@ -52,8 +52,8 @@ fn test_withdrawal_tx() {
     );
     assert_eq!(ctx.get_balance(EVM_ADDRESS), U256::ZERO);
     assert!(
-        logs.iter()
-            .any(|log| log.address.to_move_address() == L2_CROSS_DOMAIN_MESSENGER_ADDRESS),
+        logs.iter().any(|log| log.address.to_move_address()
+            == address!("4200000000000000000000000000000000000007").to_move_address()),
         "Outcome must have logs from the L2CrossDomainMessenger contract"
     );
 }

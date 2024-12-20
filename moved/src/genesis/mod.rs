@@ -3,7 +3,7 @@ use {
     move_core_types::effects::ChangeSet, move_table_extension::TableChangeSet,
 };
 
-pub use framework::{FRAMEWORK_ADDRESS, L2_CROSS_DOMAIN_MESSENGER_ADDRESS};
+pub use framework::FRAMEWORK_ADDRESS;
 
 pub mod config;
 mod framework;

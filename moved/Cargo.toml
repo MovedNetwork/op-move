@@ -32,6 +32,7 @@ move-vm-test-utils.workspace = true
 move-vm-types.workspace = true
 once_cell.workspace = true
 op-alloy.workspace = true
+regex.workspace = true
 revm.workspace = true
 serde.workspace = true
 serde_json.workspace = true

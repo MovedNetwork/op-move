@@ -39,6 +39,7 @@ pub(super) fn verify_transaction(
     gas_meter: &mut StandardGasMeter<StandardGasAlgebra>,
     genesis_config: &GenesisConfig,
     l1_cost: u64,
+    l2_cost: u64,
     base_token: &impl BaseTokenAccounts,
 ) -> crate::Result<()> {
     if let Some(chain_id) = tx.chain_id {
@@ -71,6 +72,14 @@ pub(super) fn verify_transaction(
         )
         .map_err(|_| InvalidTransaction(InvalidTransactionCause::FailedToPayL1Fee))?;
 
+    base_token.charge_l2_cost(
+        &sender_move_address,
+        l2_cost,
+        session,
+        traversal_context,
+        gas_meter,
+    )?;
+
     check_nonce(
         tx.nonce,
         &sender_move_address,
@@ -88,6 +97,7 @@ pub(super) fn execute_canonical_transaction(
     state: &(impl MoveResolver<PartialVMError> + TableResolver),
     genesis_config: &GenesisConfig,
     l1_cost: u64,
+    l2_cost: u64,
     base_token: &impl BaseTokenAccounts,
     block_header: HeaderForExecution,
 ) -> crate::Result<TransactionExecutionOutcome> {
@@ -118,6 +128,7 @@ pub(super) fn execute_canonical_transaction(
         &mut gas_meter,
         genesis_config,
         l1_cost,
+        l2_cost,
         base_token,
     )?;
 

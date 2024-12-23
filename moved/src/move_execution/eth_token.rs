@@ -46,6 +46,15 @@ pub trait BaseTokenAccounts {
         gas_meter: &mut G,
     ) -> Result<(), crate::Error>;
 
+    fn charge_l2_cost<G: GasMeter>(
+        &self,
+        from: &AccountAddress,
+        amount: u64,
+        session: &mut Session,
+        traversal_context: &mut TraversalContext,
+        gas_meter: &mut G,
+    ) -> Result<(), crate::Error>;
+
     fn transfer<G: GasMeter>(
         &self,
         args: TransferArgs<'_>,

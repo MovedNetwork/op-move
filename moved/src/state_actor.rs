@@ -8,14 +8,14 @@ pub use {
 use {
     crate::{
         block::{
-            Block, BlockHash, BlockQueries, BlockRepository, ExtendedBlock, GasFee, Header,
+            BaseGasFee, Block, BlockHash, BlockQueries, BlockRepository, ExtendedBlock, Header,
             HeaderForExecution,
         },
         genesis::config::GenesisConfig,
         move_execution::{
             execute_transaction,
             simulate::{call_transaction, simulate_transaction},
-            BaseTokenAccounts, CreateL1GasFee, L1GasFee, L1GasFeeInput, LogsBloom,
+            BaseTokenAccounts, CreateL1GasFee, GasFee, L1GasFeeInput, LogsBloom,
         },
         primitives::{self, ToEthAddress, ToMoveAddress, ToSaturatedU64, B256, U256, U64},
         storage::State,
@@ -76,7 +76,7 @@ pub struct StateActor<
     P: NewPayloadId,
     H: BlockHash,
     R: BlockRepository<Storage = M>,
-    G: GasFee,
+    G: BaseGasFee,
     L1G: CreateL1GasFee,
     B: BaseTokenAccounts,
     Q: BlockQueries<Storage = M>,
@@ -111,7 +111,7 @@ impl<
         P: NewPayloadId + Send + Sync + 'static,
         H: BlockHash + Send + Sync + 'static,
         R: BlockRepository<Storage = M> + Send + Sync + 'static,
-        G: GasFee + Send + Sync + 'static,
+        G: BaseGasFee + Send + Sync + 'static,
         L1G: CreateL1GasFee + Send + Sync + 'static,
         B: BaseTokenAccounts + Send + Sync + 'static,
         Q: BlockQueries<Storage = M> + Send + Sync + 'static,
@@ -136,7 +136,7 @@ impl<
         P: NewPayloadId,
         H: BlockHash,
         R: BlockRepository<Storage = M>,
-        G: GasFee,
+        G: BaseGasFee,
         L1G: CreateL1GasFee,
         B: BaseTokenAccounts,
         Q: BlockQueries<Storage = M>,
@@ -442,6 +442,10 @@ impl<
                     .as_ref()
                     .map(|v| v.l1_fee(l1_cost_input.clone()).to_saturated_u64())
                     .unwrap_or(0),
+                l1_fee
+                    .as_ref()
+                    .map(|v| v.l2_fee(normalized_tx.gas_limit()).to_saturated_u64())
+                    .unwrap_or(0),
                 &self.base_token,
                 block_header.clone(),
             ) {
@@ -587,7 +591,7 @@ impl<
         P: NewPayloadId,
         H: BlockHash,
         R: BlockRepository<Storage = M>,
-        G: GasFee,
+        G: BaseGasFee,
         L1G: CreateL1GasFee,
         B: BaseTokenAccounts,
         Q: BlockQueries<Storage = M>,
@@ -767,7 +771,7 @@ mod tests {
             impl NewPayloadId,
             impl BlockHash,
             impl BlockRepository<Storage = BlockMemory>,
-            impl GasFee,
+            impl BaseGasFee,
             impl CreateL1GasFee,
             impl BaseTokenAccounts,
             impl BlockQueries<Storage = BlockMemory>,
@@ -844,7 +848,7 @@ mod tests {
             impl NewPayloadId,
             impl BlockHash,
             impl BlockRepository<Storage = BlockMemory>,
-            impl GasFee,
+            impl BaseGasFee,
             impl CreateL1GasFee,
             impl BaseTokenAccounts,
             impl BlockQueries<Storage = BlockMemory>,

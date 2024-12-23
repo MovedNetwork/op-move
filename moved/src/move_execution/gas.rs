@@ -52,8 +52,10 @@ impl NormalizedEthTransaction {
     }
 }
 
-pub trait L1GasFee {
+/// Determines functions in charge of  TODO:
+pub trait GasFee {
     fn l1_fee(&self, input: L1GasFeeInput) -> U256;
+    fn l2_fee(&self, gas_limit: u64) -> U256;
     fn l1_block_info(&self, input: L1GasFeeInput) -> Option<L1BlockInfo>;
 }
 
@@ -83,14 +85,14 @@ impl<T: AsRef<[u8]>> From<T> for L1GasFeeInput {
 }
 
 #[derive(Debug)]
-pub struct EcotoneL1GasFee {
+pub struct EcotoneGasFee {
     base_fee: U256,
     base_fee_scalar: U256,
     blob_base_fee: U256,
     blob_base_fee_scalar: U256,
 }
 
-impl EcotoneL1GasFee {
+impl EcotoneGasFee {
     const ZERO_BYTE_MULTIPLIER: U256 = U256::from_limbs([4, 0, 0, 0]);
     const GAS_PRICE_MULTIPLIER: U256 = U256::from_limbs([16, 0, 0, 0]);
 
@@ -109,7 +111,7 @@ impl EcotoneL1GasFee {
     }
 }
 
-impl L1GasFee for EcotoneL1GasFee {
+impl GasFee for EcotoneGasFee {
     fn l1_fee(&self, input: L1GasFeeInput) -> U256 {
         let zero_bytes = input.zero_bytes;
         let non_zero_bytes = input.non_zero_bytes;
@@ -120,6 +122,12 @@ impl L1GasFee for EcotoneL1GasFee {
             + self.blob_base_fee_scalar * self.blob_base_fee;
 
         tx_compressed_size * weighted_gas_price
+    }
+    fn l2_fee(&self, gas_limit: u64) -> U256 {
+        let weighted_gas_price = Self::GAS_PRICE_MULTIPLIER * self.base_fee_scalar * self.base_fee
+            + self.blob_base_fee_scalar * self.blob_base_fee;
+
+        weighted_gas_price.saturating_mul(U256::from(gas_limit))
     }
 
     fn l1_block_info(&self, input: L1GasFeeInput) -> Option<L1BlockInfo> {
@@ -139,13 +147,13 @@ impl L1GasFee for EcotoneL1GasFee {
 pub trait CreateL1GasFee {
     /// Extracts parameters from deposit transaction and creates the algorithm for calculating L1
     /// gas cost.
-    fn for_deposit(&self, data: &[u8]) -> impl L1GasFee + 'static;
+    fn for_deposit(&self, data: &[u8]) -> impl GasFee + 'static;
 }
 
 pub struct CreateEcotoneL1GasFee;
 
 impl CreateL1GasFee for CreateEcotoneL1GasFee {
-    fn for_deposit(&self, data: &[u8]) -> impl L1GasFee + 'static {
+    fn for_deposit(&self, data: &[u8]) -> impl GasFee + 'static {
         let l1_base_fee = U256::from_be_slice(&data[36..68]);
         let l1_blob_base_fee = U256::from_be_slice(&data[68..100]);
         let l1_base_fee_scalar =
@@ -153,7 +161,7 @@ impl CreateL1GasFee for CreateEcotoneL1GasFee {
         let l1_blob_base_fee_scalar =
             u32::from_be_bytes(data[8..12].try_into().expect("Slice should be 4 bytes"));
 
-        EcotoneL1GasFee::new(
+        EcotoneGasFee::new(
             l1_base_fee,
             l1_base_fee_scalar,
             l1_blob_base_fee,
@@ -166,8 +174,12 @@ impl CreateL1GasFee for CreateEcotoneL1GasFee {
 mod tests {
     use super::*;
 
-    impl L1GasFee for U256 {
+    impl GasFee for U256 {
         fn l1_fee(&self, _input: L1GasFeeInput) -> U256 {
+            *self
+        }
+
+        fn l2_fee(&self) -> U256 {
             *self
         }
 
@@ -177,7 +189,7 @@ mod tests {
     }
 
     impl CreateL1GasFee for U256 {
-        fn for_deposit(&self, _data: &[u8]) -> impl L1GasFee + 'static {
+        fn for_deposit(&self, _data: &[u8]) -> impl GasFee + 'static {
             *self
         }
     }

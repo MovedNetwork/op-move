@@ -1,7 +1,7 @@
 pub use {
     eth_token::{mint_eth, quick_get_eth_balance, BaseTokenAccounts, MovedBaseTokenAccounts},
     evm_native::genesis_state_changes,
-    gas::{CreateEcotoneL1GasFee, CreateL1GasFee, EcotoneL1GasFee, L1GasFee, L1GasFeeInput},
+    gas::{CreateEcotoneL1GasFee, CreateL1GasFee, EcotoneGasFee, GasFee, L1GasFeeInput},
     nonces::{check_nonce, quick_get_nonce},
 };
 
@@ -112,6 +112,7 @@ pub fn execute_transaction(
     state: &(impl MoveResolver<PartialVMError> + TableResolver),
     genesis_config: &GenesisConfig,
     l1_cost: u64,
+    l2_cost: u64,
     base_token: &impl BaseTokenAccounts,
     block_header: HeaderForExecution,
 ) -> crate::Result<TransactionExecutionOutcome> {
@@ -125,6 +126,7 @@ pub fn execute_transaction(
             state,
             genesis_config,
             l1_cost,
+            l2_cost,
             base_token,
             block_header,
         ),

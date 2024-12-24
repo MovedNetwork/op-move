@@ -105,6 +105,7 @@ fn check_programs() {
     assert!(is_program_in_path("op-node"));
     assert!(is_program_in_path("op-batcher"));
     assert!(is_program_in_path("op-proposer"));
+    assert!(is_program_in_path("cast"));
 }
 
 async fn fund_accounts() -> Result<()> {
@@ -139,7 +140,7 @@ async fn check_factory_deployer() -> Result<()> {
                 02222222222222222222222222222222222222222222222222222222222222222",
             ])
             .output()
-            .context("Call to config failed")
+            .context("Call to foundry cast failed")
             .unwrap();
         check_output(output);
     }

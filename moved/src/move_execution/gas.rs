@@ -179,7 +179,7 @@ mod tests {
             *self
         }
 
-        fn l2_fee(&self) -> U256 {
+        fn l2_fee(&self, _gas_limit: u64) -> U256 {
             *self
         }
 

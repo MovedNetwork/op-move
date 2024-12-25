@@ -53,6 +53,7 @@ pub fn simulate_transaction(
         state,
         genesis_config,
         0,
+        0,
         base_token,
         block_header,
     )
@@ -83,6 +84,7 @@ pub fn call_transaction(
         &mut traversal_context,
         &mut gas_meter,
         genesis_config,
+        0,
         0,
         base_token,
     )?;

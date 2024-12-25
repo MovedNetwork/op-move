@@ -209,9 +209,10 @@ impl NormalizedExtendedTxEnvelope {
             Self::Canonical(tx) => tx.tip_per_gas(base_fee),
         }
     }
-    pub fn gas_limit(&self) -> U256 {
+
+    pub fn gas_limit(&self) -> u64 {
         match self {
-            Self::DepositedTx(..) => U256::ZERO,
+            Self::DepositedTx(..) => 0,
             Self::Canonical(tx) => tx.gas_limit(),
         }
     }

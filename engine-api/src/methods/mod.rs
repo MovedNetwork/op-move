@@ -28,8 +28,8 @@ pub mod tests {
         move_core_types::account_address::AccountAddress,
         moved::{
             block::{
-                Block, BlockHash, BlockMemory, BlockQueries, BlockRepository, Eip1559GasFee,
-                GasFee, InMemoryBlockQueries, InMemoryBlockRepository, MovedBlockHash,
+                BaseGasFee, Block, BlockHash, BlockMemory, BlockQueries, BlockRepository,
+                Eip1559GasFee, InMemoryBlockQueries, InMemoryBlockRepository, MovedBlockHash,
             },
             genesis::{
                 self,
@@ -163,7 +163,7 @@ pub mod tests {
             impl NewPayloadId,
             impl BlockHash,
             impl BlockRepository<Storage = ()>,
-            impl GasFee,
+            impl BaseGasFee,
             impl CreateL1GasFee,
             impl BaseTokenAccounts,
             impl BlockQueries<Storage = ()>,

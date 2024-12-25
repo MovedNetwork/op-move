@@ -37,7 +37,7 @@ pub struct TransferArgs<'a> {
 }
 
 pub trait BaseTokenAccounts {
-    fn charge_l1_cost<G: GasMeter>(
+    fn charge_gas_cost<G: GasMeter>(
         &self,
         from: &AccountAddress,
         amount: u64,
@@ -46,9 +46,9 @@ pub trait BaseTokenAccounts {
         gas_meter: &mut G,
     ) -> Result<(), crate::Error>;
 
-    fn charge_l2_cost<G: GasMeter>(
+    fn refund_l2_cost<G: GasMeter>(
         &self,
-        from: &AccountAddress,
+        to: &AccountAddress,
         amount: u64,
         session: &mut Session,
         traversal_context: &mut TraversalContext,
@@ -76,7 +76,7 @@ impl MovedBaseTokenAccounts {
 }
 
 impl BaseTokenAccounts for MovedBaseTokenAccounts {
-    fn charge_l1_cost<G: GasMeter>(
+    fn charge_gas_cost<G: GasMeter>(
         &self,
         from: &AccountAddress,
         amount: u64,
@@ -96,6 +96,25 @@ impl BaseTokenAccounts for MovedBaseTokenAccounts {
         )
     }
 
+    fn refund_l2_cost<G: GasMeter>(
+        &self,
+        to: &AccountAddress,
+        amount: u64,
+        session: &mut Session,
+        traversal_context: &mut TraversalContext,
+        gas_meter: &mut G,
+    ) -> Result<(), crate::Error> {
+        transfer_eth(
+            TransferArgs {
+                from: &self.eth_treasury,
+                to,
+                amount: U256::from(amount),
+            },
+            session,
+            traversal_context,
+            gas_meter,
+        )
+    }
     fn transfer<G: GasMeter>(
         &self,
         args: TransferArgs<'_>,
@@ -270,7 +289,7 @@ mod tests {
     use {super::*, crate::Error};
 
     impl BaseTokenAccounts for () {
-        fn charge_l1_cost<G: GasMeter>(
+        fn charge_gas_cost<G: GasMeter>(
             &self,
             _from: &AccountAddress,
             _amount: u64,
@@ -288,6 +307,17 @@ mod tests {
             _traversal_context: &mut TraversalContext,
             _gas_meter: &mut G,
         ) -> Result<(), Error> {
+            Ok(())
+        }
+
+        fn refund_l2_cost<G: GasMeter>(
+            &self,
+            _to: &AccountAddress,
+            _amount: u64,
+            _session: &mut Session,
+            _traversal_context: &mut TraversalContext,
+            _gas_meter: &mut G,
+        ) -> Result<(), crate::Error> {
             Ok(())
         }
     }

@@ -32,6 +32,7 @@ use {
     },
 };
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn verify_transaction(
     tx: &NormalizedEthTransaction,
     session: &mut Session,
@@ -72,7 +73,7 @@ pub(super) fn verify_transaction(
         )
         .map_err(|_| InvalidTransaction(InvalidTransactionCause::FailedToPayL1Fee))?;
 
-    base_token.charge_l2_cost(
+    base_token.charge_gas_cost(
         &sender_move_address,
         l2_cost,
         session,
@@ -91,6 +92,7 @@ pub(super) fn verify_transaction(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn execute_canonical_transaction(
     tx: &NormalizedEthTransaction,
     tx_hash: &B256,

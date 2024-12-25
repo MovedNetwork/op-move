@@ -56,6 +56,7 @@ mod counter;
 mod data_type;
 mod framework;
 mod l1_cost;
+mod l2_cost;
 mod marketplace;
 mod natives;
 mod transaction;

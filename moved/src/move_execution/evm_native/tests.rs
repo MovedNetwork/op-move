@@ -173,6 +173,7 @@ fn test_solidity_fixed_bytes() {
             state.resolver(),
             &ctx.genesis_config,
             0,
+            0,
             &(),
             HeaderForExecution::default(),
         )

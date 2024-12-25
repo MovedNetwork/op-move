@@ -18,6 +18,8 @@ pub struct TestTransaction {
     pub tx_hash: B256,
     /// L1 cost associated with the transaction
     pub l1_cost: u64,
+    /// L2 cost associated with the transaction
+    pub l2_cost: u64,
     /// Base token state for the transaction
     pub base_token: TestBaseToken,
 }
@@ -33,6 +35,7 @@ impl TestTransaction {
             tx,
             tx_hash,
             l1_cost: 0,
+            l2_cost: 0,
             base_token: TestBaseToken::Empty,
         }
     }
@@ -42,8 +45,9 @@ impl TestTransaction {
     /// # Arguments
     /// * `l1_cost` - The L1 cost to set
     /// * `base_token` - The moved base token accounts to set
-    pub fn with_cost(&mut self, l1_cost: u64, base_token: MovedBaseTokenAccounts) {
+    pub fn with_cost(&mut self, l1_cost: u64, l2_cost: u64, base_token: MovedBaseTokenAccounts) {
         self.l1_cost = l1_cost;
+        self.l2_cost = l2_cost;
         self.base_token = TestBaseToken::Moved(base_token);
     }
 }
@@ -138,6 +142,7 @@ impl TestContext {
         to: Address,
         amount: U256,
         l1_cost: u64,
+        l2_cost: u64,
     ) -> TransactionExecutionOutcome {
         let (tx_hash, tx) = create_transaction_with_value(
             &mut self.signer,
@@ -150,7 +155,7 @@ impl TestContext {
         let treasury_address = AccountAddress::ONE;
         let base_token = MovedBaseTokenAccounts::new(treasury_address);
         let mut transaction = TestTransaction::new(tx, tx_hash);
-        transaction.with_cost(l1_cost, base_token);
+        transaction.with_cost(l1_cost, l2_cost, base_token);
         let outcome = self.execute_tx(&transaction).unwrap();
         self.state.apply(outcome.changes.clone()).unwrap();
 
@@ -231,6 +236,7 @@ impl TestContext {
                 self.state.resolver(),
                 &self.genesis_config,
                 0,
+                0,
                 &(),
                 HeaderForExecution::default(),
             ),
@@ -240,6 +246,7 @@ impl TestContext {
                 self.state.resolver(),
                 &self.genesis_config,
                 tx.l1_cost,
+                tx.l2_cost,
                 moved_base_token,
                 HeaderForExecution::default(),
             ),

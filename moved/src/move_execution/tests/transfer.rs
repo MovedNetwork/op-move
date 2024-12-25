@@ -111,12 +111,12 @@ fn test_eoa_base_token_transfer() {
     // Should fail when transfer is larger than account balance
     let receiver = ALT_EVM_ADDRESS;
     let transfer_amount = mint_amount.saturating_add(U256::from(1));
-    let outcome = ctx.transfer(receiver, transfer_amount, 0);
+    let outcome = ctx.transfer(receiver, transfer_amount, 0, 0);
     outcome.vm_outcome.unwrap_err();
 
     // Should work with proper transfer
     let transfer_amount = mint_amount.wrapping_shr(1);
-    let outcome = ctx.transfer(receiver, transfer_amount, 0);
+    let outcome = ctx.transfer(receiver, transfer_amount, 0, 0);
     outcome.vm_outcome.unwrap();
 
     let sender_balance = ctx.get_balance(sender);

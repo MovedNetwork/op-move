@@ -1,7 +1,10 @@
 pub use {
     eth_token::{mint_eth, quick_get_eth_balance, BaseTokenAccounts, MovedBaseTokenAccounts},
     evm_native::genesis_state_changes,
-    gas::{CreateEcotoneL1GasFee, CreateL1GasFee, EcotoneGasFee, GasFee, L1GasFeeInput},
+    gas::{
+        CreateEcotoneL1GasFee, CreateL1GasFee, CreateL2GasFee, CreateMovedL2GasFee, EcotoneGasFee,
+        L1GasFee, L1GasFeeInput, L2GasFee, L2GasFeeInput, MovedGasFee,
+    },
     nonces::{check_nonce, quick_get_nonce},
 };
 
@@ -113,6 +116,7 @@ where
     vm.new_session_with_extensions(state, native_extensions)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn execute_transaction(
     tx: &NormalizedExtendedTxEnvelope,
     tx_hash: &B256,

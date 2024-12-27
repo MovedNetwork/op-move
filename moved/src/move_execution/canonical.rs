@@ -181,6 +181,15 @@ pub(super) fn execute_canonical_transaction(
         }
     };
 
+    let gas_used = total_gas_used(&gas_meter, genesis_config);
+    base_token.refund_gas_cost(
+        &sender_move_address,
+        gas_used - l2_cost,
+        &mut session,
+        &mut traversal_context,
+        &mut gas_meter,
+    )?;
+
     let (mut changes, mut extensions) = session.finish_with_extensions()?;
     let mut logs = extensions.logs();
     logs.extend(evm_logs);
@@ -188,7 +197,6 @@ pub(super) fn execute_canonical_transaction(
     changes
         .squash(evm_changes)
         .expect("EVM changes must merge with other session changes");
-    let gas_used = total_gas_used(&gas_meter, genesis_config);
 
     match vm_outcome {
         Ok(_) => Ok(TransactionExecutionOutcome::new(

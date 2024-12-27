@@ -63,12 +63,6 @@ impl ExtendedTxEnvelope {
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum NormalizedExtendedTxEnvelope {
-    Canonical(NormalizedEthTransaction),
-    DepositedTx(DepositedTx),
-}
-
 impl ExtendedTxEnvelope {
     /// In case this transaction is a deposit, returns `Some` containing a reference to the
     /// underlying [`DepositedTx`]. Otherwise, returns `None`.
@@ -189,6 +183,12 @@ impl Decodable for ExtendedTxEnvelope {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum NormalizedExtendedTxEnvelope {
+    Canonical(NormalizedEthTransaction),
+    DepositedTx(DepositedTx),
+}
+
 impl TryFrom<ExtendedTxEnvelope> for NormalizedExtendedTxEnvelope {
     type Error = Error;
 
@@ -214,6 +214,13 @@ impl NormalizedExtendedTxEnvelope {
         match self {
             Self::DepositedTx(..) => 0,
             Self::Canonical(tx) => tx.gas_limit(),
+        }
+    }
+
+    pub fn effective_gas_price(&self, base_fee: U256) -> U256 {
+        match self {
+            Self::DepositedTx(..) => U256::ZERO,
+            Self::Canonical(tx) => tx.effective_gas_price(base_fee),
         }
     }
 }

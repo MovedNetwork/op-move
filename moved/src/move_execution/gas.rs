@@ -50,13 +50,19 @@ impl NormalizedEthTransaction {
             .unwrap_or(U256::ZERO);
         self.max_priority_fee_per_gas.min(extra_fee)
     }
+
+    pub fn effective_gas_price(&self, base_fee: U256) -> U256 {
+        self.tip_per_gas(base_fee) + base_fee
+    }
 }
 
-/// Determines functions in charge of  TODO:
-pub trait GasFee {
+pub trait L1GasFee {
     fn l1_fee(&self, input: L1GasFeeInput) -> U256;
-    fn l2_fee(&self, gas_limit: u64) -> U256;
     fn l1_block_info(&self, input: L1GasFeeInput) -> Option<L1BlockInfo>;
+}
+
+pub trait L2GasFee {
+    fn l2_fee(&self, input: L2GasFeeInput) -> U256;
 }
 
 #[derive(Debug, Clone, Default)]
@@ -81,6 +87,23 @@ impl<T: AsRef<[u8]>> From<T> for L1GasFeeInput {
         let non_zero_bytes = U256::from(tx_data.len()) - zero_bytes;
 
         Self::new(zero_bytes, non_zero_bytes)
+    }
+}
+
+/// Transaction-defined parameters necessary for
+/// calculation of L2 gas costs.
+#[derive(Debug, Clone)]
+pub struct L2GasFeeInput {
+    gas_limit: u64,
+    effective_gas_price: U256,
+}
+
+impl L2GasFeeInput {
+    pub fn new(gas_limit: u64, effective_gas_price: U256) -> Self {
+        Self {
+            gas_limit,
+            effective_gas_price,
+        }
     }
 }
 
@@ -111,7 +134,7 @@ impl EcotoneGasFee {
     }
 }
 
-impl GasFee for EcotoneGasFee {
+impl L1GasFee for EcotoneGasFee {
     fn l1_fee(&self, input: L1GasFeeInput) -> U256 {
         let zero_bytes = input.zero_bytes;
         let non_zero_bytes = input.non_zero_bytes;
@@ -122,12 +145,6 @@ impl GasFee for EcotoneGasFee {
             + self.blob_base_fee_scalar * self.blob_base_fee;
 
         tx_compressed_size * weighted_gas_price
-    }
-    fn l2_fee(&self, gas_limit: u64) -> U256 {
-        let weighted_gas_price = Self::GAS_PRICE_MULTIPLIER * self.base_fee_scalar * self.base_fee
-            + self.blob_base_fee_scalar * self.blob_base_fee;
-
-        weighted_gas_price.saturating_mul(U256::from(gas_limit))
     }
 
     fn l1_block_info(&self, input: L1GasFeeInput) -> Option<L1BlockInfo> {
@@ -143,17 +160,34 @@ impl GasFee for EcotoneGasFee {
     }
 }
 
+/// This struct holds additional parameters and behavior as
+/// defined by Moved network for L2 gas calculation that are
+/// independent of transaction-defined limits or block state.
+#[derive(Debug)]
+pub struct MovedGasFee {
+    gas_fee_multiplier: U256,
+}
+
+impl L2GasFee for MovedGasFee {
+    fn l2_fee(&self, input: L2GasFeeInput) -> U256 {
+        input
+            .effective_gas_price
+            .saturating_mul(U256::from(input.gas_limit))
+            .saturating_mul(self.gas_fee_multiplier)
+    }
+}
+
 /// Creates algorithm for calculating cost of publishing a transaction to layer-1 blockchain.
 pub trait CreateL1GasFee {
     /// Extracts parameters from deposit transaction and creates the algorithm for calculating L1
     /// gas cost.
-    fn for_deposit(&self, data: &[u8]) -> impl GasFee + 'static;
+    fn for_deposit(&self, data: &[u8]) -> impl L1GasFee + 'static;
 }
 
 pub struct CreateEcotoneL1GasFee;
 
 impl CreateL1GasFee for CreateEcotoneL1GasFee {
-    fn for_deposit(&self, data: &[u8]) -> impl GasFee + 'static {
+    fn for_deposit(&self, data: &[u8]) -> impl L1GasFee + 'static {
         let l1_base_fee = U256::from_be_slice(&data[36..68]);
         let l1_blob_base_fee = U256::from_be_slice(&data[68..100]);
         let l1_base_fee_scalar =
@@ -170,16 +204,26 @@ impl CreateL1GasFee for CreateEcotoneL1GasFee {
     }
 }
 
+pub struct CreateMovedL2GasFee;
+
+/// Creates algorithm for calculating cost of publishing a transaction to layer-2 blockchain.
+pub trait CreateL2GasFee {
+    /// Instantiates L2 gas fee structure with a given multiplier. Basically a decoupled
+    /// constructor.
+    fn with_gas_fee_multiplier(&self, gas_fee_multiplier: U256) -> impl L2GasFee + 'static;
+}
+impl CreateL2GasFee for CreateMovedL2GasFee {
+    fn with_gas_fee_multiplier(&self, gas_fee_multiplier: U256) -> impl L2GasFee + 'static {
+        MovedGasFee { gas_fee_multiplier }
+    }
+}
+
 #[cfg(any(feature = "test-doubles", test))]
 mod tests {
     use super::*;
 
-    impl GasFee for U256 {
+    impl L1GasFee for U256 {
         fn l1_fee(&self, _input: L1GasFeeInput) -> U256 {
-            *self
-        }
-
-        fn l2_fee(&self, _gas_limit: u64) -> U256 {
             *self
         }
 
@@ -188,8 +232,20 @@ mod tests {
         }
     }
 
+    impl L2GasFee for U256 {
+        fn l2_fee(&self, _input: L2GasFeeInput) -> U256 {
+            *self
+        }
+    }
+
     impl CreateL1GasFee for U256 {
-        fn for_deposit(&self, _data: &[u8]) -> impl GasFee + 'static {
+        fn for_deposit(&self, _data: &[u8]) -> impl L1GasFee + 'static {
+            *self
+        }
+    }
+
+    impl CreateL2GasFee for U256 {
+        fn with_gas_fee_multiplier(&self, _base_fee: U256) -> impl L2GasFee + 'static {
             *self
         }
     }

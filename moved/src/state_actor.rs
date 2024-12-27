@@ -15,7 +15,8 @@ use {
         move_execution::{
             execute_transaction,
             simulate::{call_transaction, simulate_transaction},
-            BaseTokenAccounts, CreateL1GasFee, GasFee, L1GasFeeInput, LogsBloom,
+            BaseTokenAccounts, CreateL1GasFee, CreateL2GasFee, L1GasFee, L1GasFeeInput, L2GasFee,
+            L2GasFeeInput, LogsBloom,
         },
         primitives::{self, ToEthAddress, ToMoveAddress, ToSaturatedU64, B256, U256, U64},
         storage::State,
@@ -57,6 +58,7 @@ pub type InMemStateActor = StateActor<
     crate::block::InMemoryBlockRepository,
     crate::block::Eip1559GasFee,
     U256,
+    U256,
     crate::move_execution::MovedBaseTokenAccounts,
     crate::block::InMemoryBlockQueries,
     crate::block::BlockMemory,
@@ -78,6 +80,7 @@ pub struct StateActor<
     R: BlockRepository<Storage = M>,
     G: BaseGasFee,
     L1G: CreateL1GasFee,
+    L2G: CreateL2GasFee,
     B: BaseTokenAccounts,
     Q: BlockQueries<Storage = M>,
     M,
@@ -97,6 +100,7 @@ pub struct StateActor<
     block_repository: R,
     block_queries: Q,
     l1_fee: L1G,
+    l2_fee: L2G,
     base_token: B,
     block_memory: M,
     state_queries: SQ,
@@ -113,11 +117,12 @@ impl<
         R: BlockRepository<Storage = M> + Send + Sync + 'static,
         G: BaseGasFee + Send + Sync + 'static,
         L1G: CreateL1GasFee + Send + Sync + 'static,
+        L2G: CreateL2GasFee + Send + Sync + 'static,
         B: BaseTokenAccounts + Send + Sync + 'static,
         Q: BlockQueries<Storage = M> + Send + Sync + 'static,
         M: Send + Sync + 'static,
         SQ: StateQueries + Send + Sync + 'static,
-    > StateActor<S, P, H, R, G, L1G, B, Q, M, SQ>
+    > StateActor<S, P, H, R, G, L1G, L2G, B, Q, M, SQ>
 {
     pub fn spawn(mut self) -> JoinHandle<()> {
         tokio::spawn(async move {
@@ -138,11 +143,12 @@ impl<
         R: BlockRepository<Storage = M>,
         G: BaseGasFee,
         L1G: CreateL1GasFee,
+        L2G: CreateL2GasFee,
         B: BaseTokenAccounts,
         Q: BlockQueries<Storage = M>,
         M,
         SQ: StateQueries,
-    > StateActor<S, P, H, R, G, L1G, B, Q, M, SQ>
+    > StateActor<S, P, H, R, G, L1G, L2G, B, Q, M, SQ>
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -156,6 +162,7 @@ impl<
         block_repository: R,
         base_fee_per_gas: G,
         l1_fee: L1G,
+        l2_fee: L2G,
         base_token: B,
         block_queries: Q,
         block_memory: M,
@@ -177,6 +184,7 @@ impl<
             block_repository,
             gas_fee: base_fee_per_gas,
             l1_fee,
+            l2_fee,
             base_token,
             block_queries,
             block_memory,
@@ -427,12 +435,20 @@ impl<
             .peek()
             .and_then(|(_, v, _)| v.as_deposited())
             .map(|tx| self.l1_fee.for_deposit(tx.data.as_ref()));
+        let l2_cost = self.l2_fee.with_gas_fee_multiplier(U256::from(1));
 
         // TODO: parallel transaction processing?
         for (tx_hash, tx, l1_cost_input) in transactions {
-            let Ok(normalized_tx) = tx.clone().try_into() else {
+            let Ok(normalized_tx): Result<NormalizedExtendedTxEnvelope, _> = tx.clone().try_into()
+            else {
                 continue;
             };
+            // TODO: normalize the tx at an earlier stage so that
+            // l2 gas inputs can be stored in mempool?
+            let l2_gas_input = L2GasFeeInput::new(
+                normalized_tx.gas_limit(),
+                normalized_tx.effective_gas_price(base_fee),
+            );
             let outcome = match execute_transaction(
                 &normalized_tx,
                 &tx_hash,
@@ -442,10 +458,7 @@ impl<
                     .as_ref()
                     .map(|v| v.l1_fee(l1_cost_input.clone()).to_saturated_u64())
                     .unwrap_or(0),
-                l1_fee
-                    .as_ref()
-                    .map(|v| v.l2_fee(normalized_tx.gas_limit()).to_saturated_u64())
-                    .unwrap_or(0),
+                l2_cost.l2_fee(l2_gas_input).to_saturated_u64(),
                 &self.base_token,
                 block_header.clone(),
             ) {
@@ -593,10 +606,11 @@ impl<
         R: BlockRepository<Storage = M>,
         G: BaseGasFee,
         L1G: CreateL1GasFee,
+        L2G: CreateL2GasFee,
         B: BaseTokenAccounts,
         Q: BlockQueries<Storage = M>,
         M,
-    > StateActor<S, P, H, R, G, L1G, B, Q, M, InMemoryStateQueries>
+    > StateActor<S, P, H, R, G, L1G, L2G, B, Q, M, InMemoryStateQueries>
 {
     pub fn on_tx_in_memory() -> OnTx<Self> {
         Box::new(|| Box::new(|state, changes| state.state_queries.add(changes)))
@@ -773,6 +787,7 @@ mod tests {
             impl BlockRepository<Storage = BlockMemory>,
             impl BaseGasFee,
             impl CreateL1GasFee,
+            impl CreateL2GasFee,
             impl BaseTokenAccounts,
             impl BlockQueries<Storage = BlockMemory>,
             BlockMemory,
@@ -805,6 +820,7 @@ mod tests {
             MovedBlockHash,
             repository,
             Eip1559GasFee::default(),
+            U256::ZERO,
             U256::ZERO,
             MovedBaseTokenAccounts::new(AccountAddress::ONE),
             InMemoryBlockQueries,
@@ -850,6 +866,7 @@ mod tests {
             impl BlockRepository<Storage = BlockMemory>,
             impl BaseGasFee,
             impl CreateL1GasFee,
+            impl CreateL2GasFee,
             impl BaseTokenAccounts,
             impl BlockQueries<Storage = BlockMemory>,
             BlockMemory,
@@ -891,6 +908,7 @@ mod tests {
             MovedBlockHash,
             repository,
             Eip1559GasFee::default(),
+            U256::ZERO,
             U256::ZERO,
             MovedBaseTokenAccounts::new(AccountAddress::ONE),
             InMemoryBlockQueries,

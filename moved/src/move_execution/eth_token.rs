@@ -46,7 +46,7 @@ pub trait BaseTokenAccounts {
         gas_meter: &mut G,
     ) -> Result<(), crate::Error>;
 
-    fn refund_l2_cost<G: GasMeter>(
+    fn refund_gas_cost<G: GasMeter>(
         &self,
         to: &AccountAddress,
         amount: u64,
@@ -96,7 +96,7 @@ impl BaseTokenAccounts for MovedBaseTokenAccounts {
         )
     }
 
-    fn refund_l2_cost<G: GasMeter>(
+    fn refund_gas_cost<G: GasMeter>(
         &self,
         to: &AccountAddress,
         amount: u64,
@@ -310,7 +310,7 @@ mod tests {
             Ok(())
         }
 
-        fn refund_l2_cost<G: GasMeter>(
+        fn refund_gas_cost<G: GasMeter>(
             &self,
             _to: &AccountAddress,
             _amount: u64,

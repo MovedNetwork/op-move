@@ -305,6 +305,7 @@ mod tests {
             repository,
             Eip1559GasFee::default(),
             U256::ZERO,
+            U256::ZERO,
             (),
             InMemoryBlockQueries,
             block_memory,

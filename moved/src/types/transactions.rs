@@ -61,9 +61,7 @@ impl ExtendedTxEnvelope {
             Self::DepositedTx(tx) => Some(tx.from),
         }
     }
-}
 
-impl ExtendedTxEnvelope {
     /// In case this transaction is a deposit, returns `Some` containing a reference to the
     /// underlying [`DepositedTx`]. Otherwise, returns `None`.
     pub fn as_deposited(&self) -> Option<&DepositedTx> {
@@ -239,6 +237,8 @@ pub struct TransactionExecutionOutcome {
     pub changes: ChangeSet,
     /// Total amount of gas spent during the transaction execution.
     pub gas_used: u64,
+    /// Effective L2 gas price during transaction execution.
+    pub l2_price: U256,
     /// All emitted Move events converted to Ethereum logs.
     pub logs: Vec<Log<LogData>>,
     /// AccountAddress + ModuleId of a deployed module (if any).
@@ -250,6 +250,7 @@ impl TransactionExecutionOutcome {
         vm_outcome: Result<(), UserError>,
         changes: ChangeSet,
         gas_used: u64,
+        l2_price: U256,
         logs: Vec<Log<LogData>>,
         deployment: Option<(AccountAddress, ModuleId)>,
     ) -> Self {
@@ -257,6 +258,7 @@ impl TransactionExecutionOutcome {
             vm_outcome,
             changes,
             gas_used,
+            l2_price,
             logs,
             deployment,
         }

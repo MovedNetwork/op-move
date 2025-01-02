@@ -503,6 +503,7 @@ impl<
                 receipt,
                 l1_block_info,
                 gas_used: outcome.gas_used,
+                l2_gas_price: outcome.l2_price,
                 tx_index,
                 contract_address: outcome
                     .deployment
@@ -575,8 +576,8 @@ impl<
                 block_hash: Some(*block_hash),
                 block_number: Some(block.0.header.number),
                 gas_used: rx.gas_used as u128,
-                // TODO: charge for gas
-                effective_gas_price: 0,
+                // TODO: make all gas prices bounded by u128?
+                effective_gas_price: rx.l2_gas_price.saturating_to(),
                 // Always None because we do not support eip-4844 transactions
                 blob_gas_used: None,
                 blob_gas_price: None,

@@ -127,7 +127,13 @@ pub(super) fn execute_deposited_transaction(
         .expect("EVM changes must merge with other session changes");
 
     Ok(TransactionExecutionOutcome::new(
-        vm_outcome, changes, gas_used, logs, None,
+        vm_outcome,
+        changes,
+        gas_used,
+        // No L2 gas for deposited txs
+        U256::ZERO,
+        logs,
+        None,
     ))
 }
 
@@ -177,6 +183,8 @@ fn direct_mint(
         Ok(()),
         changes,
         gas_used,
+        // No L2 gas for deposited txs
+        U256::ZERO,
         logs,
         None,
     ))

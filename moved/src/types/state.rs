@@ -273,7 +273,10 @@ impl BlockResponse {
                             block_hash: Some(value.hash),
                             block_number: Some(value.block.header.number),
                             transaction_index: Some(i as u64),
-                            effective_gas_price: None, // TODO: Gas it up #160
+                            // TODO: Gassing it up requires either modifying supported variants of
+                            // `OpTxEnvelope` or storing a different type in block transactions
+                            // altogether
+                            effective_gas_price: None,
                             from: compute_from(&inner)
                                 .expect("Block transactions should contain valid signature"),
                             inner,
@@ -332,6 +335,7 @@ pub struct TransactionWithReceipt {
     pub receipt: OpReceiptEnvelope,
     pub l1_block_info: Option<L1BlockInfo>,
     pub gas_used: u64,
+    pub l2_gas_price: U256,
     /// If the transaction deployed a new contract, gives the address.
     ///
     /// In Move contracts are identified by AccountAddress + ModuleID,

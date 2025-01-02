@@ -1,12 +1,11 @@
 use {
     crate::{
         move_execution::{quick_get_eth_balance, quick_get_nonce},
-        primitives::U256,
+        primitives::{KeyHashable, U256},
     },
-    aptos_crypto::hash::CryptoHash,
-    aptos_jellyfish_merkle::{JellyfishMerkleTree, TreeReader},
     aptos_types::state_store::{state_key::StateKey, state_value::StateValue},
     bytes::Bytes,
+    jmt::{storage::TreeReader, JellyfishMerkleTree, SimpleHasher},
     move_binary_format::errors::PartialVMError,
     move_core_types::{
         account_address::AccountAddress,
@@ -18,7 +17,8 @@ use {
         vm_status::StatusCode,
     },
     move_table_extension::{TableHandle, TableResolver},
-    std::{collections::HashMap, fmt::Debug},
+    sha3::Keccak256,
+    std::{fmt::Debug, marker::PhantomData},
 };
 
 /// A non-negative integer for indicating the amount of base token on an account.
@@ -51,7 +51,7 @@ pub trait StateQueries {
     /// base token associated with `account`.
     fn balance_at(
         &self,
-        db: &(impl TreeReader<StateKey> + Sync),
+        db: &(impl TreeReader + Sync),
         account: AccountAddress,
         height: BlockHeight,
     ) -> Option<Balance>;
@@ -60,7 +60,7 @@ pub trait StateQueries {
     /// associated with `account`.
     fn nonce_at(
         &self,
-        db: &(impl TreeReader<StateKey> + Sync),
+        db: &(impl TreeReader + Sync),
         account: AccountAddress,
         height: BlockHeight,
     ) -> Option<Nonce>;
@@ -68,26 +68,21 @@ pub trait StateQueries {
 
 #[derive(Debug)]
 pub struct StateMemory {
-    mem: InMemoryVersionedState,
     tags: Vec<Version>,
     version: Version,
 }
 
 impl StateMemory {
     /// Creates state memory with `genesis_changes` on `version` 0 tagged as block `height` 0.
-    pub fn from_genesis(genesis_changes: ChangeSet) -> Self {
+    pub fn from_genesis(_genesis_changes: ChangeSet) -> Self {
         Self {
-            mem: InMemoryVersionedState::from_iter(genesis_changes.into_versioned_map(0)),
             tags: vec![0],
             version: 0,
         }
     }
 
-    fn add(&mut self, changes: ChangeSet) {
-        let version = self.next_version();
-        for (k, v) in changes.into_versioned_map(version) {
-            self.mem.historic_state.insert(k, v);
-        }
+    fn add(&mut self, _changes: ChangeSet) {
+        let _version = self.next_version();
     }
 
     fn tag(&mut self) {
@@ -96,68 +91,18 @@ impl StateMemory {
 
     fn resolver<'a>(
         &'a self,
-        db: &'a (impl TreeReader<StateKey> + Sync),
+        db: &'a (impl TreeReader + Sync),
         height: BlockHeight,
     ) -> Option<impl MoveResolver<PartialVMError> + TableResolver + 'a> {
-        Some(HistoricResolver::new(
+        Some(HistoricResolver::<_, Keccak256>::new(
             db,
             self.tags.get(height as usize).copied()?,
-            &self.mem,
         ))
     }
 
     fn next_version(&mut self) -> Version {
         self.version += 1;
         self.version
-    }
-}
-
-/// The `IntoVersionedMap` trait is defined by a single operation [`Self::into_versioned_map`]. See
-/// its documentation for details.
-trait IntoVersionedMap {
-    /// Converts a set of changes into an iterator of key-value pairs where:
-    ///
-    /// * *Key* is a pair of [`StateKey`] and [`Version`]. It is a fully qualified name of a module
-    ///   or a resource paired with a version that corresponds to a transaction where this change
-    ///   was made.
-    /// * *Value* is [`StateValue`] wrapped in an option. It contains no value in case of deletion.
-    ///   In case of addition or modification, it contains the raw contents of the module or
-    ///   resource being changed.
-    ///
-    /// The term "set of changes" assumes some representation of a list of account addresses
-    /// associated with a list of operations on its modules and resources.
-    ///
-    /// The term "operation" is a ternary value of either addition, modification or deletion.
-    fn into_versioned_map(
-        self,
-        version: Version,
-    ) -> impl Iterator<Item = ((StateKey, Version), Option<StateValue>)>;
-}
-
-impl IntoVersionedMap for ChangeSet {
-    fn into_versioned_map(
-        self,
-        version: Version,
-    ) -> impl Iterator<Item = ((StateKey, Version), Option<StateValue>)> {
-        self.into_inner()
-            .into_iter()
-            .map(|(address, changes)| (address, changes.into_inner()))
-            .flat_map(move |(address, (modules, resources))| {
-                modules
-                    .into_iter()
-                    .map(move |(k, v)| {
-                        let value = v.ok().map(StateValue::new_legacy);
-                        let key = StateKey::module(&address, k.as_ident_str());
-
-                        ((key, version), value)
-                    })
-                    .chain(resources.into_iter().map(move |(k, v)| {
-                        let value = v.ok().map(StateValue::new_legacy);
-                        let key = StateKey::resource(&address, &k).unwrap();
-
-                        ((key, version), value)
-                    }))
-            })
     }
 }
 
@@ -196,7 +141,7 @@ impl StateQueries for InMemoryStateQueries {
 
     fn balance_at(
         &self,
-        db: &(impl TreeReader<StateKey> + Sync),
+        db: &(impl TreeReader + Sync),
         account: AccountAddress,
         height: BlockHeight,
     ) -> Option<Balance> {
@@ -207,7 +152,7 @@ impl StateQueries for InMemoryStateQueries {
 
     fn nonce_at(
         &self,
-        db: &(impl TreeReader<StateKey> + Sync),
+        db: &(impl TreeReader + Sync),
         account: AccountAddress,
         height: BlockHeight,
     ) -> Option<Nonce> {
@@ -221,57 +166,20 @@ impl StateQueries for InMemoryStateQueries {
 pub struct HistoricResolver<'a, R, H> {
     db: &'a R,
     version: u64,
-    historic_state: &'a H,
-}
-
-/// Capable of fetching state value based on its key and version at which the change was registered.
-///
-/// Defined by a single operation [`Self::get`].
-pub trait VersionedState {
-    /// Fetches state value in case of addition or modification, or None in case of deletion,
-    /// corresponding to state key at given version.
-    fn get(&self, key: &(StateKey, Version)) -> Option<Bytes>;
-}
-
-/// A [`VersionedState`] that keeps all records locally in an owned unshared memory.
-#[derive(Debug)]
-pub struct InMemoryVersionedState {
-    historic_state: HashMap<(StateKey, Version), Option<StateValue>>,
-}
-
-impl InMemoryVersionedState {
-    pub fn from_iter(
-        iter: impl Iterator<Item = ((StateKey, Version), Option<StateValue>)>,
-    ) -> Self {
-        Self {
-            historic_state: HashMap::from_iter(iter),
-        }
-    }
-}
-
-impl VersionedState for InMemoryVersionedState {
-    fn get(&self, key: &(StateKey, Version)) -> Option<Bytes> {
-        self.historic_state
-            .get(key)
-            .cloned()
-            .flatten()
-            .map(|v| v.unpack().1)
-    }
+    hasher: PhantomData<H>,
 }
 
 impl<'a, R, H> HistoricResolver<'a, R, H> {
-    pub fn new(db: &'a R, version: Version, historic_state: &'a H) -> Self {
+    pub fn new(db: &'a R, version: Version) -> Self {
         Self {
             db,
             version,
-            historic_state,
+            hasher: PhantomData,
         }
     }
 }
 
-impl<'a, R: TreeReader<StateKey> + Sync, H: VersionedState> ModuleResolver
-    for HistoricResolver<'a, R, H>
-{
+impl<'a, R: TreeReader + Sync, H: SimpleHasher> ModuleResolver for HistoricResolver<'a, R, H> {
     type Error = PartialVMError;
 
     fn get_module_metadata(&self, _module_id: &ModuleId) -> Vec<Metadata> {
@@ -279,24 +187,18 @@ impl<'a, R: TreeReader<StateKey> + Sync, H: VersionedState> ModuleResolver
     }
 
     fn get_module(&self, id: &ModuleId) -> Result<Option<Bytes>, Self::Error> {
-        let tree = JellyfishMerkleTree::new(self.db);
+        let tree = JellyfishMerkleTree::<'_, R, H>::new(self.db);
         let state_key = StateKey::module(id.address(), id.name());
-        let (maybe_leaf, _) = tree
-            .get_with_proof(state_key.hash(), self.version)
+        let (value, _) = tree
+            .get_with_proof(state_key.key_hash(), self.version)
             .inspect_err(|e| print!("{e:?}"))
             .map_err(|_| PartialVMError::new(StatusCode::MISSING_DATA))?;
-        let Some((_, history_key)) = maybe_leaf else {
-            return Ok(None);
-        };
-        let value = self.historic_state.get(&history_key);
 
-        Ok(value)
+        Ok(deserialize_state_value(value))
     }
 }
 
-impl<'a, R: TreeReader<StateKey> + Sync, H: VersionedState> ResourceResolver
-    for HistoricResolver<'a, R, H>
-{
+impl<'a, R: TreeReader + Sync, H: SimpleHasher> ResourceResolver for HistoricResolver<'a, R, H> {
     type Error = PartialVMError;
 
     fn get_resource_bytes_with_metadata_and_layout(
@@ -306,27 +208,22 @@ impl<'a, R: TreeReader<StateKey> + Sync, H: VersionedState> ResourceResolver
         _metadata: &[Metadata],
         _layout: Option<&MoveTypeLayout>,
     ) -> Result<(Option<Bytes>, usize), Self::Error> {
-        let tree = JellyfishMerkleTree::new(self.db);
+        let tree = JellyfishMerkleTree::<'_, R, H>::new(self.db);
         let state_key = StateKey::resource(address, struct_tag)
             .inspect_err(|e| print!("{e:?}"))
             .map_err(|_| PartialVMError::new(StatusCode::DATA_FORMAT_ERROR))?;
-        let (maybe_leaf, _) = tree
-            .get_with_proof(state_key.hash(), self.version)
+        let (value, _) = tree
+            .get_with_proof(state_key.key_hash(), self.version)
             .inspect_err(|e| print!("{e:?}"))
             .map_err(|_| PartialVMError::new(StatusCode::MISSING_DATA))?;
-        let Some((_, history_key)) = maybe_leaf else {
-            return Ok((None, 0));
-        };
-        let value = self.historic_state.get(&history_key);
+        let value = deserialize_state_value(value);
         let len = value.as_ref().map(|v| v.len()).unwrap_or_default();
 
         Ok((value, len))
     }
 }
 
-impl<'a, R: TreeReader<StateKey> + Sync, H: VersionedState> TableResolver
-    for HistoricResolver<'a, R, H>
-{
+impl<'a, R: TreeReader + Sync, H: SimpleHasher> TableResolver for HistoricResolver<'a, R, H> {
     fn resolve_table_entry_bytes_with_layout(
         &self,
         _handle: &TableHandle,
@@ -335,6 +232,12 @@ impl<'a, R: TreeReader<StateKey> + Sync, H: VersionedState> TableResolver
     ) -> Result<Option<Bytes>, PartialVMError> {
         unimplemented!()
     }
+}
+
+fn deserialize_state_value(bytes: Option<Vec<u8>>) -> Option<Bytes> {
+    let value: StateValue = bcs::from_bytes(&bytes?).expect("Bytes must be serialized StateValue");
+    let (_, inner) = value.unpack();
+    Some(inner)
 }
 
 #[cfg(test)]
@@ -373,7 +276,7 @@ mod tests {
             self.0.apply_with_tables(changes, table_changes)
         }
 
-        fn db(&self) -> &(impl TreeReader<StateKey> + Sync) {
+        fn db(&self) -> &(impl TreeReader + Sync) {
             self.0.db()
         }
 

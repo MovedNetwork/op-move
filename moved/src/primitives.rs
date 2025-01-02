@@ -2,8 +2,11 @@ pub use alloy::primitives::{aliases::B2048, Address, Bytes, B256, B64, U256, U64
 use {
     alloy::consensus::{Receipt, ReceiptWithBloom},
     aptos_crypto::HashValue,
+    aptos_types::state_store::state_key::StateKey,
+    jmt::{KeyHash, RootHash},
     move_core_types::{account_address::AccountAddress, u256::U256 as MoveU256},
     op_alloy::consensus::{OpDepositReceipt, OpDepositReceiptWithBloom, OpReceiptEnvelope},
+    sha3::Keccak256,
 };
 
 pub(crate) trait ToEthAddress {
@@ -38,6 +41,22 @@ pub(crate) trait ToB256 {
 impl ToB256 for HashValue {
     fn to_h256(self) -> B256 {
         B256::from_slice(self.as_slice())
+    }
+}
+
+impl ToB256 for RootHash {
+    fn to_h256(self) -> B256 {
+        B256::new(self.0)
+    }
+}
+
+pub trait KeyHashable {
+    fn key_hash(&self) -> KeyHash;
+}
+
+impl KeyHashable for StateKey {
+    fn key_hash(&self) -> KeyHash {
+        KeyHash::with::<Keccak256>(bcs::to_bytes(&self).expect("key must serialize"))
     }
 }
 

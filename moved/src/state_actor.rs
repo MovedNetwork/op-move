@@ -609,8 +609,7 @@ pub use test_doubles::*;
 #[cfg(any(feature = "test-doubles", test))]
 mod test_doubles {
     use {
-        super::*, crate::primitives::U256, aptos_jellyfish_merkle::TreeReader,
-        aptos_types::state_store::state_key::StateKey,
+        super::*, crate::primitives::U256, jmt::storage::TreeReader,
         move_core_types::account_address::AccountAddress,
     };
 
@@ -621,7 +620,7 @@ mod test_doubles {
 
         fn balance_at(
             &self,
-            _db: &(impl TreeReader<StateKey> + Sync),
+            _db: &(impl TreeReader + Sync),
             account: AccountAddress,
             height: BlockHeight,
         ) -> Option<Balance> {
@@ -633,7 +632,7 @@ mod test_doubles {
 
         fn nonce_at(
             &self,
-            _db: &(impl TreeReader<StateKey> + Sync),
+            _db: &(impl TreeReader + Sync),
             account: AccountAddress,
             height: BlockHeight,
         ) -> Option<Nonce> {

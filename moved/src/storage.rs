@@ -1,22 +1,15 @@
 use {
-    crate::{
-        iter::GroupIterator,
-        primitives::{ToB256, B256},
-    },
-    aptos_crypto::{hash::CryptoHash, HashValue},
-    aptos_jellyfish_merkle::{
-        mock_tree_store::MockTreeStore, node_type::Node, JellyfishMerkleTree, TreeReader,
-        TreeUpdateBatch,
-    },
-    aptos_storage_interface::AptosDbError,
+    crate::primitives::{KeyHashable, ToB256, B256},
     aptos_types::{
         state_store::{state_key::StateKey, state_value::StateValue},
         transaction::Version,
     },
+    jmt::{mock::MockTreeStore, storage::TreeReader, JellyfishMerkleTree, KeyHash},
     move_binary_format::errors::PartialVMError,
     move_core_types::{effects::ChangeSet, resolver::MoveResolver},
     move_table_extension::{TableChangeSet, TableResolver},
     move_vm_test_utils::InMemoryStorage,
+    sha3::Keccak256,
     std::{collections::HashMap, fmt::Debug},
 };
 
@@ -48,7 +41,7 @@ pub trait State {
         table_changes: TableChangeSet,
     ) -> Result<(), Self::Err>;
 
-    fn db(&self) -> &(impl TreeReader<StateKey> + Sync);
+    fn db(&self) -> &(impl TreeReader + Sync);
 
     /// Returns a reference to a [`MoveResolver`] that can resolve both resources and modules.
     fn resolver(&self) -> &(impl MoveResolver<Self::Err> + TableResolver);
@@ -59,7 +52,7 @@ pub trait State {
 
 pub struct InMemoryState {
     resolver: InMemoryStorage,
-    db: MockTreeStore<StateKey>,
+    db: MockTreeStore,
     version: Version,
 }
 
@@ -80,7 +73,7 @@ impl InMemoryState {
         }
     }
 
-    fn tree(&self) -> JellyfishMerkleTree<impl TreeReader<StateKey>, StateKey> {
+    fn tree(&self) -> JellyfishMerkleTree<impl TreeReader, Keccak256> {
         JellyfishMerkleTree::new(&self.db)
     }
 }
@@ -104,7 +97,7 @@ impl State for InMemoryState {
         Ok(())
     }
 
-    fn db(&self) -> &(impl TreeReader<StateKey> + Sync) {
+    fn db(&self) -> &(impl TreeReader + Sync) {
         &self.db
     }
 
@@ -134,13 +127,15 @@ impl InMemoryState {
     fn insert_change_set_into_merkle_trie(&mut self, change_set: &ChangeSet) -> B256 {
         let version = self.next_version();
         let values = change_set.to_tree_values();
-        let values_per_shard = values
-            .iter()
-            .map(|(&k, v)| (k, v.as_ref()))
-            .group_by(|(k, _)| k.nibble(0));
+        let value_set = values.into_iter().map(|(k, v)| {
+            (
+                k,
+                v.map(|x| bcs::to_bytes(&x).expect("Must serialize value")),
+            )
+        });
         let (root_hash, tree_update_batch) = self
             .tree()
-            .create_update_batch(values_per_shard, version)
+            .put_value_set(value_set, version)
             .expect("Fails on duplicate key or storage read. In memory storage cannot fail.");
 
         self.db
@@ -152,13 +147,10 @@ impl InMemoryState {
 }
 
 /// The jellyfish merkle trie key is the hash of the actual key.
-type TreeKey = HashValue;
+type TreeKey = KeyHash;
 
-/// The jellyfish merkle trie value consists of a hash of the actual value and the actual key.
-type TreeValue = Option<(HashValue, StateKey)>;
-
-/// A reference to [`TreeValue`].
-type TreeValueRef<'r> = Option<&'r (HashValue, StateKey)>;
+/// The jellyfish merkle trie value. None indicates the value was deleted.
+type TreeValue = Option<StateValue>;
 
 /// Converts itself to a set of updates for a jellyfish merkle trie.
 ///
@@ -219,59 +211,8 @@ impl ToTreeValues for ChangeSet {
                         (key, value)
                     }))
             })
-            .map(|(k, v)| (k.hash(), v.map(|v| (v.hash(), k))))
+            .map(|(k, v)| (k.key_hash(), v))
             .collect::<HashMap<_, _>>()
-    }
-}
-
-/// Creates update batches for mutating the merkle trie.
-///
-/// This trait is defined by a single operation called [`Self::create_update_batch`].
-trait CreateUpdateBatch {
-    /// Creates a [`TreeUpdateBatch`] from `values_per_shard` and a `version`. Returns the update
-    /// batch and a root hash of the trie after applying the update batch.
-    ///
-    /// This function does not write any updates to the tree itself, making this work with an
-    /// immutable reference to `self`. It only creates an update batch that can be written using
-    /// a compatible storage backend.
-    fn create_update_batch(
-        &self,
-        values_per_shard: HashMap<u8, Vec<(TreeKey, TreeValueRef)>>,
-        version: Version,
-    ) -> Result<(HashValue, TreeUpdateBatch<StateKey>), AptosDbError>;
-}
-
-impl<'a, R> CreateUpdateBatch for JellyfishMerkleTree<'a, R, StateKey>
-where
-    R: 'a + TreeReader<StateKey> + Sync,
-{
-    fn create_update_batch(
-        &self,
-        mut values_per_shard: HashMap<u8, Vec<(TreeKey, TreeValueRef)>>,
-        version: Version,
-    ) -> Result<(HashValue, TreeUpdateBatch<StateKey>), AptosDbError> {
-        let mut tree_update_batch = TreeUpdateBatch::new();
-        const NIL: Node<StateKey> = Node::Null;
-        let mut shard_root_nodes = [NIL; 16];
-
-        for shard_id in 0..16 {
-            let values = values_per_shard.remove(&shard_id).unwrap_or_default();
-            let (shard_root_node, batch) = self.batch_put_value_set_for_shard(
-                shard_id,
-                values,
-                None,
-                version.checked_sub(1),
-                version,
-            )?;
-
-            tree_update_batch.combine(batch);
-            shard_root_nodes[shard_id as usize] = shard_root_node;
-        }
-
-        let (root_hash, root_batch) =
-            self.put_top_levels_nodes(shard_root_nodes.to_vec(), version.checked_sub(1), version)?;
-        tree_update_batch.combine(root_batch);
-        Ok((root_hash, tree_update_batch))
     }
 }
 

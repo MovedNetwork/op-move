@@ -46,13 +46,12 @@ pub trait BaseTokenAccounts {
         gas_meter: &mut G,
     ) -> Result<(), crate::Error>;
 
-    fn refund_gas_cost<G: GasMeter>(
+    fn refund_gas_cost(
         &self,
         to: &AccountAddress,
         amount: u64,
         session: &mut Session,
         traversal_context: &mut TraversalContext,
-        gas_meter: &mut G,
     ) -> Result<(), crate::Error>;
 
     fn transfer<G: GasMeter>(
@@ -96,14 +95,14 @@ impl BaseTokenAccounts for MovedBaseTokenAccounts {
         )
     }
 
-    fn refund_gas_cost<G: GasMeter>(
+    fn refund_gas_cost(
         &self,
         to: &AccountAddress,
         amount: u64,
         session: &mut Session,
         traversal_context: &mut TraversalContext,
-        gas_meter: &mut G,
     ) -> Result<(), crate::Error> {
+        let mut gas_meter = UnmeteredGasMeter;
         transfer_eth(
             TransferArgs {
                 from: &self.eth_treasury,
@@ -112,9 +111,10 @@ impl BaseTokenAccounts for MovedBaseTokenAccounts {
             },
             session,
             traversal_context,
-            gas_meter,
+            &mut gas_meter,
         )
     }
+
     fn transfer<G: GasMeter>(
         &self,
         args: TransferArgs<'_>,
@@ -202,7 +202,8 @@ pub fn transfer_eth<G: GasMeter>(
     let amount_arg =
         bcs::to_bytes(&MoveValue::U256(args.amount.to_move_u256())).expect("amount can serialize");
 
-    // Note: transfer function can fail if user has insufficient balance.
+    // FIXME: transfer function can fail if user has insufficient balance or if the gas meter
+    // is depleted, which is a potential attack vector
     session.execute_entry_function(
         &token_module_id,
         TRANSFER_FUNCTION_NAME,
@@ -310,13 +311,12 @@ mod tests {
             Ok(())
         }
 
-        fn refund_gas_cost<G: GasMeter>(
+        fn refund_gas_cost(
             &self,
             _to: &AccountAddress,
             _amount: u64,
             _session: &mut Session,
             _traversal_context: &mut TraversalContext,
-            _gas_meter: &mut G,
         ) -> Result<(), crate::Error> {
             Ok(())
         }

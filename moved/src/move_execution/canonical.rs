@@ -128,6 +128,7 @@ pub(super) fn execute_canonical_transaction(
     let mut deployment = None;
     // Using l2 input here as test transactions don't set the max limit directly on itself
     let l2_cost = l2_fee.l2_fee(l2_input.clone()).saturating_to();
+    let mut evm_logs = Vec::new();
 
     // TODO: use free gas meter for things that shouldn't fail due to
     // insufficient gas limit, impose a lower bound on the latter
@@ -189,7 +190,6 @@ pub(super) fn execute_canonical_transaction(
         }
     };
 
-    let mut free_gas_meter = new_gas_meter(genesis_config, u64::MAX);
     let gas_used = total_gas_used(&gas_meter, genesis_config);
     let used_l2_input = L2GasFeeInput::new(gas_used, l2_input.effective_gas_price);
     let used_l2_cost = l2_fee.l2_fee(used_l2_input).to_saturated_u64();
@@ -201,7 +201,6 @@ pub(super) fn execute_canonical_transaction(
             l2_cost.saturating_sub(used_l2_cost),
             &mut session,
             &mut traversal_context,
-            &mut free_gas_meter,
         )
         .map_err(|_| {
             crate::Error::InvariantViolation(InvariantViolation::EthToken(

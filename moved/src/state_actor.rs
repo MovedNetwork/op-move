@@ -444,7 +444,7 @@ impl<
                 continue;
             };
             // TODO: implement gas limits etc. for `ExtendedTxEnvelope` so that
-            // l2 gas inputs can be constructed at an earlier stage and stored in mempool?
+            // l2 gas inputs can be constructed at an earlier stage and stored in mempool
             let l2_gas_input = L2GasFeeInput::new(
                 normalized_tx.gas_limit(),
                 normalized_tx.effective_gas_price(base_fee),

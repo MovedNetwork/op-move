@@ -94,8 +94,8 @@ impl<T: AsRef<[u8]>> From<T> for L1GasFeeInput {
 /// calculation of L2 gas costs.
 #[derive(Debug, Clone)]
 pub struct L2GasFeeInput {
-    gas_limit: u64,
-    effective_gas_price: U256,
+    pub gas_limit: u64,
+    pub effective_gas_price: U256,
 }
 
 impl L2GasFeeInput {
@@ -103,6 +103,15 @@ impl L2GasFeeInput {
         Self {
             gas_limit,
             effective_gas_price,
+        }
+    }
+}
+
+impl From<(u64, U256)> for L2GasFeeInput {
+    fn from(value: (u64, U256)) -> Self {
+        Self {
+            gas_limit: value.0,
+            effective_gas_price: value.1,
         }
     }
 }
@@ -163,7 +172,7 @@ impl L1GasFee for EcotoneGasFee {
 /// This struct holds additional parameters and behavior as
 /// defined by Moved network for L2 gas calculation that are
 /// independent of transaction-defined limits or block state.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MovedGasFee {
     gas_fee_multiplier: U256,
 }
@@ -210,10 +219,11 @@ pub struct CreateMovedL2GasFee;
 pub trait CreateL2GasFee {
     /// Instantiates L2 gas fee structure with a given multiplier. Basically a decoupled
     /// constructor.
-    fn with_gas_fee_multiplier(&self, gas_fee_multiplier: U256) -> impl L2GasFee + 'static;
+    fn with_gas_fee_multiplier(&self, gas_fee_multiplier: U256) -> impl L2GasFee + 'static + Clone;
 }
+
 impl CreateL2GasFee for CreateMovedL2GasFee {
-    fn with_gas_fee_multiplier(&self, gas_fee_multiplier: U256) -> impl L2GasFee + 'static {
+    fn with_gas_fee_multiplier(&self, gas_fee_multiplier: U256) -> impl L2GasFee + 'static + Clone {
         MovedGasFee { gas_fee_multiplier }
     }
 }
@@ -245,7 +255,7 @@ mod tests {
     }
 
     impl CreateL2GasFee for U256 {
-        fn with_gas_fee_multiplier(&self, _base_fee: U256) -> impl L2GasFee + 'static {
+        fn with_gas_fee_multiplier(&self, _base_fee: U256) -> impl L2GasFee + 'static + Clone {
             *self
         }
     }

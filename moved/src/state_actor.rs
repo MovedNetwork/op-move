@@ -15,7 +15,7 @@ use {
         move_execution::{
             execute_transaction,
             simulate::{call_transaction, simulate_transaction},
-            BaseTokenAccounts, CreateL1GasFee, CreateL2GasFee, L1GasFee, L1GasFeeInput, L2GasFee,
+            BaseTokenAccounts, CreateL1GasFee, CreateL2GasFee, L1GasFee, L1GasFeeInput,
             L2GasFeeInput, LogsBloom,
         },
         primitives::{self, ToEthAddress, ToMoveAddress, ToSaturatedU64, B256, U256, U64},
@@ -435,7 +435,7 @@ impl<
             .peek()
             .and_then(|(_, v, _)| v.as_deposited())
             .map(|tx| self.l1_fee.for_deposit(tx.data.as_ref()));
-        let l2_cost = self.l2_fee.with_gas_fee_multiplier(U256::from(1));
+        let l2_fee = self.l2_fee.with_gas_fee_multiplier(U256::from(1));
 
         // TODO: parallel transaction processing?
         for (tx_hash, tx, l1_cost_input) in transactions {
@@ -443,8 +443,8 @@ impl<
             else {
                 continue;
             };
-            // TODO: normalize the tx at an earlier stage so that
-            // l2 gas inputs can be stored in mempool?
+            // TODO: implement gas limits etc. for `ExtendedTxEnvelope` so that
+            // l2 gas inputs can be constructed at an earlier stage and stored in mempool?
             let l2_gas_input = L2GasFeeInput::new(
                 normalized_tx.gas_limit(),
                 normalized_tx.effective_gas_price(base_fee),
@@ -458,7 +458,8 @@ impl<
                     .as_ref()
                     .map(|v| v.l1_fee(l1_cost_input.clone()).to_saturated_u64())
                     .unwrap_or(0),
-                l2_cost.l2_fee(l2_gas_input).to_saturated_u64(),
+                l2_fee.clone(),
+                l2_gas_input,
                 &self.base_token,
                 block_header.clone(),
             ) {

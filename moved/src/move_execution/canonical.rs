@@ -1,4 +1,5 @@
 use {
+    super::{L2GasFee, L2GasFeeInput},
     crate::{
         block::HeaderForExecution,
         genesis::config::GenesisConfig,
@@ -11,7 +12,7 @@ use {
             nonces::check_nonce,
             Logs,
         },
-        primitives::{ToMoveAddress, B256},
+        primitives::{ToMoveAddress, ToSaturatedU64, B256},
         types::{
             session_id::SessionId,
             transactions::{
@@ -20,7 +21,7 @@ use {
             },
         },
         Error::{InvalidTransaction, User},
-        InvalidTransactionCause,
+        EthToken, InvalidTransactionCause, InvariantViolation,
     },
     aptos_gas_meter::{AptosGasMeter, StandardGasAlgebra, StandardGasMeter},
     aptos_table_natives::TableResolver,
@@ -32,6 +33,7 @@ use {
     },
 };
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn verify_transaction(
     tx: &NormalizedEthTransaction,
     session: &mut Session,
@@ -39,6 +41,7 @@ pub(super) fn verify_transaction(
     gas_meter: &mut StandardGasMeter<StandardGasAlgebra>,
     genesis_config: &GenesisConfig,
     l1_cost: u64,
+    l2_cost: u64,
     base_token: &impl BaseTokenAccounts,
 ) -> crate::Result<()> {
     if let Some(chain_id) = tx.chain_id {
@@ -62,7 +65,7 @@ pub(super) fn verify_transaction(
     }
 
     base_token
-        .charge_l1_cost(
+        .charge_gas_cost(
             &sender_move_address,
             l1_cost,
             session,
@@ -70,6 +73,16 @@ pub(super) fn verify_transaction(
             gas_meter,
         )
         .map_err(|_| InvalidTransaction(InvalidTransactionCause::FailedToPayL1Fee))?;
+
+    base_token
+        .charge_gas_cost(
+            &sender_move_address,
+            l2_cost,
+            session,
+            traversal_context,
+            gas_meter,
+        )
+        .map_err(|_| InvalidTransaction(InvalidTransactionCause::FailedToPayL2Fee))?;
 
     check_nonce(
         tx.nonce,
@@ -82,12 +95,15 @@ pub(super) fn verify_transaction(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn execute_canonical_transaction(
     tx: &NormalizedEthTransaction,
     tx_hash: &B256,
     state: &(impl MoveResolver<PartialVMError> + TableResolver),
     genesis_config: &GenesisConfig,
     l1_cost: u64,
+    l2_fee: impl L2GasFee,
+    l2_input: L2GasFeeInput,
     base_token: &impl BaseTokenAccounts,
     block_header: HeaderForExecution,
 ) -> crate::Result<TransactionExecutionOutcome> {
@@ -107,10 +123,15 @@ pub(super) fn execute_canonical_transaction(
     let mut session = create_vm_session(&move_vm, state, session_id);
     let traversal_storage = TraversalStorage::new();
     let mut traversal_context = TraversalContext::new(&traversal_storage);
-    let mut gas_meter = new_gas_meter(genesis_config, tx.gas_limit());
+
+    let mut gas_meter = new_gas_meter(genesis_config, l2_input.gas_limit);
     let mut deployment = None;
+    // Using l2 input here as test transactions don't set the max limit directly on itself
+    let l2_cost = l2_fee.l2_fee(l2_input.clone()).saturating_to();
     let mut evm_logs = Vec::new();
 
+    // TODO: use free gas meter for things that shouldn't fail due to
+    // insufficient gas limit, impose a lower bound on the latter
     verify_transaction(
         tx,
         &mut session,
@@ -118,6 +139,7 @@ pub(super) fn execute_canonical_transaction(
         &mut gas_meter,
         genesis_config,
         l1_cost,
+        l2_cost,
         base_token,
     )?;
 
@@ -168,6 +190,24 @@ pub(super) fn execute_canonical_transaction(
         }
     };
 
+    let gas_used = total_gas_used(&gas_meter, genesis_config);
+    let used_l2_input = L2GasFeeInput::new(gas_used, l2_input.effective_gas_price);
+    let used_l2_cost = l2_fee.l2_fee(used_l2_input).to_saturated_u64();
+
+    // Refunds should not be metered as they're supposed to always succeed
+    base_token
+        .refund_gas_cost(
+            &sender_move_address,
+            l2_cost.saturating_sub(used_l2_cost),
+            &mut session,
+            &mut traversal_context,
+        )
+        .map_err(|_| {
+            crate::Error::InvariantViolation(InvariantViolation::EthToken(
+                EthToken::RefundAlwaysSucceeds,
+            ))
+        })?;
+
     let (mut changes, mut extensions) = session.finish_with_extensions()?;
     let mut logs = extensions.logs();
     logs.extend(evm_logs);
@@ -175,13 +215,13 @@ pub(super) fn execute_canonical_transaction(
     changes
         .squash(evm_changes)
         .expect("EVM changes must merge with other session changes");
-    let gas_used = total_gas_used(&gas_meter, genesis_config);
 
     match vm_outcome {
         Ok(_) => Ok(TransactionExecutionOutcome::new(
             Ok(()),
             changes,
             gas_used,
+            l2_input.effective_gas_price,
             logs,
             deployment,
         )),
@@ -190,6 +230,7 @@ pub(super) fn execute_canonical_transaction(
             Err(e),
             changes,
             gas_used,
+            l2_input.effective_gas_price,
             logs,
             None,
         )),

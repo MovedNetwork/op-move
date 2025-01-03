@@ -1,7 +1,10 @@
 pub use {
     eth_token::{mint_eth, quick_get_eth_balance, BaseTokenAccounts, MovedBaseTokenAccounts},
     evm_native::genesis_state_changes,
-    gas::{CreateEcotoneL1GasFee, CreateL1GasFee, EcotoneL1GasFee, L1GasFee, L1GasFeeInput},
+    gas::{
+        CreateEcotoneL1GasFee, CreateL1GasFee, CreateL2GasFee, CreateMovedL2GasFee, EcotoneGasFee,
+        L1GasFee, L1GasFeeInput, L2GasFee, L2GasFeeInput, MovedGasFee,
+    },
     nonces::{check_nonce, quick_get_nonce},
 };
 
@@ -113,12 +116,15 @@ where
     vm.new_session_with_extensions(state, native_extensions)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn execute_transaction(
     tx: &NormalizedExtendedTxEnvelope,
     tx_hash: &B256,
     state: &(impl MoveResolver<PartialVMError> + TableResolver),
     genesis_config: &GenesisConfig,
     l1_cost: u64,
+    l2_fee: impl L2GasFee,
+    l2_input: L2GasFeeInput,
     base_token: &impl BaseTokenAccounts,
     block_header: HeaderForExecution,
 ) -> crate::Result<TransactionExecutionOutcome> {
@@ -132,6 +138,8 @@ pub fn execute_transaction(
             state,
             genesis_config,
             l1_cost,
+            l2_fee,
+            l2_input,
             base_token,
             block_header,
         ),

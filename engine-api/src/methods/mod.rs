@@ -28,14 +28,16 @@ pub mod tests {
         move_core_types::account_address::AccountAddress,
         moved::{
             block::{
-                Block, BlockHash, BlockMemory, BlockQueries, BlockRepository, Eip1559GasFee,
-                GasFee, InMemoryBlockQueries, InMemoryBlockRepository, MovedBlockHash,
+                BaseGasFee, Block, BlockHash, BlockMemory, BlockQueries, BlockRepository,
+                Eip1559GasFee, InMemoryBlockQueries, InMemoryBlockRepository, MovedBlockHash,
             },
             genesis::{
                 self,
                 config::{GenesisConfig, CHAIN_ID},
             },
-            move_execution::{BaseTokenAccounts, CreateL1GasFee, MovedBaseTokenAccounts},
+            move_execution::{
+                BaseTokenAccounts, CreateL1GasFee, CreateL2GasFee, MovedBaseTokenAccounts,
+            },
             primitives::{Address, B256, U256, U64},
             state_actor::{
                 InMemoryStateQueries, MockStateQueries, NewPayloadId, StateActor, StateQueries,
@@ -82,6 +84,7 @@ pub mod tests {
             MovedBlockHash,
             repository,
             Eip1559GasFee::default(),
+            U256::ZERO,
             U256::ZERO,
             MovedBaseTokenAccounts::new(AccountAddress::ONE),
             InMemoryBlockQueries,
@@ -163,8 +166,9 @@ pub mod tests {
             impl NewPayloadId,
             impl BlockHash,
             impl BlockRepository<Storage = ()>,
-            impl GasFee,
+            impl BaseGasFee,
             impl CreateL1GasFee,
+            impl CreateL2GasFee,
             impl BaseTokenAccounts,
             impl BlockQueries<Storage = ()>,
             (),
@@ -185,6 +189,7 @@ pub mod tests {
             MovedBlockHash,
             (),
             Eip1559GasFee::default(),
+            U256::ZERO,
             U256::ZERO,
             MovedBaseTokenAccounts::new(AccountAddress::ONE),
             (),

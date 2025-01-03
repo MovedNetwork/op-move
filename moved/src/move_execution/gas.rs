@@ -50,11 +50,19 @@ impl NormalizedEthTransaction {
             .unwrap_or(U256::ZERO);
         self.max_priority_fee_per_gas.min(extra_fee)
     }
+
+    pub fn effective_gas_price(&self, base_fee: U256) -> U256 {
+        self.tip_per_gas(base_fee) + base_fee
+    }
 }
 
 pub trait L1GasFee {
     fn l1_fee(&self, input: L1GasFeeInput) -> U256;
     fn l1_block_info(&self, input: L1GasFeeInput) -> Option<L1BlockInfo>;
+}
+
+pub trait L2GasFee {
+    fn l2_fee(&self, input: L2GasFeeInput) -> U256;
 }
 
 #[derive(Debug, Clone, Default)]
@@ -82,15 +90,41 @@ impl<T: AsRef<[u8]>> From<T> for L1GasFeeInput {
     }
 }
 
+/// Transaction-defined parameters necessary for
+/// calculation of L2 gas costs.
+#[derive(Debug, Clone)]
+pub struct L2GasFeeInput {
+    pub gas_limit: u64,
+    pub effective_gas_price: U256,
+}
+
+impl L2GasFeeInput {
+    pub fn new(gas_limit: u64, effective_gas_price: U256) -> Self {
+        Self {
+            gas_limit,
+            effective_gas_price,
+        }
+    }
+}
+
+impl From<(u64, U256)> for L2GasFeeInput {
+    fn from(value: (u64, U256)) -> Self {
+        Self {
+            gas_limit: value.0,
+            effective_gas_price: value.1,
+        }
+    }
+}
+
 #[derive(Debug)]
-pub struct EcotoneL1GasFee {
+pub struct EcotoneGasFee {
     base_fee: U256,
     base_fee_scalar: U256,
     blob_base_fee: U256,
     blob_base_fee_scalar: U256,
 }
 
-impl EcotoneL1GasFee {
+impl EcotoneGasFee {
     const ZERO_BYTE_MULTIPLIER: U256 = U256::from_limbs([4, 0, 0, 0]);
     const GAS_PRICE_MULTIPLIER: U256 = U256::from_limbs([16, 0, 0, 0]);
 
@@ -109,7 +143,7 @@ impl EcotoneL1GasFee {
     }
 }
 
-impl L1GasFee for EcotoneL1GasFee {
+impl L1GasFee for EcotoneGasFee {
     fn l1_fee(&self, input: L1GasFeeInput) -> U256 {
         let zero_bytes = input.zero_bytes;
         let non_zero_bytes = input.non_zero_bytes;
@@ -135,6 +169,23 @@ impl L1GasFee for EcotoneL1GasFee {
     }
 }
 
+/// This struct holds additional parameters and behavior as
+/// defined by Moved network for L2 gas calculation that are
+/// independent of transaction-defined limits or block state.
+#[derive(Debug, Clone)]
+pub struct MovedGasFee {
+    gas_fee_multiplier: U256,
+}
+
+impl L2GasFee for MovedGasFee {
+    fn l2_fee(&self, input: L2GasFeeInput) -> U256 {
+        input
+            .effective_gas_price
+            .saturating_mul(U256::from(input.gas_limit))
+            .saturating_mul(self.gas_fee_multiplier)
+    }
+}
+
 /// Creates algorithm for calculating cost of publishing a transaction to layer-1 blockchain.
 pub trait CreateL1GasFee {
     /// Extracts parameters from deposit transaction and creates the algorithm for calculating L1
@@ -153,12 +204,27 @@ impl CreateL1GasFee for CreateEcotoneL1GasFee {
         let l1_blob_base_fee_scalar =
             u32::from_be_bytes(data[8..12].try_into().expect("Slice should be 4 bytes"));
 
-        EcotoneL1GasFee::new(
+        EcotoneGasFee::new(
             l1_base_fee,
             l1_base_fee_scalar,
             l1_blob_base_fee,
             l1_blob_base_fee_scalar,
         )
+    }
+}
+
+pub struct CreateMovedL2GasFee;
+
+/// Creates algorithm for calculating cost of publishing a transaction to layer-2 blockchain.
+pub trait CreateL2GasFee {
+    /// Instantiates L2 gas fee structure with a given multiplier. Basically a decoupled
+    /// constructor.
+    fn with_gas_fee_multiplier(&self, gas_fee_multiplier: U256) -> impl L2GasFee + 'static + Clone;
+}
+
+impl CreateL2GasFee for CreateMovedL2GasFee {
+    fn with_gas_fee_multiplier(&self, gas_fee_multiplier: U256) -> impl L2GasFee + 'static + Clone {
+        MovedGasFee { gas_fee_multiplier }
     }
 }
 
@@ -176,8 +242,20 @@ mod tests {
         }
     }
 
+    impl L2GasFee for U256 {
+        fn l2_fee(&self, _input: L2GasFeeInput) -> U256 {
+            *self
+        }
+    }
+
     impl CreateL1GasFee for U256 {
         fn for_deposit(&self, _data: &[u8]) -> impl L1GasFee + 'static {
+            *self
+        }
+    }
+
+    impl CreateL2GasFee for U256 {
+        fn with_gas_fee_multiplier(&self, _base_fee: U256) -> impl L2GasFee + 'static + Clone {
             *self
         }
     }

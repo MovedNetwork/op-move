@@ -113,6 +113,8 @@ pub enum InvalidTransactionCause {
     InvalidObject,
     #[error("Failed to pay L1 fee")]
     FailedToPayL1Fee,
+    #[error("Failed to pay L2 fee")]
+    FailedToPayL2Fee,
 }
 
 impl From<InvalidTransactionCause> for Error {
@@ -167,6 +169,8 @@ pub enum EthToken {
     GetBalanceReturnDeserializes,
     #[error("Function get_balance returns a value of type u256")]
     GetBalanceReturnsU256,
+    #[error("Unused gas refund should never fail")]
+    RefundAlwaysSucceeds,
 }
 
 #[derive(Debug, Error)]

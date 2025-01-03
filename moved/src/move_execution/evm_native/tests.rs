@@ -173,6 +173,8 @@ fn test_solidity_fixed_bytes() {
             state.resolver(),
             &ctx.genesis_config,
             0,
+            U256::ZERO,
+            (u64::MAX, U256::ZERO).into(),
             &(),
             HeaderForExecution::default(),
         )

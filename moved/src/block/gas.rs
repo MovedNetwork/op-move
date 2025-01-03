@@ -5,7 +5,8 @@ use {crate::primitives::U256, std::cmp::Ordering};
 /// Determines amount of fees charged per gas used in transaction execution.
 ///
 /// The base fee applies to the entire block and does not include tips for validators.
-pub trait GasFee {
+/// Does not take into account any priority fees.
+pub trait BaseGasFee {
     /// Calculates base fee per gas for a block based on the parent block.
     ///
     /// The concrete formula applied depends on the implementation.
@@ -69,7 +70,7 @@ impl Eip1559GasFee {
     }
 }
 
-impl GasFee for Eip1559GasFee {
+impl BaseGasFee for Eip1559GasFee {
     fn base_fee_per_gas(
         &self,
         parent_gas_limit: u64,

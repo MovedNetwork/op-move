@@ -61,15 +61,7 @@ impl ExtendedTxEnvelope {
             Self::DepositedTx(tx) => Some(tx.from),
         }
     }
-}
 
-#[derive(Debug, Clone)]
-pub enum NormalizedExtendedTxEnvelope {
-    Canonical(NormalizedEthTransaction),
-    DepositedTx(DepositedTx),
-}
-
-impl ExtendedTxEnvelope {
     /// In case this transaction is a deposit, returns `Some` containing a reference to the
     /// underlying [`DepositedTx`]. Otherwise, returns `None`.
     pub fn as_deposited(&self) -> Option<&DepositedTx> {
@@ -189,6 +181,12 @@ impl Decodable for ExtendedTxEnvelope {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum NormalizedExtendedTxEnvelope {
+    Canonical(NormalizedEthTransaction),
+    DepositedTx(DepositedTx),
+}
+
 impl TryFrom<ExtendedTxEnvelope> for NormalizedExtendedTxEnvelope {
     type Error = Error;
 
@@ -209,6 +207,20 @@ impl NormalizedExtendedTxEnvelope {
             Self::Canonical(tx) => tx.tip_per_gas(base_fee),
         }
     }
+
+    pub fn gas_limit(&self) -> u64 {
+        match self {
+            Self::DepositedTx(..) => 0,
+            Self::Canonical(tx) => tx.gas_limit(),
+        }
+    }
+
+    pub fn effective_gas_price(&self, base_fee: U256) -> U256 {
+        match self {
+            Self::DepositedTx(..) => U256::ZERO,
+            Self::Canonical(tx) => tx.effective_gas_price(base_fee),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -225,6 +237,8 @@ pub struct TransactionExecutionOutcome {
     pub changes: ChangeSet,
     /// Total amount of gas spent during the transaction execution.
     pub gas_used: u64,
+    /// Effective L2 gas price during transaction execution.
+    pub l2_price: U256,
     /// All emitted Move events converted to Ethereum logs.
     pub logs: Vec<Log<LogData>>,
     /// AccountAddress + ModuleId of a deployed module (if any).
@@ -236,6 +250,7 @@ impl TransactionExecutionOutcome {
         vm_outcome: Result<(), UserError>,
         changes: ChangeSet,
         gas_used: u64,
+        l2_price: U256,
         logs: Vec<Log<LogData>>,
         deployment: Option<(AccountAddress, ModuleId)>,
     ) -> Self {
@@ -243,6 +258,7 @@ impl TransactionExecutionOutcome {
             vm_outcome,
             changes,
             gas_used,
+            l2_price,
             logs,
             deployment,
         }

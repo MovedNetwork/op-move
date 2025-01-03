@@ -1,4 +1,5 @@
 use {
+    super::{CreateL2GasFee, CreateMovedL2GasFee, L2GasFeeInput},
     crate::{
         block::HeaderForExecution,
         genesis::config::GenesisConfig,
@@ -6,7 +7,7 @@ use {
             canonical::verify_transaction, create_move_vm, create_vm_session, execute_transaction,
             gas::new_gas_meter, quick_get_nonce, BaseTokenAccounts,
         },
-        primitives::{ToMoveAddress, B256},
+        primitives::{ToMoveAddress, B256, U256},
         types::{
             session_id::SessionId,
             transactions::{
@@ -47,12 +48,17 @@ pub fn simulate_transaction(
         prev_randao: B256::random(),
     };
 
+    let l2_input = L2GasFeeInput::new(u64::MAX, U256::ZERO);
+    let l2_fee = CreateMovedL2GasFee.with_gas_fee_multiplier(U256::from(1));
+
     execute_transaction(
         &tx,
         &B256::random(),
         state,
         genesis_config,
         0,
+        l2_fee,
+        l2_input,
         base_token,
         block_header,
     )
@@ -83,6 +89,7 @@ pub fn call_transaction(
         &mut traversal_context,
         &mut gas_meter,
         genesis_config,
+        0,
         0,
         base_token,
     )?;

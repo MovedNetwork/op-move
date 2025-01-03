@@ -37,13 +37,21 @@ pub struct TransferArgs<'a> {
 }
 
 pub trait BaseTokenAccounts {
-    fn charge_l1_cost<G: GasMeter>(
+    fn charge_gas_cost<G: GasMeter>(
         &self,
         from: &AccountAddress,
         amount: u64,
         session: &mut Session,
         traversal_context: &mut TraversalContext,
         gas_meter: &mut G,
+    ) -> Result<(), crate::Error>;
+
+    fn refund_gas_cost(
+        &self,
+        to: &AccountAddress,
+        amount: u64,
+        session: &mut Session,
+        traversal_context: &mut TraversalContext,
     ) -> Result<(), crate::Error>;
 
     fn transfer<G: GasMeter>(
@@ -67,7 +75,7 @@ impl MovedBaseTokenAccounts {
 }
 
 impl BaseTokenAccounts for MovedBaseTokenAccounts {
-    fn charge_l1_cost<G: GasMeter>(
+    fn charge_gas_cost<G: GasMeter>(
         &self,
         from: &AccountAddress,
         amount: u64,
@@ -84,6 +92,26 @@ impl BaseTokenAccounts for MovedBaseTokenAccounts {
             session,
             traversal_context,
             gas_meter,
+        )
+    }
+
+    fn refund_gas_cost(
+        &self,
+        to: &AccountAddress,
+        amount: u64,
+        session: &mut Session,
+        traversal_context: &mut TraversalContext,
+    ) -> Result<(), crate::Error> {
+        let mut gas_meter = UnmeteredGasMeter;
+        transfer_eth(
+            TransferArgs {
+                from: &self.eth_treasury,
+                to,
+                amount: U256::from(amount),
+            },
+            session,
+            traversal_context,
+            &mut gas_meter,
         )
     }
 
@@ -174,7 +202,8 @@ pub fn transfer_eth<G: GasMeter>(
     let amount_arg =
         bcs::to_bytes(&MoveValue::U256(args.amount.to_move_u256())).expect("amount can serialize");
 
-    // Note: transfer function can fail if user has insufficient balance.
+    // FIXME: transfer function can fail if user has insufficient balance or if the gas meter
+    // is depleted, which is a potential attack vector
     session.execute_entry_function(
         &token_module_id,
         TRANSFER_FUNCTION_NAME,
@@ -261,7 +290,7 @@ mod tests {
     use {super::*, crate::Error};
 
     impl BaseTokenAccounts for () {
-        fn charge_l1_cost<G: GasMeter>(
+        fn charge_gas_cost<G: GasMeter>(
             &self,
             _from: &AccountAddress,
             _amount: u64,
@@ -279,6 +308,16 @@ mod tests {
             _traversal_context: &mut TraversalContext,
             _gas_meter: &mut G,
         ) -> Result<(), Error> {
+            Ok(())
+        }
+
+        fn refund_gas_cost(
+            &self,
+            _to: &AccountAddress,
+            _amount: u64,
+            _session: &mut Session,
+            _traversal_context: &mut TraversalContext,
+        ) -> Result<(), crate::Error> {
             Ok(())
         }
     }

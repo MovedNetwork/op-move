@@ -55,7 +55,7 @@ use {
 mod counter;
 mod data_type;
 mod framework;
-mod l1_cost;
+mod gas_cost;
 mod marketplace;
 mod natives;
 mod transaction;

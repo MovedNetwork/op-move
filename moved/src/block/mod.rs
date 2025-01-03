@@ -10,7 +10,7 @@ mod in_memory;
 mod root;
 
 pub use {
-    gas::{Eip1559GasFee, GasFee},
+    gas::{BaseGasFee, Eip1559GasFee},
     hash::{BlockHash, MovedBlockHash},
     in_memory::{BlockMemory, InMemoryBlockQueries, InMemoryBlockRepository},
     root::{Block, BlockQueries, BlockRepository, ExtendedBlock, Header, HeaderForExecution},

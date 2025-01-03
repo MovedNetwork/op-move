@@ -18,6 +18,10 @@ pub struct TestTransaction {
     pub tx_hash: B256,
     /// L1 cost associated with the transaction
     pub l1_cost: u64,
+    /// L2 gas limit associated with the transaction
+    pub l2_gas_limit: u64,
+    /// L2 gas price associated with the transaction
+    pub l2_gas_price: U256,
     /// Base token state for the transaction
     pub base_token: TestBaseToken,
 }
@@ -29,11 +33,14 @@ impl TestTransaction {
     /// * `tx` - The normalized transaction envelope
     /// * `tx_hash` - The transaction hash
     pub fn new(tx: NormalizedExtendedTxEnvelope, tx_hash: B256) -> Self {
+        let gas_limit = tx.gas_limit();
         Self {
             tx,
             tx_hash,
             l1_cost: 0,
             base_token: TestBaseToken::Empty,
+            l2_gas_limit: gas_limit,
+            l2_gas_price: U256::ZERO,
         }
     }
 
@@ -42,9 +49,19 @@ impl TestTransaction {
     /// # Arguments
     /// * `l1_cost` - The L1 cost to set
     /// * `base_token` - The moved base token accounts to set
-    pub fn with_cost(&mut self, l1_cost: u64, base_token: MovedBaseTokenAccounts) {
+    /// * `l2_gas_limit` - The L2 gas limit to set
+    /// * `l2_gas_price` - The L2 gas price to set
+    pub fn with_cost_and_token(
+        &mut self,
+        l1_cost: u64,
+        base_token: MovedBaseTokenAccounts,
+        l2_gas_limit: u64,
+        l2_gas_price: U256,
+    ) {
         self.l1_cost = l1_cost;
         self.base_token = TestBaseToken::Moved(base_token);
+        self.l2_gas_limit = l2_gas_limit;
+        self.l2_gas_price = l2_gas_price;
     }
 }
 
@@ -130,6 +147,7 @@ impl TestContext {
     /// * `to` - Destination address for the transfer
     /// * `amount` - Amount of ETH to transfer
     /// * `l1_cost` - L1 cost associated with the transaction
+    /// * `l2_cost` - L2 cost associated with the transaction
     ///
     /// # Returns
     /// The execution outcome from the transfer
@@ -138,7 +156,9 @@ impl TestContext {
         to: Address,
         amount: U256,
         l1_cost: u64,
-    ) -> TransactionExecutionOutcome {
+        l2_gas_limit: u64,
+        l2_gas_price: U256,
+    ) -> crate::Result<TransactionExecutionOutcome> {
         let (tx_hash, tx) = create_transaction_with_value(
             &mut self.signer,
             TxKind::Call(to),
@@ -150,13 +170,19 @@ impl TestContext {
         let treasury_address = AccountAddress::ONE;
         let base_token = MovedBaseTokenAccounts::new(treasury_address);
         let mut transaction = TestTransaction::new(tx, tx_hash);
-        transaction.with_cost(l1_cost, base_token);
-        let outcome = self.execute_tx(&transaction).unwrap();
-        self.state.apply(outcome.changes.clone()).unwrap();
+        transaction.with_cost_and_token(l1_cost, base_token, l2_gas_limit, l2_gas_price);
+        let outcome = self.execute_tx(&transaction)?;
+        self.state.apply(outcome.changes.clone())?;
+        let l2_gas_fee = CreateMovedL2GasFee.with_gas_fee_multiplier(U256::from(1));
+        let used_gas_input = L2GasFeeInput::new(outcome.gas_used, outcome.l2_price);
+        let l2_cost = l2_gas_fee.l2_fee(used_gas_input);
 
         let treasury_balance = self.get_balance(treasury_address.to_eth_address());
-        assert_eq!(treasury_balance, U256::from(l1_cost));
-        outcome
+        assert_eq!(
+            treasury_balance,
+            U256::from(l1_cost).saturating_add(l2_cost)
+        );
+        Ok(outcome)
     }
 
     /// Executes a Move entry function with the given arguments
@@ -224,6 +250,8 @@ impl TestContext {
         &mut self,
         tx: &TestTransaction,
     ) -> crate::Result<TransactionExecutionOutcome> {
+        let l2_fee = CreateMovedL2GasFee.with_gas_fee_multiplier(U256::from(1));
+        let l2_gas_input = L2GasFeeInput::new(tx.l2_gas_limit, tx.l2_gas_price);
         match &tx.base_token {
             TestBaseToken::Empty => execute_transaction(
                 &tx.tx,
@@ -231,6 +259,8 @@ impl TestContext {
                 self.state.resolver(),
                 &self.genesis_config,
                 0,
+                l2_fee,
+                l2_gas_input,
                 &(),
                 HeaderForExecution::default(),
             ),
@@ -240,6 +270,8 @@ impl TestContext {
                 self.state.resolver(),
                 &self.genesis_config,
                 tx.l1_cost,
+                l2_fee,
+                l2_gas_input,
                 moved_base_token,
                 HeaderForExecution::default(),
             ),

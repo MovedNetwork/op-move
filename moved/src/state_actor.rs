@@ -1,7 +1,8 @@
 pub use {
     payload::{NewPayloadId, NewPayloadIdInput, StatePayloadId},
     queries::{
-        Balance, BlockHeight, InMemoryStateQueries, Nonce, StateMemory, StateQueries, Version,
+        Balance, BlockHeight, HistoricResolver, InMemoryStateQueries, Nonce, StateMemory,
+        StateQueries, Version,
     },
 };
 

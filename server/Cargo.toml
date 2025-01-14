@@ -26,5 +26,6 @@ warp.workspace = true
 [dev-dependencies]
 alloy.workspace = true
 dotenvy.workspace = true
+eth_trie.workspace = true
 move-binary-format.workspace = true
 openssl.workspace = true

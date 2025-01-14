@@ -5,9 +5,10 @@ use {
             quick_get_eth_balance, quick_get_nonce,
         },
         primitives::{KeyHashable, ToEthAddress, B256, U256},
-        storage::IN_MEMORY_EXPECT_MSG,
+        storage::{evm_key_address, IN_MEMORY_EXPECT_MSG},
         types::{
             queries::{ProofResponse, StorageProof},
+            state::TreeKey,
             transactions::{L2_HIGHEST_ADDRESS, L2_LOWEST_ADDRESS},
         },
     },
@@ -179,16 +180,22 @@ impl StateQueries for InMemoryStateQueries {
         let evm_db = evm_native::ResolverBackedDB::new(&resolver);
         let account_info = evm_db.basic_ref(address).ok()??;
 
-        let account_struct = evm_native::type_utils::account_info_struct_tag(&address);
         let root = self.storage.get_root_by_height(height)?;
         let mut tree = EthTrie::from(db, root).expect(IN_MEMORY_EXPECT_MSG);
-        let account_proof = get_proof(&mut tree, &EVM_NATIVE_ADDRESS, &account_struct)?;
+        let account_key = TreeKey::Evm(address);
+        let account_proof = tree
+            .get_proof(account_key.key_hash().0.as_slice())
+            .ok()?
+            .into_iter()
+            .map(Into::into)
+            .collect();
 
         let mut storage_proof = Vec::new();
         for index in storage_slots {
             let storage_struct =
                 evm_native::type_utils::account_storage_struct_tag(&address, index);
             let value = evm_db.storage_ref(address, *index).ok()?;
+            // TODO: need to revisit EVM storage proofs.
             let proof = get_proof(&mut tree, &EVM_NATIVE_ADDRESS, &storage_struct)?;
             storage_proof.push(StorageProof {
                 key: (*index).into(),
@@ -218,7 +225,7 @@ where
     R: DB,
 {
     let state_key = StateKey::resource(account, resource).ok()?;
-    let key_hash = state_key.key_hash();
+    let key_hash = TreeKey::StateKey(state_key).key_hash();
     let proof = tree.get_proof(key_hash.0.as_slice()).ok()?;
     Some(proof.into_iter().map(Into::into).collect())
 }
@@ -245,7 +252,7 @@ impl<D: DB> ModuleResolver for HistoricResolver<D> {
     fn get_module(&self, id: &ModuleId) -> Result<Option<Bytes>, Self::Error> {
         let tree = EthTrie::from(self.db.clone(), self.root).expect(IN_MEMORY_EXPECT_MSG);
         let state_key = StateKey::module(id.address(), id.name());
-        let key_hash = state_key.key_hash();
+        let key_hash = TreeKey::StateKey(state_key).key_hash();
         let value = tree.get(key_hash.0.as_slice()).map_err(trie_err)?;
 
         Ok(deserialize_state_value(value))
@@ -263,10 +270,15 @@ impl<D: DB> ResourceResolver for HistoricResolver<D> {
         _layout: Option<&MoveTypeLayout>,
     ) -> Result<(Option<Bytes>, usize), Self::Error> {
         let tree = EthTrie::from(self.db.clone(), self.root).expect(IN_MEMORY_EXPECT_MSG);
-        let state_key = StateKey::resource(address, struct_tag)
-            .inspect_err(|e| print!("{e:?}"))
-            .map_err(|_| PartialVMError::new(StatusCode::DATA_FORMAT_ERROR))?;
-        let key_hash = state_key.key_hash();
+        let tree_key = if let Some(address) = evm_key_address(struct_tag) {
+            TreeKey::Evm(address)
+        } else {
+            let state_key = StateKey::resource(address, struct_tag)
+                .inspect_err(|e| print!("{e:?}"))
+                .map_err(|_| PartialVMError::new(StatusCode::DATA_FORMAT_ERROR))?;
+            TreeKey::StateKey(state_key)
+        };
+        let key_hash = tree_key.key_hash();
         let value = tree.get(key_hash.0.as_slice()).map_err(trie_err)?;
         let value = deserialize_state_value(value);
         let len = value.as_ref().map(|v| v.len()).unwrap_or_default();

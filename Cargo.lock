@@ -6782,6 +6782,7 @@ dependencies = [
  "bcs 0.1.3",
  "clap 4.5.21",
  "dotenvy",
+ "eth_trie",
  "flate2",
  "hex",
  "hyper 0.14.31",

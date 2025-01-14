@@ -1,10 +1,8 @@
 pub use alloy::primitives::{aliases::B2048, Address, Bytes, B256, B64, U256, U64};
 use {
     alloy::consensus::{Receipt, ReceiptWithBloom},
-    aptos_types::state_store::state_key::StateKey,
     move_core_types::{account_address::AccountAddress, u256::U256 as MoveU256},
     op_alloy::consensus::{OpDepositReceipt, OpDepositReceiptWithBloom, OpReceiptEnvelope},
-    sha3::{Digest, Keccak256},
 };
 
 pub(crate) trait ToEthAddress {
@@ -36,16 +34,6 @@ pub struct KeyHash(pub B256);
 
 pub trait KeyHashable {
     fn key_hash(&self) -> KeyHash;
-}
-
-impl KeyHashable for StateKey {
-    fn key_hash(&self) -> KeyHash {
-        let bytes = self.encoded();
-        let mut digest = Keccak256::new();
-        digest.update(bytes);
-        let hash = digest.finalize();
-        KeyHash(B256::new(hash.into()))
-    }
 }
 
 pub trait ToU64 {

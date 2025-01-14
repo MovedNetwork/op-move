@@ -1,3 +1,4 @@
+mod get_proof;
 mod integration;
 
 use {

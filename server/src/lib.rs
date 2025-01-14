@@ -11,7 +11,7 @@ use {
         genesis::{self, config::GenesisConfig},
         move_execution::{CreateEcotoneL1GasFee, CreateMovedL2GasFee, MovedBaseTokenAccounts},
         primitives::U256,
-        state_actor::{InMemoryStateQueries, StatePayloadId},
+        state_actor::{InMemoryStateQueries, StateActor, StatePayloadId},
         storage::InMemoryState,
         types::state::{Command, StateMessage},
     },
@@ -40,6 +40,20 @@ mod mirror;
 
 #[cfg(test)]
 mod tests;
+
+pub type ProductionStateActor = StateActor<
+    InMemoryState,
+    StatePayloadId,
+    MovedBlockHash,
+    InMemoryBlockRepository,
+    Eip1559GasFee,
+    CreateEcotoneL1GasFee,
+    CreateMovedL2GasFee,
+    MovedBaseTokenAccounts,
+    InMemoryBlockQueries,
+    BlockMemory,
+    InMemoryStateQueries,
+>;
 
 #[derive(Parser)]
 struct Args {
@@ -79,42 +93,7 @@ pub async fn run() {
         ..Default::default()
     };
 
-    let block_hash = MovedBlockHash;
-    let genesis_block = create_genesis_block(&block_hash, &genesis_config);
-
-    let mut block_memory = BlockMemory::new();
-    let mut repository = InMemoryBlockRepository::new();
-    let head = genesis_block.hash;
-    repository.add(&mut block_memory, genesis_block);
-
-    let mut state = InMemoryState::new();
-    let (genesis_changes, table_changes) = genesis::init(&genesis_config, &state);
-    let state_query = InMemoryStateQueries::from_genesis(genesis_config.initial_state_root);
-    genesis::apply(genesis_changes, table_changes, &genesis_config, &mut state);
-
-    let base_token = MovedBaseTokenAccounts::new(genesis_config.treasury);
-    let state = moved::state_actor::StateActor::new(
-        rx,
-        state,
-        head,
-        0,
-        genesis_config,
-        StatePayloadId,
-        block_hash,
-        repository,
-        Eip1559GasFee::new(
-            EIP1559_ELASTICITY_MULTIPLIER,
-            EIP1559_BASE_FEE_MAX_CHANGE_DENOMINATOR,
-        ),
-        CreateEcotoneL1GasFee,
-        CreateMovedL2GasFee,
-        base_token,
-        InMemoryBlockQueries,
-        block_memory,
-        state_query,
-        moved::state_actor::StateActor::on_tx_in_memory(),
-        moved::state_actor::StateActor::on_tx_batch_in_memory(),
-    );
+    let state = initialize_state_actor(genesis_config, rx);
 
     let http_state_channel = state_channel.clone();
     let http_server_addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 8545));
@@ -142,6 +121,48 @@ pub async fn run() {
         state.spawn(),
     );
     state_result.unwrap();
+}
+
+pub fn initialize_state_actor(
+    genesis_config: GenesisConfig,
+    rx: mpsc::Receiver<StateMessage>,
+) -> ProductionStateActor {
+    let block_hash = MovedBlockHash;
+    let genesis_block = create_genesis_block(&block_hash, &genesis_config);
+
+    let mut block_memory = BlockMemory::new();
+    let mut repository = InMemoryBlockRepository::new();
+    let head = genesis_block.hash;
+    repository.add(&mut block_memory, genesis_block);
+
+    let mut state = InMemoryState::new();
+    let (genesis_changes, table_changes) = genesis::init(&genesis_config, &state);
+    let state_query = InMemoryStateQueries::from_genesis(genesis_config.initial_state_root);
+    genesis::apply(genesis_changes, table_changes, &genesis_config, &mut state);
+
+    let base_token = MovedBaseTokenAccounts::new(genesis_config.treasury);
+    StateActor::new(
+        rx,
+        state,
+        head,
+        0,
+        genesis_config,
+        StatePayloadId,
+        block_hash,
+        repository,
+        Eip1559GasFee::new(
+            EIP1559_ELASTICITY_MULTIPLIER,
+            EIP1559_BASE_FEE_MAX_CHANGE_DENOMINATOR,
+        ),
+        CreateEcotoneL1GasFee,
+        CreateMovedL2GasFee,
+        base_token,
+        InMemoryBlockQueries,
+        block_memory,
+        state_query,
+        moved::state_actor::StateActor::on_tx_in_memory(),
+        moved::state_actor::StateActor::on_tx_batch_in_memory(),
+    )
 }
 
 fn create_genesis_block(

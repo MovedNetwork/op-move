@@ -1,9 +1,16 @@
 use {
-    crate::primitives::{KeyHashable, B256},
+    crate::{
+        move_execution::evm_native::{
+            type_utils::ACCOUNT_INFO_PREFIX, EVM_NATIVE_ADDRESS, EVM_NATIVE_MODULE,
+        },
+        primitives::{Address, KeyHashable, B256},
+        types::state::TreeKey,
+    },
+    alloy::hex::FromHex,
     aptos_types::state_store::{state_key::StateKey, state_value::StateValue},
     eth_trie::{EthTrie, MemoryDB, Trie, DB},
     move_binary_format::errors::PartialVMError,
-    move_core_types::{effects::ChangeSet, resolver::MoveResolver},
+    move_core_types::{effects::ChangeSet, language_storage::StructTag, resolver::MoveResolver},
     move_table_extension::{TableChangeSet, TableResolver},
     move_vm_test_utils::InMemoryStorage,
     std::{collections::HashMap, fmt::Debug, sync::Arc},
@@ -137,9 +144,6 @@ impl InMemoryState {
     }
 }
 
-/// The merkle patricia trie key is the hash of the actual key.
-type TreeKey = StateKey;
-
 /// The merkle patricia trie value. None indicates the value was deleted.
 type TreeValue = Option<StateValue>;
 
@@ -193,16 +197,31 @@ impl ToTreeValues for ChangeSet {
                         let value = v.clone().ok().map(StateValue::new_legacy);
                         let key = StateKey::module(address, k.as_ident_str());
 
-                        (key, value)
+                        (TreeKey::StateKey(key), value)
                     })
                     .chain(changes.resources().iter().map(move |(k, v)| {
                         let value = v.clone().ok().map(StateValue::new_legacy);
-                        let key = StateKey::resource(address, k).unwrap();
+                        let key = if let Some(address) = evm_key_address(k) {
+                            TreeKey::Evm(address)
+                        } else {
+                            TreeKey::StateKey(StateKey::resource(address, k).unwrap())
+                        };
 
                         (key, value)
                     }))
             })
             .collect::<HashMap<_, _>>()
+    }
+}
+
+pub fn evm_key_address(k: &StructTag) -> Option<Address> {
+    if k.address == EVM_NATIVE_ADDRESS && k.module.as_ident_str() == EVM_NATIVE_MODULE {
+        k.name
+            .as_str()
+            .strip_prefix(ACCOUNT_INFO_PREFIX)
+            .and_then(|h| Address::from_hex(h).ok())
+    } else {
+        None
     }
 }
 

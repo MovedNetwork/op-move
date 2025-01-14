@@ -13,8 +13,10 @@ use {
     },
 };
 
+pub const ACCOUNT_INFO_PREFIX: &str = "Account_";
+
 pub fn account_info_struct_tag(address: &Address) -> StructTag {
-    let name = format!("Account_{}", address.encode_hex());
+    let name = format!("{ACCOUNT_INFO_PREFIX}{}", address.encode_hex());
     let name = Identifier::new(name).expect("Account info name is valid");
     StructTag {
         address: EVM_NATIVE_ADDRESS,

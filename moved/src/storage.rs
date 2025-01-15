@@ -29,23 +29,26 @@ pub trait State {
     /// The associated error that can occur on storage operations.
     type Err: Debug;
 
-    /// Applies the `changes` to the underlying storage state.
+    /// Applies the `changes` to the blockchain state.
     fn apply(&mut self, changes: ChangeSet) -> Result<(), Self::Err>;
 
-    /// Applies the `changes` to the underlying storage state. In addition, applies `table_changes`
-    /// using the [`move_table_extension`].
+    /// Applies the `changes` to the blockchain state. In addition, applies `table_changes`
+    /// from the [`move_table_extension`].
     fn apply_with_tables(
         &mut self,
         changes: ChangeSet,
         table_changes: TableChangeSet,
     ) -> Result<(), Self::Err>;
 
+    /// Returns a reference to a [`TreeReader`] that can access the merkle trie holding the current
+    /// blockchain state.
     fn db(&self) -> Arc<impl DB>;
 
-    /// Returns a reference to a [`MoveResolver`] that can resolve both resources and modules.
+    /// Returns a reference to a [`MoveResolver`] that can resolve both resources and modules on
+    /// the current blockchain state.
     fn resolver(&self) -> &(impl MoveResolver<Self::Err> + TableResolver);
 
-    /// Retrieves the current state root.
+    /// Retrieves the value of the root node of the merkle trie that holds the blockchain state.
     fn state_root(&self) -> B256;
 }
 
@@ -146,7 +149,7 @@ type TreeValue = Option<StateValue>;
 /// Converts itself to a set of updates for a merkle patricia trie.
 ///
 /// This trait is defined by a single operation called [`Self::to_tree_values`].
-trait ToTreeValues {
+pub trait ToTreeValues {
     /// Extracts modules and resources and generates a set of merkle trie keys and values applicable
     /// to a trie for the purpose of updating it resulting in a new root hash.
     ///

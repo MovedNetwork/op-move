@@ -1,0 +1,15 @@
+[package]
+name = "moved-rocksdb"
+description = "Moved node integration with RocksDB persistent storage engine"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+bcs.workspace = true
+bytes.workspace = true
+eth_trie.workspace = true
+move-binary-format.workspace = true
+move-core-types.workspace = true
+move-table-extension.workspace = true
+moved.workspace = true
+rocksdb.workspace = true

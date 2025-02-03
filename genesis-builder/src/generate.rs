@@ -3,11 +3,10 @@ use {
     convert_case::{Case, Casing},
     handlebars::{handlebars_helper, Handlebars},
     regex::Regex,
-    serde::Serialize,
+    serde::{Deserialize, Serialize},
     std::{
         collections::BTreeMap,
         fs::{read_dir, read_to_string, File},
-        path::Path,
     },
 };
 
@@ -31,6 +30,27 @@ struct L2Function {
 struct L2Input {
     name: String,
     ty: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct TokenData {
+    name: String,
+    symbol: String,
+    decimals: u32,
+    website: Option<String>,
+    /// Absent in source json, filled during iterations
+    logo_uri: Option<String>,
+    tokens: TokenChains,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct TokenChains {
+    ethereum: Option<ChainAddress>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct ChainAddress {
+    address: String,
 }
 
 handlebars_helper!(pascal: |s: String| s.to_case(Case::Pascal));
@@ -144,9 +164,43 @@ pub fn l2_abi_to_move() -> anyhow::Result<()> {
             structs,
             has_fungible_asset,
         };
-        handlebars.render_to_write("move", &module, &mut output_file)?;
+        handlebars.render_to_write("l2", &module, &mut output_file)?;
     }
 
+    Ok(())
+}
+
+pub fn generate_erc20_contracts() -> anyhow::Result<()> {
+    let mut handlebars = Handlebars::new();
+    handlebars.register_template_file("erc20", BUILDER_ROOT.join("l2_erc20_template.hbs"))?;
+    let tokens_dir = read_dir(crate::TOKEN_LIST_DIR.join("data"))?;
+
+    for entry in tokens_dir {
+        let token_folder = entry?;
+        let token_file = token_folder.path().join("data.json");
+        let json = read_to_string(token_file)?;
+        let mut token: TokenData = serde_json::from_str(&json)?;
+        // Ignoring legacy Ethereum ERC20
+        if token.name == "Ether" {
+            continue;
+        }
+        // Complying with Move identifier specs and leaving `0` of `0x..` addresses out
+        if let Some(eth_address) = &mut token.tokens.ethereum {
+            eth_address.address.remove(0);
+        } else {
+            continue;
+        }
+        token.logo_uri = Some(format!(
+            "https://ethereum-optimism.github.io/data/{}/logo.svg",
+            token_folder.path().file_stem().unwrap().to_string_lossy()
+        ));
+        let mut gen_path = BUILDER_ROOT
+            .join("framework/erc20/sources")
+            .join(&token.symbol);
+        gen_path.set_extension("move");
+        let mut output_file = File::create(gen_path)?;
+        handlebars.render_to_write("erc20", &token, &mut output_file)?;
+    }
     Ok(())
 }
 

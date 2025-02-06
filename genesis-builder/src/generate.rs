@@ -1,4 +1,5 @@
 use {
+    crate::BUILDER_ROOT,
     alloy::json_abi::{InternalType, JsonAbi, StateMutability},
     convert_case::{Case, Casing},
     handlebars::{handlebars_helper, Handlebars},
@@ -59,8 +60,7 @@ handlebars_helper!(snake: |s: String| to_snake_case(s));
 
 pub fn l2_abi_to_move() -> anyhow::Result<()> {
     println!("Converting L2 Solidity ABIs to Move modules");
-    let directory_path = "server/src/tests/optimism/packages/contracts-bedrock/snapshots/abi/";
-    let directory = read_dir(directory_path)?;
+    let directory = read_dir(crate::OPTIMISM_BEDROCK_DIR.as_path())?;
     let l2_contract_names = get_l2_contract_names()?;
 
     let mut handlebars = Handlebars::new();
@@ -153,10 +153,10 @@ pub fn l2_abi_to_move() -> anyhow::Result<()> {
             }
         }
 
-        let mut path = Path::new("genesis-builder/framework/l2/sources").join(&name);
+        let mut path = BUILDER_ROOT.join("framework/l2/sources").join(&name);
         path.set_extension("move");
         let mut output_file = File::create(path)?;
-        handlebars.register_template_file("move", "genesis-builder/l2_move_template.hbs")?;
+        handlebars.register_template_file("l2", BUILDER_ROOT.join("l2_move_template.hbs"))?;
 
         let module = L2Module {
             name,
@@ -214,7 +214,7 @@ fn to_snake_case(s: String) -> String {
 }
 
 fn get_l2_contract_names() -> anyhow::Result<Vec<String>> {
-    let move_toml = read_to_string("genesis-builder/framework/l2/Move.toml")?;
+    let move_toml = read_to_string(BUILDER_ROOT.join("framework/l2/Move.toml"))?;
     // Capture the contract name where the address starts with 0x42
     let mut names = Vec::new();
     let re = Regex::new("^(?<name>.*) = \"0x42.*\"$")?;

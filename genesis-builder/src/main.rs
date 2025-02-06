@@ -1,12 +1,10 @@
 use {
-    crate::generate::l2_abi_to_move,
-    alloy::{dyn_abi::abi::token, primitives::map::HashSet},
+    crate::generate::{generate_erc20_contracts, l2_abi_to_move},
     aptos_framework::{BuildOptions, BuiltPackage, ReleaseBundle, ReleasePackage},
     move_package::{
         package_hooks::register_package_hooks, BuildConfig as MoveBuildConfig, LintFlag,
     },
     once_cell::sync::Lazy,
-    serde::Deserialize,
     std::{
         collections::BTreeMap,
         fs::{copy, read_to_string, remove_dir_all, write, OpenOptions},
@@ -37,7 +35,6 @@ const SUI_REPO_TAG: &str = "testnet-v1.28.3";
 const MOVE_TOML: &str = "Move.toml";
 
 const TOKEN_LIST_REPO: &str = "https://github.com/ethereum-optimism/ethereum-optimism.github.io";
-const L2_STANDARD_BRIDGE_ADDRESS: &str = "0x4200000000000000000000000000000000000010";
 
 static TARGET_ROOT: Lazy<PathBuf> = Lazy::new(|| {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -45,6 +42,8 @@ static TARGET_ROOT: Lazy<PathBuf> = Lazy::new(|| {
         .expect("Workspace root directory should exist")
         .join("target")
 });
+
+static BUILDER_ROOT: Lazy<PathBuf> = Lazy::new(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")));
 
 static MOVED_FRAMEWORK_DIR: Lazy<PathBuf> =
     Lazy::new(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("framework"));
@@ -92,10 +91,12 @@ static SUI_COIN_PATH: Lazy<PathBuf> = Lazy::new(|| {
 
 static TOKEN_LIST_DIR: Lazy<PathBuf> = Lazy::new(|| TARGET_ROOT.join("superchain_token_list"));
 
-#[derive(Debug, Deserialize)]
-struct TokenChainInfo {
-    address: String,
-}
+static OPTIMISM_BEDROCK_DIR: Lazy<PathBuf> = Lazy::new(|| {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("Workspace root directory should exist")
+        .join("server/src/tests/optimism/packages/contracts-bedrock/snapshots/abi/")
+});
 
 const fn small_object_id(value: u8) -> ObjectID {
     ObjectID::from_single_byte(value)
@@ -146,81 +147,12 @@ fn clone_repos() -> anyhow::Result<()> {
             "clone",
             "--depth",
             "1",
-            "-b",
             TOKEN_LIST_REPO,
-            "superchain_token_list",
+            TOKEN_LIST_DIR.file_name().unwrap().to_str().unwrap(),
         ])
         .output()?;
     Ok(())
 }
-
-// NOTE: generate module name as the *ethereum* erc address
-fn generate_erc20_contracts() -> anyhow::Result<()> {
-    let superchain_token_list_file = TOKEN_LIST_DIR.join("optimism.tokenlist.json");
-    let content = read_to_string(superchain_token_list_file)?;
-    let list: SuperchainTokenList = serde_json::from_str(&content)?;
-    let mut tokens = list.tokens;
-    let bridge_address = "0x4200000000000000000000000000000000000010";
-    // We only want the optimism addresses, not ethereum or base network, and to also filter out
-    // legacy ETH ERC20
-    tokens.retain(|token| {
-        token.extensions.optimism_bridge_address.as_deref() == Some(bridge_address)
-            && token.symbol != "ETH"
-    });
-    // Weird corner case of double symbol occurrence
-    if let Some(token) = tokens
-        .iter_mut()
-        .find(|token| token.name == "StaFi Staked ETH")
-    {
-        token.symbol = "rETH_StaFi".to_string()
-    };
-    let tokens: Vec<_> = tokens
-        .iter()
-        .filter_map(|token| {
-            let dupe_count = tokens.iter().filter(|t| t.symbol == token.symbol).count();
-
-            if dupe_count > 1 {
-                // As somehow the big token list doesn't differentiate testnet and
-                // mainnet, we need to double check the initial json
-                dbg!(&token.symbol);
-                let path = TOKEN_LIST_DIR
-                    .join("data")
-                    .join(&token.symbol)
-                    .join("data.json");
-                match read_to_string(path)
-                    .and_then(|s| serde_json::from_str::<TokenData>(&s).map_err(Into::into))
-                {
-                    Ok(token_data) => {
-                        dbg!(&token_data);
-                        dbg!(&token.address);
-                        dbg!(token_data.tokens.optimism.address == token.address).then_some(token)
-                    }
-                    Err(_) => None,
-                }
-            } else {
-                Some(token)
-            }
-        })
-        .collect();
-
-    // dbg!(filtered);
-    // dbg!(list);
-    dbg!(tokens.len());
-    dbg!(tokens
-        .iter()
-        .map(|t| &t.symbol)
-        .collect::<HashSet<_>>()
-        .len());
-    let dupes: Vec<_> = tokens
-        .iter()
-        .filter(|token| tokens.iter().filter(|x| x.symbol == token.symbol).count() > 1)
-        // .map(|token| )
-        .collect();
-    dbg!(dupes);
-    Ok(())
-}
-
-fn get_optimism_address(symbol: &str) {}
 
 fn fix_aptos_packages() -> anyhow::Result<()> {
     // Addresses are mapped from 0x1, 0x3, 0x4 to 0x11, 0x13, 0x14 etc for conflict resolution

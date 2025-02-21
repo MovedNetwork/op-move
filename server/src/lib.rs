@@ -34,7 +34,7 @@ use {
     warp::{
         hyper::{body::Bytes, Body, Response},
         path::FullPath,
-        Filter, Rejection,
+        Filter, Rejection, Reply,
     },
     warp_reverse_proxy::{
         extract_request_data_filter, proxy_to_and_forward_response, Headers, Method,
@@ -259,6 +259,11 @@ async fn mirror(
     is_allowed: impl Fn(&MethodName) -> bool,
 ) -> Result<warp::reply::Response, Rejection> {
     let (path, query, method, headers, body) = request;
+
+    // Handle load balancer health check with a simple response
+    if method == Method::GET {
+        return Ok("healthy".into_response());
+    }
 
     let is_zipped = headers
         .get("accept-encoding")

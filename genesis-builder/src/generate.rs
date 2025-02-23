@@ -1,13 +1,13 @@
 use {
+    crate::BUILDER_ROOT,
     alloy::json_abi::{InternalType, JsonAbi, StateMutability},
     convert_case::{Case, Casing},
     handlebars::{handlebars_helper, Handlebars},
     regex::Regex,
-    serde::Serialize,
+    serde::{Deserialize, Serialize},
     std::{
         collections::BTreeMap,
         fs::{read_dir, read_to_string, File},
-        path::Path,
     },
 };
 
@@ -33,14 +33,34 @@ struct L2Input {
     ty: String,
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+struct TokenData {
+    name: String,
+    symbol: String,
+    decimals: u32,
+    website: Option<String>,
+    /// Absent in source json, filled during iterations
+    logo_uri: Option<String>,
+    tokens: TokenChains,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct TokenChains {
+    ethereum: Option<ChainAddress>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct ChainAddress {
+    address: String,
+}
+
 handlebars_helper!(pascal: |s: String| s.to_case(Case::Pascal));
 
 handlebars_helper!(snake: |s: String| to_snake_case(s));
 
 pub fn l2_abi_to_move() -> anyhow::Result<()> {
     println!("Converting L2 Solidity ABIs to Move modules");
-    let directory_path = "server/src/tests/optimism/packages/contracts-bedrock/snapshots/abi/";
-    let directory = read_dir(directory_path)?;
+    let directory = read_dir(crate::OPTIMISM_BEDROCK_DIR.as_path())?;
     let l2_contract_names = get_l2_contract_names()?;
 
     let mut handlebars = Handlebars::new();
@@ -133,10 +153,10 @@ pub fn l2_abi_to_move() -> anyhow::Result<()> {
             }
         }
 
-        let mut path = Path::new("genesis-builder/framework/l2/sources").join(&name);
+        let mut path = BUILDER_ROOT.join("framework/l2/sources").join(&name);
         path.set_extension("move");
         let mut output_file = File::create(path)?;
-        handlebars.register_template_file("move", "genesis-builder/l2_move_template.hbs")?;
+        handlebars.register_template_file("l2", BUILDER_ROOT.join("l2_move_template.hbs"))?;
 
         let module = L2Module {
             name,
@@ -144,9 +164,43 @@ pub fn l2_abi_to_move() -> anyhow::Result<()> {
             structs,
             has_fungible_asset,
         };
-        handlebars.render_to_write("move", &module, &mut output_file)?;
+        handlebars.render_to_write("l2", &module, &mut output_file)?;
     }
 
+    Ok(())
+}
+
+pub fn generate_erc20_contracts() -> anyhow::Result<()> {
+    let mut handlebars = Handlebars::new();
+    handlebars.register_template_file("erc20", BUILDER_ROOT.join("l2_erc20_template.hbs"))?;
+    let tokens_dir = read_dir(crate::TOKEN_LIST_DIR.join("data"))?;
+
+    for entry in tokens_dir {
+        let token_folder = entry?;
+        let token_file = token_folder.path().join("data.json");
+        let json = read_to_string(token_file)?;
+        let mut token: TokenData = serde_json::from_str(&json)?;
+        // Ignoring legacy Ethereum ERC20
+        if token.name == "Ether" {
+            continue;
+        }
+        // Complying with Move identifier specs and leaving `0` of `0x..` addresses out
+        if let Some(eth_address) = &mut token.tokens.ethereum {
+            eth_address.address.remove(0);
+        } else {
+            continue;
+        }
+        token.logo_uri = Some(format!(
+            "https://ethereum-optimism.github.io/data/{}/logo.svg",
+            token_folder.path().file_stem().unwrap().to_string_lossy()
+        ));
+        let mut gen_path = BUILDER_ROOT
+            .join("framework/erc20/sources")
+            .join(&token.symbol);
+        gen_path.set_extension("move");
+        let mut output_file = File::create(gen_path)?;
+        handlebars.render_to_write("erc20", &token, &mut output_file)?;
+    }
     Ok(())
 }
 
@@ -160,7 +214,7 @@ fn to_snake_case(s: String) -> String {
 }
 
 fn get_l2_contract_names() -> anyhow::Result<Vec<String>> {
-    let move_toml = read_to_string("genesis-builder/framework/l2/Move.toml")?;
+    let move_toml = read_to_string(BUILDER_ROOT.join("framework/l2/Move.toml"))?;
     // Capture the contract name where the address starts with 0x42
     let mut names = Vec::new();
     let re = Regex::new("^(?<name>.*) = \"0x42.*\"$")?;

@@ -1,19 +1,25 @@
 use {
     alloy::{
+        consensus::{SignableTransaction, TxEip1559, TxEnvelope},
         contract::CallBuilder,
         dyn_abi::EventExt,
-        network::{EthereumWallet, TransactionBuilder},
-        primitives::{address, utils::parse_ether, Address, B256, U256},
-        providers::{Provider, ProviderBuilder},
-        rpc::types::eth::TransactionRequest,
+        network::{EthereumWallet, TransactionBuilder, TxSignerSync},
+        primitives::{address, utils::parse_ether, Address, TxKind, B256, U256},
+        providers::{Provider, ProviderBuilder, WalletProvider},
+        rlp::Encodable,
+        rpc::types::{eth::TransactionRequest, TransactionReceipt},
         signers::{
             k256::ecdsa::SigningKey,
             local::{LocalSigner, PrivateKeySigner},
         },
+        sol_types::{SolCall, SolEventInterface},
         transports::http::reqwest::Url,
     },
     anyhow::{Context, Result},
-    aptos_types::transaction::{EntryFunction, Module},
+    aptos_types::{
+        transaction::{EntryFunction, Module},
+        PeerId,
+    },
     move_binary_format::CompiledModule,
     move_core_types::{ident_str, language_storage::ModuleId, value::MoveValue},
     moved_execution::transaction::{ScriptOrModule, TransactionData},
@@ -27,6 +33,7 @@ use {
         process::{Child, Command, Output},
         str::FromStr,
         time::{Duration, Instant},
+        u64,
     },
     tokio::{fs, runtime::Runtime},
 };
@@ -38,8 +45,30 @@ const OP_BRIDGE_POLL_IN_SECS: u64 = 5;
 const OP_START_IN_SECS: u64 = 20;
 const TXN_RECEIPT_WAIT_IN_MILLIS: u64 = 100;
 
+const OPTIMISM_MINTABLE_ERC20_CREATED: B256 = B256::new(alloy::hex!(
+    "52fe89dd5930f343d25650b62fd367bae47088bcddffd2a88350a6ecdd620cdb"
+));
+
 mod heartbeat;
 mod withdrawal;
+
+alloy::sol!(
+    #[sol(rpc)]
+    ERC20,
+    "src/tests/res/erc20/gold_sol_Gold.abi"
+);
+
+alloy::sol!(
+    #[sol(rpc)]
+    L1StandardBridge,
+    "src/tests/res/erc20/L1StandardBridge.json"
+);
+
+alloy::sol!(
+    #[sol(rpc)]
+    OptimismMintable,
+    "src/tests/res/erc20/OptimismMintableERC20Factory.json"
+);
 
 #[tokio::test]
 async fn test_on_ethereum() -> Result<()> {
@@ -83,10 +112,13 @@ async fn test_on_ethereum() -> Result<()> {
     let (op_node, op_batcher, op_proposer) = run_op()?;
 
     // 10. Test out the OP bridge
-    use_optimism_bridge().await?;
+    // use_optimism_bridge().await?;
 
     // 11. Test out a simple Move contract
-    deploy_move_counter().await?;
+    // deploy_move_counter().await?;
+
+    deploy_erc20().await?;
+    pause(Some(Duration::from_secs(OP_BRIDGE_POLL_IN_SECS)));
 
     // 12. Cleanup generated files and folders
     hb.shutdown().await;
@@ -250,6 +282,7 @@ fn generate_jwt() -> Result<()> {
 }
 
 async fn start_geth() -> Result<Child> {
+    let geth_logs = File::create("geth.log").unwrap();
     let geth_process = Command::new("geth")
         .current_dir("src/tests/optimism/")
         .args([
@@ -269,6 +302,7 @@ async fn start_geth() -> Result<Child> {
             "--http.api",
             "web3,debug,eth,txpool,net,engine",
         ])
+        .stderr(geth_logs)
         .spawn()?;
     // Give a second to settle geth
     pause(Some(Duration::from_secs(GETH_START_IN_SECS)));
@@ -436,7 +470,7 @@ async fn use_optimism_bridge() -> Result<()> {
     pause(Some(Duration::from_secs(OP_START_IN_SECS)));
 
     deposit_to_l2().await?;
-    withdrawal::withdraw_to_l1().await?;
+    // withdrawal::withdraw_to_l1().await?;
 
     Ok(())
 }
@@ -460,6 +494,8 @@ async fn deposit_to_l2() -> Result<()> {
         }
         tokio::time::sleep(Duration::from_secs(OP_BRIDGE_POLL_IN_SECS)).await;
     }
+    eprintln!("deposited to l2");
+    pause(None);
     Ok(())
 }
 
@@ -496,6 +532,211 @@ async fn deploy_move_counter() -> Result<()> {
         .unwrap();
     let receipt = pending_tx.get_receipt().await.unwrap();
     assert!(receipt.status(), "Transaction should succeed");
+
+    Ok(())
+}
+
+// async fn deploy_erc20() -> Result<()> {
+//     let from_wallet = get_prefunded_wallet().await?;
+//     let l1_provider = ProviderBuilder::new()
+//         .with_recommended_fillers()
+//         .wallet(EthereumWallet::from(from_wallet.clone()))
+//         .on_http(Url::parse(&var("L1_RPC_URL")?)?);
+//     let l2_provider = ProviderBuilder::new()
+//         .with_recommended_fillers()
+//         .wallet(EthereumWallet::from(from_wallet.clone()))
+//         .on_http(Url::parse(L2_RPC_URL)?);
+//
+//     // Deploy L1 Gold (EVM)
+//     let l1_bytecode =
+//         hex::decode(std::fs::read_to_string("src/tests/res/erc20/gold_sol_Gold.bin")?.trim())?;
+//     let l1_call = CallBuilder::new_raw_deploy(&l1_provider, l1_bytecode.into());
+//     let l1_token = l1_call.deploy().await?;
+//     eprintln!("L1 Gold deployed at: {:?}", l1_token);
+//
+//     // Deploy L2 Gold (Move)
+//     // Deploy base module
+//     let base_hex = std::fs::read_to_string("src/tests/res/erc20/base.hex")?;
+//     let base_bytecode = hex::decode(base_hex.trim())?;
+//     let base_bytecode = set_module_address(base_bytecode, from_wallet.address());
+//     let base_call = CallBuilder::new_raw_deploy(&l2_provider, base_bytecode.into());
+//     let _base_address = base_call.deploy().await?;
+//
+//     let l2_token = FRAMEWORK_ADDRESS.to_eth_address();
+//     eprintln!("L2 Gold deployed at: {:?}", l2_token);
+//
+//     // Approve and bridge
+//     eprintln!("about to approvue stuff");
+//     let bridge_address = Address::from_str(&get_deployed_address("L1StandardBridgeProxy")?)?;
+//     let bridge_contract = L1StandardBridge::new(bridge_address, &l1_provider);
+//     let contract = ERC20::new(l1_token, &l1_provider);
+//     let send_amount = parse_ether("100")?;
+//     let approve_tx = contract.approve(bridge_address, send_amount).send().await?;
+//     approve_tx.watch().await?;
+//     let bridge_tx = bridge_contract
+//         .depositERC20(l1_token, l2_token, send_amount, 21_000, "".into())
+//         .send()
+//         .await?;
+//     let receipt = bridge_tx.watch().await?;
+//     eprintln!("Bridge tx receipt: {:?}", receipt);
+//
+//     // Poll L2 logs
+//     let filter = alloy::rpc::types::Filter::new()
+//         .event("ERC20DepositFinalized(address,address,address,address,uint256,bytes)")
+//         .address(
+//             "0x4200000000000000000000000000000000000010"
+//                 .parse::<Address>()
+//                 .unwrap(),
+//         );
+//
+//     let now = Instant::now();
+//     while now.elapsed().as_secs() < OP_BRIDGE_IN_SECS {
+//         let l2_logs = l2_provider.get_logs(&filter).await?;
+//         if !l2_logs.is_empty() {
+//             eprintln!("L2 logs: {:?}", l2_logs);
+//             break;
+//         }
+//         tokio::time::sleep(Duration::from_secs(OP_BRIDGE_POLL_IN_SECS)).await;
+//     }
+//
+//     // Check L2 balance
+//     let balance_input = TransactionData::EntryFunction(EntryFunction::new(
+//         ModuleId::new(l2_token.to_move_address(), ident_str!("Gold").into()),
+//         ident_str!("get_balance").into(),
+//         Vec::new(),
+//         vec![bcs::to_bytes(&from_wallet.address().to_move_address())?],
+//     ));
+//     let balance_tx = CallBuilder::new_raw(&l2_provider, bcs::to_bytes(&balance_input)?.into())
+//         .to(l2_token)
+//         .call()
+//         .await?;
+//     eprintln!("L2 Gold balance: {:?}", balance_tx);
+//
+//     Ok(())
+// }
+
+async fn deploy_erc20() -> Result<()> {
+    pause(Some(Duration::from_secs(OP_START_IN_SECS)));
+    let from_wallet = get_prefunded_wallet().await?;
+    let l1_provider = ProviderBuilder::new()
+        .with_recommended_fillers()
+        .wallet(EthereumWallet::from(from_wallet.clone()))
+        .on_http(Url::parse(
+            &var("L1_RPC_URL").expect("Missing Ethereum L1 RPC URL"),
+        )?);
+    let l2_provider = ProviderBuilder::new()
+        .with_recommended_fillers()
+        .wallet(EthereumWallet::from(from_wallet.clone()))
+        .on_http(Url::parse(L2_RPC_URL)?);
+
+    let bytecode_hex = std::fs::read_to_string("src/tests/res/erc20/gold_sol_Gold.bin").unwrap();
+    let bytecode = hex::decode(bytecode_hex.trim()).unwrap();
+    let erc20_call = CallBuilder::new_raw_deploy(&l1_provider, bytecode.into());
+
+    let l1_token_address = erc20_call.deploy().await.unwrap();
+    let bridge_address = Address::from_str(&get_deployed_address("L1StandardBridgeProxy")?)?;
+    dbg!(&l1_token_address);
+    dbg!(&bridge_address);
+
+    let factory_address = Address::new(alloy::hex!("4200000000000000000000000000000000000012"));
+    dbg!(&factory_address);
+
+    let name = "Gold".to_string();
+    let symbol = "AU".to_string();
+
+    // Encode the function call
+    let call = OptimismMintable::createOptimismMintableERC20Call {
+        _remoteToken: l1_token_address,
+        _name: name,
+        _symbol: symbol,
+    };
+
+    let tx = TransactionRequest::default()
+        // EIP1559
+        .transaction_type(2)
+        .with_call(&call)
+        .with_to(factory_address);
+    dbg!(&tx);
+
+    let tx = l2_provider.send_transaction(tx).await?;
+    let receipt = tx.get_receipt().await?;
+    dbg!(receipt.inner.logs());
+    let logs = receipt.inner.logs();
+
+    let mut l2_token_addr = None;
+    for log in logs {
+        if log.topic0() == Some(&OPTIMISM_MINTABLE_ERC20_CREATED) {
+            eprintln!(
+                "FOUNDDDD! loc: {:?}, rem: {:?}",
+                log.topics()[1],
+                log.topics()[2],
+            );
+            l2_token_addr = Some(Address::from_word(log.topics()[1]));
+        }
+    }
+    let l2_token_addr = l2_token_addr.expect("l2 creation event not found");
+    // Extract L2 token address from logs
+    eprintln!("L2 Gold created at: {:?}", l2_token_addr);
+
+    let bridge_contract = L1StandardBridge::new(bridge_address, &l1_provider);
+    eprintln!(
+        "deployed code: {:?}",
+        &l1_provider.get_code_at(l1_token_address).await.unwrap()
+    );
+    let erc20_contract = ERC20::new(l1_token_address, &l1_provider);
+
+    let balance = erc20_contract
+        .balanceOf(from_wallet.address())
+        .call()
+        .await?
+        ._0;
+    eprintln!("balance of from wallet: {:?}", balance);
+
+    let send_amount = parse_ether("100")?;
+    let before_allowance = erc20_contract
+        .allowance(from_wallet.address(), bridge_address)
+        .call()
+        .await?
+        ._0;
+    eprintln!("allowance before increase: {:?}", before_allowance);
+    let approve_tx = erc20_contract
+        .approve(bridge_address, send_amount)
+        .send()
+        .await?;
+    approve_tx.watch().await?;
+    let after_allowance = erc20_contract
+        .allowance(from_wallet.address(), bridge_address)
+        .call()
+        .await?
+        ._0;
+    eprintln!("allowance after increase: {:?}", after_allowance);
+
+    let bridge_tx = bridge_contract
+        .depositERC20(
+            l1_token_address,
+            // TODO: h
+            l2_token_addr,
+            send_amount,
+            21_000,
+            "".into(),
+        )
+        .send()
+        .await?;
+    eprintln!("return of deposit: {:?}", bridge_tx);
+    let bridge_tx_hash = bridge_tx.watch().await?;
+    dbg!(bridge_tx_hash);
+    let balance = erc20_contract
+        .balanceOf(from_wallet.address())
+        .call()
+        .await?
+        ._0;
+    eprintln!("balance of from wallet after: {:?}", balance);
+    let receipt = l1_provider
+        .get_transaction_receipt(bridge_tx_hash)
+        .await?
+        .unwrap();
+    eprintln!("success: {:?}", receipt.inner.is_success());
+    eprintln!("logs: {:?}", receipt.inner.logs());
 
     Ok(())
 }
@@ -600,6 +841,7 @@ async fn send_ethers(
     let receipt = provider.send_transaction(tx).await?;
     pause(Some(Duration::from_millis(TXN_RECEIPT_WAIT_IN_MILLIS)));
     let tx_hash = receipt.watch().await?;
+    dbg!(&tx_hash);
 
     if check_balance {
         let new_balance = provider.get_balance(to).await?;

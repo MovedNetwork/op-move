@@ -108,10 +108,11 @@ fn main() -> anyhow::Result<()> {
 
     clone_repos()?;
 
-    generate_erc20_contracts()?;
-
     fix_aptos_packages()?;
+
+    generate_erc20_contracts()?;
     l2_abi_to_move()?;
+
     build_aptos_packages()?;
 
     fix_sui_packages()?;
@@ -205,7 +206,10 @@ fn build_aptos_packages() -> anyhow::Result<()> {
     );
     let binary = bcs::to_bytes(&bundle)?;
     write(TARGET_ROOT.join(APTOS_SNAPSHOT_NAME), binary)?;
-    println!("Generated Aptos snapshot bundle");
+    println!(
+        "Generated Aptos snapshot bundle at {:?}",
+        TARGET_ROOT.join(APTOS_SNAPSHOT_NAME)
+    );
     Ok(())
 }
 

@@ -143,6 +143,7 @@ fn deploy_framework(
     deploy_aptos_framework(&mut session)?;
     deploy_sui_framework(&mut session)?;
     initialize_eth_token(&mut session, &mut traversal_context)?;
+    initialize_erc20_mock(&mut session, &mut traversal_context)?;
 
     let (change_set, mut extensions) = session.finish_with_extensions()?;
     let table_change_set = extensions
@@ -151,6 +152,26 @@ fn deploy_framework(
         .map_err(|e| e.finish(Location::Undefined))?;
 
     Ok((change_set, table_change_set))
+}
+
+fn initialize_erc20_mock(
+    session: &mut Session,
+    traversal_context: &mut TraversalContext,
+) -> Result<(), VMError> {
+    let module = ModuleId::new(FRAMEWORK_ADDRESS, ident_str!("Gold").into());
+    let function_name = ident_str!("init_module");
+    let args = bcs::to_bytes(&MoveValue::Signer(FRAMEWORK_ADDRESS))
+        .expect("Serialization of constant must succeed");
+    session.execute_function_bypass_visibility(
+        &module,
+        function_name,
+        Vec::new(),
+        vec![args],
+        &mut UnmeteredGasMeter,
+        traversal_context,
+    )?;
+    eprintln!("Wenth through mock no trouble");
+    Ok(())
 }
 
 fn initialize_eth_token(
@@ -189,6 +210,7 @@ fn deploy_aptos_framework(session: &mut Session) -> Result<(), VMError> {
                 session.publish_module(code, sender, &mut UnmeteredGasMeter)?;
             }
         } else {
+            dbg!(&package.name());
             // Address from the first module is sufficient as they're the same within the package
             let sender = modules.first().expect("Package has at least one module");
             let sender = *sender.1.self_id().address();
@@ -234,6 +256,7 @@ mod tests {
     use {super::*, crate::vm::MovedVm, moved_state::InMemoryState};
 
     // Aptos framework has 133 modules and Sui has 69. They are kept mutually exclusive.
+    // TODO: with current varying number of superchain ERC20, this breaks regularly
     const APTOS_MODULES_LEN: usize = 133;
     const SUI_MODULES_LEN: usize = 69;
     const TOTAL_MODULES_LEN: usize = APTOS_MODULES_LEN + SUI_MODULES_LEN;

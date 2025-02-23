@@ -1,6 +1,7 @@
 use {
     crate::BUILDER_ROOT,
     alloy::json_abi::{InternalType, JsonAbi, StateMutability},
+    anyhow::Context,
     convert_case::{Case, Casing},
     handlebars::{handlebars_helper, Handlebars},
     regex::Regex,
@@ -60,7 +61,8 @@ handlebars_helper!(snake: |s: String| to_snake_case(s));
 
 pub fn l2_abi_to_move() -> anyhow::Result<()> {
     println!("Converting L2 Solidity ABIs to Move modules");
-    let directory = read_dir(crate::OPTIMISM_BEDROCK_DIR.as_path())?;
+    let directory =
+        read_dir(crate::OPTIMISM_BEDROCK_DIR.as_path()).context("No bedrock dir for abi found")?;
     let l2_contract_names = get_l2_contract_names()?;
 
     let mut handlebars = Handlebars::new();
@@ -171,6 +173,7 @@ pub fn l2_abi_to_move() -> anyhow::Result<()> {
 }
 
 pub fn generate_erc20_contracts() -> anyhow::Result<()> {
+    println!("Generating l2 erc20 contract wrappers");
     let mut handlebars = Handlebars::new();
     handlebars.register_template_file("erc20", BUILDER_ROOT.join("l2_erc20_template.hbs"))?;
     let tokens_dir = read_dir(crate::TOKEN_LIST_DIR.join("data"))?;

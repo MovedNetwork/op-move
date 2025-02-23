@@ -62,6 +62,8 @@ fn evm_call(
     let value = safely_pop_arg!(args, move_core_types::u256::U256);
     let transact_to = safely_pop_arg!(args, AccountAddress);
     let caller = safely_pop_arg!(args, AccountAddress);
+    dbg!(&caller);
+    dbg!(&caller.to_eth_address());
 
     evm_transact_inner(
         context,

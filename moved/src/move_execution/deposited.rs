@@ -35,10 +35,18 @@ const ETH_BRIDGE_FINALIZED: B256 = B256::new(hex!(
     "31b2166ff604fc5672ea5df08a78081d2bc6d746cadce880747f3643d819e83d"
 ));
 
+// Topic identifying the event
+// ERC20BridgeFinalized(address indexed localToken, address indexed remoteToken, address indexed from, address to, uint256 amount, bytes extraData)
+const ERC20_BRIDGE_FINALIZED: B256 = B256::new(hex!(
+    "d59c65b35445225835c83f50b6ede06a7be047d22e357073e250d9af537518cd"
+));
+
 pub(super) fn execute_deposited_transaction<S: MoveResolver<PartialVMError> + TableResolver>(
     input: DepositExecutionInput<S>,
 ) -> crate::Result<TransactionExecutionOutcome> {
+    eprintln!("in deposited");
     #[cfg(any(feature = "test-doubles", test))]
+    eprintln!("in deposited: tx data empty");
     if input.tx.data.is_empty() {
         return direct_mint(
             input.tx,
@@ -49,6 +57,7 @@ pub(super) fn execute_deposited_transaction<S: MoveResolver<PartialVMError> + Ta
         );
     }
 
+    eprintln!("in deposited: tx data yes");
     let move_vm = create_move_vm()?;
     let session_id = SessionId::new_from_deposited(
         input.tx,
@@ -143,6 +152,11 @@ fn get_mint_params(outcome: &EvmNativeOutcome) -> Option<MintParams> {
         .logs
         .iter()
         .find(|l| l.topics()[0] == ETH_BRIDGE_FINALIZED)?;
+    let erc_log = outcome
+        .logs
+        .iter()
+        .find(|l| l.topics()[0] == ETH_BRIDGE_FINALIZED)?;
+    dbg!(erc_log);
     // For the ETHBridgeFinalized log the topics are:
     // topics[0]: 0x31b2166ff604fc5672ea5df08a78081d2bc6d746cadce880747f3643d819e83d (fixed identifier)
     // topics[1]: from address (sender)

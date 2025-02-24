@@ -1,6 +1,6 @@
 use {
     alloy::{
-        contract::CallBuilder,
+        contract::{CallBuilder, EthCall},
         dyn_abi::EventExt,
         network::{EthereumWallet, TransactionBuilder},
         primitives::{address, utils::parse_ether, Address, B256, U256},
@@ -40,6 +40,18 @@ const TXN_RECEIPT_WAIT_IN_MILLIS: u64 = 100;
 
 mod heartbeat;
 mod withdrawal;
+
+alloy::sol!(
+    #[sol(rpc)]
+    ERC20,
+    "src/tests/res/erc20/gold_sol_Gold.abi"
+);
+
+alloy::sol!(
+    #[sol(rpc)]
+    L1StandardBridge,
+    "src/tests/res/erc20/L1StandardBridge.json"
+);
 
 #[tokio::test]
 async fn test_on_ethereum() -> Result<()> {
@@ -83,10 +95,13 @@ async fn test_on_ethereum() -> Result<()> {
     let (op_node, op_batcher, op_proposer) = run_op()?;
 
     // 10. Test out the OP bridge
-    use_optimism_bridge().await?;
+    // use_optimism_bridge().await?;
 
     // 11. Test out a simple Move contract
-    deploy_move_counter().await?;
+    // deploy_move_counter().await?;
+
+    deploy_erc20().await?;
+    // pause(None);
 
     // 12. Cleanup generated files and folders
     hb.shutdown().await;
@@ -250,6 +265,7 @@ fn generate_jwt() -> Result<()> {
 }
 
 async fn start_geth() -> Result<Child> {
+    let geth_logs = File::create("geth.log").unwrap();
     let geth_process = Command::new("geth")
         .current_dir("src/tests/optimism/")
         .args([
@@ -269,6 +285,7 @@ async fn start_geth() -> Result<Child> {
             "--http.api",
             "web3,debug,eth,txpool,net,engine",
         ])
+        .stderr(geth_logs)
         .spawn()?;
     // Give a second to settle geth
     pause(Some(Duration::from_secs(GETH_START_IN_SECS)));
@@ -436,7 +453,7 @@ async fn use_optimism_bridge() -> Result<()> {
     pause(Some(Duration::from_secs(OP_START_IN_SECS)));
 
     deposit_to_l2().await?;
-    withdrawal::withdraw_to_l1().await?;
+    // withdrawal::withdraw_to_l1().await?;
 
     Ok(())
 }
@@ -496,6 +513,101 @@ async fn deploy_move_counter() -> Result<()> {
         .unwrap();
     let receipt = pending_tx.get_receipt().await.unwrap();
     assert!(receipt.status(), "Transaction should succeed");
+
+    Ok(())
+}
+
+async fn deploy_erc20() -> Result<()> {
+    pause(Some(Duration::from_secs(OP_START_IN_SECS)));
+    let from_wallet = get_prefunded_wallet().await?;
+    let provider = ProviderBuilder::new()
+        .with_recommended_fillers()
+        .wallet(EthereumWallet::from(from_wallet.to_owned()))
+        .on_http(Url::parse(
+            &var("L1_RPC_URL").expect("Missing Ethereum L1 RPC URL"),
+        )?);
+
+    let bytecode_hex = std::fs::read_to_string("src/tests/res/erc20/gold_sol_Gold.bin").unwrap();
+    let bytecode = hex::decode(bytecode_hex.trim()).unwrap();
+
+    let call = CallBuilder::new_raw_deploy(&provider, bytecode.into());
+    let contract_address = call.deploy().await.unwrap();
+    let bridge_address = Address::from_str(&get_deployed_address("L1StandardBridgeProxy")?)?;
+
+    let bridge_contract = L1StandardBridge::new(bridge_address, &provider);
+    eprintln!(
+        "deployed code: {:?}",
+        &provider.get_code_at(contract_address).await.unwrap()
+    );
+    let contract = ERC20::new(contract_address, &provider);
+
+    let balance = contract.balanceOf(from_wallet.address()).call().await?._0;
+    eprintln!("balance of from wallet: {:?}", balance);
+
+    let send_amount = parse_ether("100")?;
+    let before_allowance = contract
+        .allowance(from_wallet.address(), bridge_address)
+        .call()
+        .await?
+        ._0;
+    eprintln!("allowance before increase: {:?}", before_allowance);
+    let approve_tx = contract.approve(bridge_address, send_amount).send().await?;
+    approve_tx.watch().await?;
+    let after_allowance = contract
+        .allowance(from_wallet.address(), bridge_address)
+        .call()
+        .await?
+        ._0;
+    eprintln!("allowance after increase: {:?}", after_allowance);
+
+    let bridge_tx = bridge_contract
+        .depositERC20(
+            contract_address,
+            contract_address,
+            send_amount,
+            21_000,
+            "".into(),
+        )
+        .send()
+        .await?;
+    eprintln!("return of deposit: {:?}", bridge_tx);
+    bridge_tx.watch().await?;
+    let balance = contract.balanceOf(from_wallet.address()).call().await?._0;
+    eprintln!("balance of from wallet after: {:?}", balance);
+    //
+    //
+    // let tx = CallBuilder::new_raw(&provider, )
+    // let data_bytecode =
+    //     "0x70a0823100000000000000000000000089d740330e773e42edf98bba1d8d1d6c545d78a6";
+    // CallBuilder::new_raw(&provider, data_bytecode.into());
+
+    // let tx = TransactionRequest::default()
+    //     .with_from(from)
+    //     .with_to(to)
+    //     .with_value(parse_ether(how_many_ethers)?);
+    // Assert that the code existts on l1
+    // assert_eq!(provider.get_code_at(contract_address))
+    // trigger l1 to l2 erc20 transport
+
+    // let input = TransactionData::EntryFunction(EntryFunction::new(
+    //     ModuleId::new(
+    //         contract_address.to_move_address(),
+    //         ident_str!("counter").into(),
+    //     ),
+    //     ident_str!("transfer").into(),
+    //     Vec::new(),
+    //     vec![
+    //         bcs::to_bytes(&MoveValue::Address(from_wallet.address().to_move_address())).unwrap(),
+    //         bcs::to_bytes(&MoveValue::U64(7)).unwrap(),
+    //     ],
+    // ));
+    // let pending_tx = CallBuilder::new_raw(&provider, bcs::to_bytes(&input).unwrap().into())
+    //     .to(contract_address)
+    //     .send()
+    //     .await
+    //     .unwrap();
+    // let receipt = pending_tx.get_receipt().await.unwrap();
+    // assert!(receipt.status(), "Transaction should succeed");
 
     Ok(())
 }

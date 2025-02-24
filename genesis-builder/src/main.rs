@@ -1,5 +1,5 @@
 use {
-    crate::generate::l2_abi_to_move,
+    crate::generate::{generate_erc20_contracts, l2_abi_to_move},
     aptos_framework::{BuildOptions, BuiltPackage, ReleaseBundle, ReleasePackage},
     move_package::{
         package_hooks::register_package_hooks, BuildConfig as MoveBuildConfig, LintFlag,
@@ -34,14 +34,20 @@ const SUI_REPO: &str = "https://github.com/MystenLabs/sui";
 const SUI_REPO_TAG: &str = "testnet-v1.28.3";
 const MOVE_TOML: &str = "Move.toml";
 
+const TOKEN_LIST_REPO: &str = "https://github.com/ethereum-optimism/ethereum-optimism.github.io";
+
 static TARGET_ROOT: Lazy<PathBuf> = Lazy::new(|| {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .expect("Workspace root directory should exist")
         .join("target")
 });
+
+static BUILDER_ROOT: Lazy<PathBuf> = Lazy::new(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")));
+
 static MOVED_FRAMEWORK_DIR: Lazy<PathBuf> =
     Lazy::new(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("framework"));
+
 static APTOS_DIR: Lazy<PathBuf> = Lazy::new(|| TARGET_ROOT.join("aptos-core"));
 static APTOS_FRAMEWORK_DIR: Lazy<PathBuf> =
     Lazy::new(|| APTOS_DIR.join("aptos-move").join("framework"));
@@ -55,6 +61,7 @@ static APTOS_PACKAGE_PATHS: Lazy<Vec<PathBuf>> = Lazy::new(|| {
         MOVED_FRAMEWORK_DIR.join("eth-token"),
         MOVED_FRAMEWORK_DIR.join("evm"),
         MOVED_FRAMEWORK_DIR.join("l2"),
+        MOVED_FRAMEWORK_DIR.join("erc20"),
     ]
 });
 static APTOS_ADDRESS_MAPPING: Lazy<BTreeMap<&str, &str>> = Lazy::new(|| {
@@ -67,6 +74,7 @@ static APTOS_ADDRESS_MAPPING: Lazy<BTreeMap<&str, &str>> = Lazy::new(|| {
         ("\"0xA550C18\"", "\"0x15\""),
     ])
 });
+
 static SUI_DIR: Lazy<PathBuf> = Lazy::new(|| TARGET_ROOT.join("sui"));
 static SUI_FRAMEWORK_DIR: Lazy<PathBuf> = Lazy::new(|| {
     SUI_DIR
@@ -81,6 +89,15 @@ static SUI_COIN_PATH: Lazy<PathBuf> = Lazy::new(|| {
         .join("coin.move")
 });
 
+static TOKEN_LIST_DIR: Lazy<PathBuf> = Lazy::new(|| TARGET_ROOT.join("superchain_token_list"));
+
+static OPTIMISM_BEDROCK_DIR: Lazy<PathBuf> = Lazy::new(|| {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("Workspace root directory should exist")
+        .join("server/src/tests/optimism/packages/contracts-bedrock/snapshots/abi/")
+});
+
 const fn small_object_id(value: u8) -> ObjectID {
     ObjectID::from_single_byte(value)
 }
@@ -90,6 +107,8 @@ fn main() -> anyhow::Result<()> {
     register_package_hooks(Box::new(SuiPackageHooks));
 
     clone_repos()?;
+
+    generate_erc20_contracts()?;
 
     fix_aptos_packages()?;
     l2_abi_to_move()?;
@@ -101,12 +120,15 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn clone_repos() -> anyhow::Result<()> {
-    // Always start with fresh copies of framework repos
+    // Always start with fresh copies of framework and token list repos
     if APTOS_DIR.try_exists()? {
         remove_dir_all(APTOS_DIR.as_path())?;
     }
     if SUI_DIR.try_exists()? {
         remove_dir_all(SUI_DIR.as_path())?;
+    }
+    if TOKEN_LIST_DIR.try_exists()? {
+        remove_dir_all(TOKEN_LIST_DIR.as_path())?;
     }
 
     // Clone the Aptos and Sui repos which contain the framework packages
@@ -117,6 +139,17 @@ fn clone_repos() -> anyhow::Result<()> {
     Command::new("git")
         .current_dir(TARGET_ROOT.as_path())
         .args(["clone", "--depth", "1", "-b", SUI_REPO_TAG, SUI_REPO])
+        .output()?;
+    // Clone the superchain ERC20 token list
+    Command::new("git")
+        .current_dir(TARGET_ROOT.as_path())
+        .args([
+            "clone",
+            "--depth",
+            "1",
+            TOKEN_LIST_REPO,
+            TOKEN_LIST_DIR.file_name().unwrap().to_str().unwrap(),
+        ])
         .output()?;
     Ok(())
 }

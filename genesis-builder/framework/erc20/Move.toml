@@ -1,0 +1,10 @@
+[package]
+name = "ERC20"
+version = "1.0.0"
+
+[addresses]
+aptos_framework = "0x1"
+ERC20 = "0x1"
+
+[dependencies]
+AptosFramework = { local = "../../../target/aptos-core/aptos-move/framework/aptos-framework/" }

@@ -1,12 +1,18 @@
 use {
-    crate::generic::{EncodableB256, SerdeJson},
+    crate::{
+        all::HeedDb,
+        generic::{EncodableB256, SerdeJson},
+    },
+    heed::RoTxn,
     moved_blockchain::receipt::{
         ExtendedReceipt, ReceiptQueries, ReceiptRepository, TransactionReceipt,
     },
     moved_shared::primitives::B256,
 };
 
-pub type Db = heed::Database<EncodableB256, EncodableReceipt>;
+pub type Key = EncodableB256;
+pub type Value = EncodableReceipt;
+pub type Db = heed::Database<Key, Value>;
 pub type EncodableReceipt = SerdeJson<ExtendedReceipt>;
 
 pub const DB: &str = "receipt";
@@ -21,10 +27,7 @@ impl ReceiptRepository for HeedReceiptRepository {
     fn contains(&self, env: &Self::Storage, transaction_hash: B256) -> Result<bool, Self::Err> {
         let transaction = env.read_txn()?;
 
-        let db: Db = env
-            .open_database(&transaction, Some(DB))?
-            .expect("Receipt database should exist");
-        let db = db.lazily_decode_data();
+        let db = env.receipt_database(&transaction)?.lazily_decode_data();
 
         let response = db.get(&transaction, &transaction_hash).map(|v| v.is_some());
 
@@ -40,9 +43,7 @@ impl ReceiptRepository for HeedReceiptRepository {
     ) -> Result<(), Self::Err> {
         let mut transaction = env.write_txn()?;
 
-        let db: Db = env
-            .open_database(&transaction, Some(DB))?
-            .expect("Receipt database should exist");
+        let db = env.receipt_database(&transaction)?;
 
         receipts.into_iter().try_for_each(|receipt| {
             db.put(&mut transaction, &receipt.transaction_hash, &receipt)
@@ -66,14 +67,26 @@ impl ReceiptQueries for HeedReceiptQueries {
     ) -> Result<Option<TransactionReceipt>, Self::Err> {
         let transaction = env.read_txn()?;
 
-        let db: Db = env
-            .open_database(&transaction, Some(DB))?
-            .expect("Receipt database should exist");
+        let db = env.receipt_database(&transaction)?;
 
         let response = db.get(&transaction, &transaction_hash);
 
         transaction.commit()?;
 
         Ok(response?.map(TransactionReceipt::from))
+    }
+}
+
+pub trait HeedReceiptExt {
+    fn receipt_database(&self, rtxn: &RoTxn) -> heed::Result<HeedDb<Key, Value>>;
+}
+
+impl HeedReceiptExt for heed::Env {
+    fn receipt_database(&self, rtxn: &RoTxn) -> heed::Result<HeedDb<Key, Value>> {
+        let db: Db = self
+            .open_database(rtxn, Some(DB))?
+            .expect("Receipt database should exist");
+
+        Ok(HeedDb(db))
     }
 }

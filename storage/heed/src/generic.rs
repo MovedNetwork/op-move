@@ -6,7 +6,7 @@ use {
     },
     moved_shared::primitives::B256,
     serde::{Deserialize, Serialize},
-    std::borrow::Cow,
+    std::{borrow::Cow, fmt::Debug},
 };
 
 #[derive(Debug)]

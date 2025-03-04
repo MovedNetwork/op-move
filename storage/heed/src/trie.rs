@@ -1,12 +1,20 @@
 use {
-    crate::generic::{EncodableB256, EncodableBytes, EncodableU64},
+    crate::{
+        all::HeedDb,
+        generic::{EncodableB256, EncodableBytes, EncodableU64},
+    },
     eth_trie::{EthTrie, TrieError, DB},
+    heed::RoTxn,
     moved_shared::primitives::B256,
     std::sync::Arc,
 };
 
-pub type Db = heed::Database<EncodableBytes, EncodableBytes>;
-pub type RootDb = heed::Database<EncodableU64, EncodableB256>;
+pub type Key = EncodableBytes;
+pub type Value = EncodableBytes;
+pub type Db = heed::Database<Key, Value>;
+pub type RootKey = EncodableU64;
+pub type RootValue = EncodableB256;
+pub type RootDb = heed::Database<RootKey, RootValue>;
 pub const DB: &str = "trie";
 pub const ROOT_DB: &str = "trie_root";
 pub const ROOT_KEY: u64 = 0u64;
@@ -23,10 +31,7 @@ impl<'db> HeedEthTrieDb<'db> {
     pub fn root(&self) -> Result<Option<B256>, heed::Error> {
         let transaction = self.env.read_txn()?;
 
-        let db: RootDb = self
-            .env
-            .open_database(&transaction, Some(ROOT_DB))?
-            .expect("Trie root database should exist");
+        let db = self.env.trie_root_database(&transaction)?;
 
         let root = db.get(&transaction, &ROOT_KEY)?;
 
@@ -38,10 +43,7 @@ impl<'db> HeedEthTrieDb<'db> {
     pub fn put_root(&self, root: B256) -> Result<(), heed::Error> {
         let mut transaction = self.env.write_txn()?;
 
-        let db: RootDb = self
-            .env
-            .open_database(&transaction, Some(ROOT_DB))?
-            .expect("Trie root database should exist");
+        let db = self.env.trie_root_database(&transaction)?;
 
         db.put(&mut transaction, &ROOT_KEY, &root)?;
 
@@ -55,10 +57,7 @@ impl<'db> DB for HeedEthTrieDb<'db> {
     fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         let transaction = self.env.read_txn()?;
 
-        let db: Db = self
-            .env
-            .open_database(&transaction, Some(DB))?
-            .expect("Trie root database should exist");
+        let db = self.env.trie_database(&transaction)?;
 
         let value = db.get(&transaction, key)?.map(<[u8]>::to_vec);
 
@@ -70,10 +69,7 @@ impl<'db> DB for HeedEthTrieDb<'db> {
     fn insert(&self, key: &[u8], value: Vec<u8>) -> Result<(), Self::Error> {
         let mut transaction = self.env.write_txn()?;
 
-        let db: Db = self
-            .env
-            .open_database(&transaction, Some(DB))?
-            .expect("Trie root database should exist");
+        let db = self.env.trie_database(&transaction)?;
 
         db.put(&mut transaction, key, value.as_slice())?;
 
@@ -115,5 +111,29 @@ pub trait FromOptRoot<D> {
 impl<D, T: TryFromOptRoot<D>> FromOptRoot<D> for T {
     fn from_opt_root(db: Arc<D>, root: Option<B256>) -> Self {
         Self::try_from_opt_root(db, root).expect("Root node should exist")
+    }
+}
+
+pub trait HeedTrieExt {
+    fn trie_database(&self, rtxn: &RoTxn) -> heed::Result<HeedDb<Key, Value>>;
+
+    fn trie_root_database(&self, rtxn: &RoTxn) -> heed::Result<HeedDb<RootKey, RootValue>>;
+}
+
+impl HeedTrieExt for heed::Env {
+    fn trie_database(&self, rtxn: &RoTxn) -> heed::Result<HeedDb<Key, Value>> {
+        let db: Db = self
+            .open_database(rtxn, Some(DB))?
+            .expect("Trie database should exist");
+
+        Ok(HeedDb(db))
+    }
+
+    fn trie_root_database(&self, rtxn: &RoTxn) -> heed::Result<HeedDb<RootKey, RootValue>> {
+        let db: RootDb = self
+            .open_database(rtxn, Some(ROOT_DB))?
+            .expect("Trie root database should exist");
+
+        Ok(HeedDb(db))
     }
 }

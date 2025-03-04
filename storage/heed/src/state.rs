@@ -1,9 +1,11 @@
 use {
     crate::{
+        all::HeedDb,
         generic::{EncodableB256, EncodableU64},
         trie::{FromOptRoot, HeedEthTrieDb},
     },
     eth_trie::{EthTrie, TrieError, DB},
+    heed::RoTxn,
     move_binary_format::errors::PartialVMError,
     move_core_types::{
         account_address::AccountAddress, effects::ChangeSet, resolver::MoveResolver,
@@ -22,8 +24,12 @@ use {
     std::sync::Arc,
 };
 
-pub type Db = heed::Database<EncodableU64, EncodableB256>;
-pub type HeightDb = heed::Database<EncodableU64, EncodableU64>;
+pub type Key = EncodableU64;
+pub type Value = EncodableB256;
+pub type Db = heed::Database<Key, Value>;
+pub type HeightKey = EncodableU64;
+pub type HeightValue = EncodableU64;
+pub type HeightDb = heed::Database<HeightKey, HeightValue>;
 
 pub const DB: &str = "state";
 pub const HEIGHT_DB: &str = "state_height";
@@ -113,17 +119,11 @@ impl<'db> HeedStateQueries<'db> {
         let height = self.height()?;
         let mut transaction = self.env.write_txn()?;
 
-        let db: Db = self
-            .env
-            .open_database(&transaction, Some(DB))?
-            .expect("State root database should exist");
+        let db = self.env.state_database(&transaction)?;
 
         db.put(&mut transaction, &height, &state_root)?;
 
-        let db: HeightDb = self
-            .env
-            .open_database(&transaction, Some(HEIGHT_DB))?
-            .expect("State height database should exist");
+        let db = self.env.state_height_database(&transaction)?;
 
         db.put(&mut transaction, &HEIGHT_KEY, &(height + 1))?;
 
@@ -133,10 +133,7 @@ impl<'db> HeedStateQueries<'db> {
     fn height(&self) -> Result<u64, heed::Error> {
         let transaction = self.env.read_txn()?;
 
-        let db: HeightDb = self
-            .env
-            .open_database(&transaction, Some(HEIGHT_DB))?
-            .expect("State height database should exist");
+        let db = self.env.state_height_database(&transaction)?;
 
         let height = db.get(&transaction, &HEIGHT_KEY);
 
@@ -148,10 +145,7 @@ impl<'db> HeedStateQueries<'db> {
     fn root_by_height(&self, height: u64) -> Result<Option<B256>, heed::Error> {
         let transaction = self.env.read_txn()?;
 
-        let db: Db = self
-            .env
-            .open_database(&transaction, Some(DB))?
-            .expect("State root database should exist");
+        let db = self.env.state_database(&transaction)?;
 
         let root = db.get(&transaction, &height);
 
@@ -217,5 +211,29 @@ impl<'db> StateQueries for HeedStateQueries<'db> {
         let resolver = self.resolver(db, height).ok()?;
 
         proof_from_trie_and_resolver(address, storage_slots, &mut tree, &resolver)
+    }
+}
+
+pub trait HeedStateExt {
+    fn state_database(&self, rtxn: &RoTxn) -> heed::Result<HeedDb<Key, Value>>;
+
+    fn state_height_database(&self, rtxn: &RoTxn) -> heed::Result<HeedDb<HeightKey, HeightValue>>;
+}
+
+impl HeedStateExt for heed::Env {
+    fn state_database(&self, rtxn: &RoTxn) -> heed::Result<HeedDb<Key, Value>> {
+        let db: Db = self
+            .open_database(rtxn, Some(DB))?
+            .expect("State root database should exist");
+
+        Ok(HeedDb(db))
+    }
+
+    fn state_height_database(&self, rtxn: &RoTxn) -> heed::Result<HeedDb<HeightKey, HeightValue>> {
+        let db: HeightDb = self
+            .open_database(rtxn, Some(HEIGHT_DB))?
+            .expect("State height database should exist");
+
+        Ok(HeedDb(db))
     }
 }

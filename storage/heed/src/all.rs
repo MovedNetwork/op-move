@@ -1,4 +1,7 @@
-use crate::{block, payload, receipt, state, transaction, trie};
+use {
+    crate::{block, payload, receipt, state, transaction, trie},
+    heed::{types::LazyDecode, BytesDecode, BytesEncode, RoTxn, RwTxn},
+};
 
 pub const DATABASES: [&str; 9] = [
     block::DB,
@@ -11,6 +14,40 @@ pub const DATABASES: [&str; 9] = [
     receipt::DB,
     payload::DB,
 ];
+
+#[derive(Debug)]
+pub struct HeedDb<KC, DC>(pub heed::Database<KC, DC>);
+
+impl<KC, DC> HeedDb<KC, DC> {
+    pub fn put<'a>(
+        &self,
+        txn: &mut RwTxn,
+        key: &'a KC::EItem,
+        data: &'a DC::EItem,
+    ) -> heed::Result<()>
+    where
+        KC: BytesEncode<'a>,
+        DC: BytesEncode<'a>,
+    {
+        self.0.put(txn, key, data)
+    }
+
+    pub fn get<'a, 'txn>(
+        &self,
+        txn: &'txn RoTxn,
+        key: &'a KC::EItem,
+    ) -> heed::Result<Option<DC::DItem>>
+    where
+        KC: BytesEncode<'a>,
+        DC: BytesDecode<'txn>,
+    {
+        self.0.get(txn, key)
+    }
+
+    pub fn lazily_decode_data(&self) -> HeedDb<KC, LazyDecode<DC>> {
+        HeedDb(self.0.lazily_decode_data())
+    }
+}
 
 #[cfg(test)]
 mod tests {

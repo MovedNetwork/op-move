@@ -4,7 +4,10 @@ use {
         type_utils::{account_info_struct_tag, code_hash_struct_tag, get_account_code_hash},
         CODE_LAYOUT, EVM_NATIVE_ADDRESS,
     },
-    crate::{storage::StorageTrieRepository, trie_types},
+    crate::{
+        storage::{self, StorageTrieRepository},
+        trie_types,
+    },
     move_binary_format::errors::PartialVMError,
     move_core_types::{
         effects::{AccountChangeSet, ChangeSet, Op},
@@ -19,11 +22,14 @@ use {
     },
 };
 
-pub fn genesis_state_changes(
+pub fn genesis_state_changes<'a, T: StorageTrieRepository<'a>>(
     genesis: alloy::genesis::Genesis,
     resolver: &impl MoveResolver<PartialVMError>,
-    storage_trie: &impl StorageTrieRepository,
-) -> ChangeSet {
+    storage_trie: &T,
+) -> ChangeSet
+where
+    storage::Error: From<<T as StorageTrieRepository<'a>>::Err>,
+{
     let mut result = ChangeSet::new();
     let empty_changes = AccountChangeSet::new();
     let mut account_changes = AccountChangeSet::new();
@@ -76,10 +82,13 @@ pub fn genesis_state_changes(
     result
 }
 
-pub fn extract_evm_changes(
+pub fn extract_evm_changes<'a, T: StorageTrieRepository<'a>>(
     extensions: &NativeContextExtensions,
-    storage_trie: &impl StorageTrieRepository,
-) -> ChangeSet {
+    storage_trie: &T,
+) -> ChangeSet
+where
+    storage::Error: From<<T as StorageTrieRepository<'a>>::Err>,
+{
     let evm_native_ctx = extensions.get::<NativeEVMContext>();
     let mut result = ChangeSet::new();
     let mut account_changes = AccountChangeSet::new();
@@ -110,14 +119,16 @@ pub fn extract_evm_changes(
     result
 }
 
-fn add_account_changes(
+fn add_account_changes<'a, T: StorageTrieRepository<'a>>(
     address: &Address,
     account: &Account,
     resolver: &dyn MoveResolver<PartialVMError>,
     prior_changes: &AccountChangeSet,
     result: &mut AccountChangeSet,
-    storage_trie: &impl StorageTrieRepository,
-) {
+    storage_trie: &T,
+) where
+    storage::Error: From<<T as StorageTrieRepository<'a>>::Err>,
+{
     debug_assert!(
         account.is_touched(),
         "Untouched accounts are filtered out before calling this function."

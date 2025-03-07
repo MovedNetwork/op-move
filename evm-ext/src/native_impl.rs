@@ -117,6 +117,7 @@ fn evm_transact_inner(
         &evm_native_ctx.storage_trie,
         evm_native_ctx.resolver,
     ));
+    // todo: storage trie repository factory?
     let mut evm = Evm::builder()
         .with_db(&mut db)
         .with_tx_env(TxEnv {

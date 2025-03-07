@@ -4,7 +4,7 @@ use {
         type_utils::{account_info_struct_tag, code_hash_struct_tag},
         CODE_LAYOUT, EVM_NATIVE_ADDRESS,
     },
-    crate::storage::StorageTrieRepository,
+    crate::{storage, storage::StorageTrieRepository},
     alloy::primitives::map::HashMap,
     aptos_types::vm_status::StatusCode,
     better_any::{Tid, TidAble},
@@ -56,16 +56,20 @@ impl<'a> NativeEVMContext<'a> {
     }
 }
 
-pub struct ResolverBackedDB<'a> {
-    storage_trie: &'a dyn StorageTrieRepository<Err = PartialVMError>,
+pub struct ResolverBackedDB<'a, T: StorageTrieRepository<'a, Err = PartialVMError>>
+where
+    storage::Error: From<<T as StorageTrieRepository<'a>>::Err>,
+{
+    storage_trie: &'a T,
     resolver: &'a dyn MoveResolver<PartialVMError>,
 }
 
-impl<'a> ResolverBackedDB<'a> {
-    pub fn new(
-        storage_trie: &'a impl StorageTrieRepository<Err = PartialVMError>,
-        resolver: &'a dyn MoveResolver<PartialVMError>,
-    ) -> Self {
+impl<'a, T> ResolverBackedDB<'a, T>
+where
+    storage::Error: From<<T as StorageTrieRepository<'a>>::Err>,
+    T: StorageTrieRepository<'a, Err = PartialVMError>,
+{
+    pub fn new(storage_trie: &'a T, resolver: &'a dyn MoveResolver<PartialVMError>) -> Self {
         Self {
             storage_trie,
             resolver,

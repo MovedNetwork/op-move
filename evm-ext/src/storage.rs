@@ -1,8 +1,8 @@
 use {
     alloy::{primitives::keccak256, rlp},
-    eth_trie::{EthTrie, Trie, TrieError, DB},
+    eth_trie::{EthTrie, MemDBError, MemoryDB, Trie, TrieError, DB},
     moved_shared::primitives::{Address, B256, U256},
-    std::{error, fmt::Debug, result},
+    std::{collections::HashMap, convert::Infallible, error, fmt::Debug, result, sync::Arc},
     thiserror::Error,
 };
 
@@ -17,40 +17,70 @@ pub enum Error {
     Rlp(#[from] rlp::Error),
 }
 
-pub struct StorageTrie<E: error::Error>(pub EthTrie<BoxedTrieDb<E>>);
-
-#[auto_impl::auto_impl(Box)]
-pub trait StorageTrieRepository {
-    type Err: error::Error;
-
-    fn for_account(&self, account: &Address) -> StorageTrie<Self::Err>;
-
-    fn by_root(&self, storage_root: &B256) -> StorageTrie<Self::Err>;
+impl From<MemDBError> for Error {
+    fn from(value: MemDBError) -> Self {
+        Self::EthTrie(TrieError::DB(value.to_string()))
+    }
 }
 
-pub struct BoxedTrieDb<T>(pub Box<dyn DB<Error = T>>);
+pub struct StorageTrie<'a, E: error::Error>(pub EthTrie<BoxedTrieDb<'a, E>>)
+where
+    Error: From<E>;
 
-impl<T: error::Error> DB for BoxedTrieDb<T> {
-    type Error = T;
+pub trait StorageTrieRepository<'a>
+where
+    Error: From<<Self as StorageTrieRepository<'a>>::Err>,
+{
+    type Err: error::Error;
+
+    fn for_account(&self, account: &Address) -> StorageTrie<'a, Self::Err>;
+
+    fn by_root(&self, storage_root: &B256) -> StorageTrie<'a, Self::Err>;
+}
+
+pub struct BoxedTrieDb<'a, T>(pub Box<dyn DB<Error = T> + 'a>);
+
+impl<'a, E: error::Error> BoxedTrieDb<'a, E> {
+    pub fn new(db: impl DB<Error = E> + 'a) -> Self {
+        Self(Box::new(db))
+    }
+}
+
+impl<'a, T: error::Error> DB for BoxedTrieDb<'a, T>
+where
+    Error: From<T>,
+{
+    type Error = Error;
 
     fn get(&self, key: &[u8]) -> result::Result<Option<Vec<u8>>, Self::Error> {
-        self.0.get(key)
+        Ok(self.0.get(key)?)
     }
 
     fn insert(&self, key: &[u8], value: Vec<u8>) -> result::Result<(), Self::Error> {
-        self.0.insert(key, value)
+        Ok(self.0.insert(key, value)?)
     }
 
     fn remove(&self, key: &[u8]) -> result::Result<(), Self::Error> {
-        self.0.remove(key)
+        Ok(self.0.remove(key)?)
     }
 
     fn flush(&self) -> result::Result<(), Self::Error> {
-        self.0.flush()
+        Ok(self.0.flush()?)
     }
 }
 
-impl<E: error::Error> StorageTrie<E> {
+impl<'a, E: error::Error> StorageTrie<'a, E>
+where
+    Error: From<E>,
+{
+    pub fn new(db: Arc<BoxedTrieDb<'a, E>>) -> Self {
+        Self(EthTrie::new(db))
+    }
+
+    pub fn from(db: Arc<BoxedTrieDb<'a, E>>, root: B256) -> result::Result<Self, TrieError> {
+        Ok(Self(EthTrie::from(db, root)?))
+    }
+
     pub fn root_hash(&mut self) -> Result<B256> {
         Ok(self.0.root_hash()?)
     }
@@ -79,5 +109,42 @@ impl<E: error::Error> StorageTrie<E> {
         }
 
         Ok(())
+    }
+}
+
+pub struct InMemoryStorageTrieRepository<'a> {
+    accounts: HashMap<Address, B256>,
+    storages: HashMap<B256, Arc<BoxedTrieDb<'a, MemDBError>>>,
+}
+
+impl<'a> StorageTrieRepository<'a> for InMemoryStorageTrieRepository<'a> {
+    type Err = MemDBError;
+
+    fn for_account(&self, account: &Address) -> StorageTrie<'a, Self::Err> {
+        if let Some((db, storage_root)) = self
+            .accounts
+            .get(account)
+            .and_then(|index| self.storages.get(index).cloned().map(|v| (v, *index)))
+        {
+            StorageTrie::from(db, storage_root).unwrap()
+        } else {
+            StorageTrie::new(Arc::new(BoxedTrieDb::new(MemoryDB::new(false))))
+        }
+    }
+
+    fn by_root(&self, _storage_root: &B256) -> StorageTrie<'a, Self::Err> {
+        unimplemented!()
+    }
+}
+
+impl<'a> InMemoryStorageTrieRepository<'a> {
+    pub fn apply(&mut self, account: Address, storage_root: B256) {
+        if let Some(root) = self.accounts.get_mut(&account) {
+            if let Some(storage) = self.storages.get(root) {
+                self.storages.insert(storage_root, storage.clone());
+            }
+            self.storages.remove(root);
+            *root = storage_root;
+        }
     }
 }

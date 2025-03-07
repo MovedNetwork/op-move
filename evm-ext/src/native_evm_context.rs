@@ -35,7 +35,7 @@ pub struct HeaderForExecution {
 #[derive(Tid)]
 pub struct NativeEVMContext<'a> {
     pub resolver: &'a dyn MoveResolver<PartialVMError>,
-    pub storage_trie: Box<dyn StorageTrieRepository<Err = PartialVMError>>,
+    pub storage_trie: Box<dyn StorageTrieRepository>,
     // pub storage_trie: &'a dyn StorageTrieRepository<Storage = D>,
     pub state_changes: Vec<HashMap<Address, Account>>,
     pub block_header: HeaderForExecution,
@@ -44,7 +44,7 @@ pub struct NativeEVMContext<'a> {
 impl<'a> NativeEVMContext<'a> {
     pub fn new(
         state: &'a impl MoveResolver<PartialVMError>,
-        storage_trie: Box<dyn StorageTrieRepository<Err = PartialVMError>>,
+        storage_trie: Box<dyn StorageTrieRepository>,
         block_header: HeaderForExecution,
     ) -> Self {
         Self {
@@ -56,20 +56,16 @@ impl<'a> NativeEVMContext<'a> {
     }
 }
 
-pub struct ResolverBackedDB<'a, T: StorageTrieRepository<'a, Err = PartialVMError>>
-where
-    storage::Error: From<<T as StorageTrieRepository<'a>>::Err>,
-{
-    storage_trie: &'a T,
+pub struct ResolverBackedDB<'a> {
+    storage_trie: &'a dyn StorageTrieRepository,
     resolver: &'a dyn MoveResolver<PartialVMError>,
 }
 
-impl<'a, T> ResolverBackedDB<'a, T>
-where
-    storage::Error: From<<T as StorageTrieRepository<'a>>::Err>,
-    T: StorageTrieRepository<'a, Err = PartialVMError>,
-{
-    pub fn new(storage_trie: &'a T, resolver: &'a dyn MoveResolver<PartialVMError>) -> Self {
+impl<'a> ResolverBackedDB<'a> {
+    pub fn new(
+        storage_trie: &'a impl StorageTrieRepository,
+        resolver: &'a dyn MoveResolver<PartialVMError>,
+    ) -> Self {
         Self {
             storage_trie,
             resolver,

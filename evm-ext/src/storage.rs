@@ -1,5 +1,6 @@
 use {
     alloy::{primitives::keccak256, rlp},
+    auto_impl::auto_impl,
     eth_trie::{EthTrie, MemDBError, MemoryDB, Trie, TrieError, DB},
     moved_shared::primitives::{Address, B256, U256},
     std::{collections::HashMap, convert::Infallible, error, fmt::Debug, result, sync::Arc},
@@ -23,33 +24,24 @@ impl From<MemDBError> for Error {
     }
 }
 
-pub struct StorageTrie<'a, E: error::Error>(pub EthTrie<BoxedTrieDb<'a, E>>)
-where
-    Error: From<E>;
+pub struct StorageTrie(pub EthTrie<BoxedTrieDb>);
 
-pub trait StorageTrieRepository<'a>
-where
-    Error: From<<Self as StorageTrieRepository<'a>>::Err>,
-{
-    type Err: error::Error;
+#[auto_impl(Box)]
+pub trait StorageTrieRepository {
+    fn for_account(&self, account: &Address) -> StorageTrie;
 
-    fn for_account(&self, account: &Address) -> StorageTrie<'a, Self::Err>;
-
-    fn by_root(&self, storage_root: &B256) -> StorageTrie<'a, Self::Err>;
+    fn by_root(&self, storage_root: &B256) -> StorageTrie;
 }
 
-pub struct BoxedTrieDb<'a, T>(pub Box<dyn DB<Error = T> + 'a>);
+pub struct BoxedTrieDb(pub Box<dyn DB<Error = Error>>);
 
-impl<'a, E: error::Error> BoxedTrieDb<'a, E> {
-    pub fn new(db: impl DB<Error = E> + 'a) -> Self {
+impl BoxedTrieDb {
+    pub fn new(db: impl DB<Error = Error> + 'static) -> Self {
         Self(Box::new(db))
     }
 }
 
-impl<'a, T: error::Error> DB for BoxedTrieDb<'a, T>
-where
-    Error: From<T>,
-{
+impl DB for BoxedTrieDb {
     type Error = Error;
 
     fn get(&self, key: &[u8]) -> result::Result<Option<Vec<u8>>, Self::Error> {
@@ -69,15 +61,12 @@ where
     }
 }
 
-impl<'a, E: error::Error> StorageTrie<'a, E>
-where
-    Error: From<E>,
-{
-    pub fn new(db: Arc<BoxedTrieDb<'a, E>>) -> Self {
+impl StorageTrie {
+    pub fn new(db: Arc<BoxedTrieDb>) -> Self {
         Self(EthTrie::new(db))
     }
 
-    pub fn from(db: Arc<BoxedTrieDb<'a, E>>, root: B256) -> result::Result<Self, TrieError> {
+    pub fn from(db: Arc<BoxedTrieDb>, root: B256) -> result::Result<Self, TrieError> {
         Ok(Self(EthTrie::from(db, root)?))
     }
 
@@ -112,15 +101,13 @@ where
     }
 }
 
-pub struct InMemoryStorageTrieRepository<'a> {
+pub struct InMemoryStorageTrieRepository {
     accounts: HashMap<Address, B256>,
-    storages: HashMap<B256, Arc<BoxedTrieDb<'a, MemDBError>>>,
+    storages: HashMap<B256, Arc<BoxedTrieDb>>,
 }
 
-impl<'a> StorageTrieRepository<'a> for InMemoryStorageTrieRepository<'a> {
-    type Err = MemDBError;
-
-    fn for_account(&self, account: &Address) -> StorageTrie<'a, Self::Err> {
+impl StorageTrieRepository for InMemoryStorageTrieRepository {
+    fn for_account(&self, account: &Address) -> StorageTrie {
         if let Some((db, storage_root)) = self
             .accounts
             .get(account)
@@ -128,16 +115,18 @@ impl<'a> StorageTrieRepository<'a> for InMemoryStorageTrieRepository<'a> {
         {
             StorageTrie::from(db, storage_root).unwrap()
         } else {
-            StorageTrie::new(Arc::new(BoxedTrieDb::new(MemoryDB::new(false))))
+            StorageTrie::new(Arc::new(BoxedTrieDb::new(KokotWrapper(MemoryDB::new(
+                false,
+            )))))
         }
     }
 
-    fn by_root(&self, _storage_root: &B256) -> StorageTrie<'a, Self::Err> {
+    fn by_root(&self, _storage_root: &B256) -> StorageTrie {
         unimplemented!()
     }
 }
 
-impl<'a> InMemoryStorageTrieRepository<'a> {
+impl InMemoryStorageTrieRepository {
     pub fn apply(&mut self, account: Address, storage_root: B256) {
         if let Some(root) = self.accounts.get_mut(&account) {
             if let Some(storage) = self.storages.get(root) {
@@ -146,5 +135,30 @@ impl<'a> InMemoryStorageTrieRepository<'a> {
             self.storages.remove(root);
             *root = storage_root;
         }
+    }
+}
+
+pub struct KokotWrapper<T>(T);
+
+impl<E, T: DB<Error = E>> DB for KokotWrapper<T>
+where
+    Error: From<E>,
+{
+    type Error = Error;
+
+    fn get(&self, key: &[u8]) -> result::Result<Option<Vec<u8>>, Self::Error> {
+        Ok(self.0.get(key)?)
+    }
+
+    fn insert(&self, key: &[u8], value: Vec<u8>) -> result::Result<(), Self::Error> {
+        Ok(self.0.insert(key, value)?)
+    }
+
+    fn remove(&self, key: &[u8]) -> result::Result<(), Self::Error> {
+        Ok(self.0.remove(key)?)
+    }
+
+    fn flush(&self) -> result::Result<(), Self::Error> {
+        Ok(self.0.flush()?)
     }
 }

@@ -22,14 +22,11 @@ use {
     },
 };
 
-pub fn genesis_state_changes<'a, T: StorageTrieRepository<'a>>(
+pub fn genesis_state_changes<'a, T: StorageTrieRepository>(
     genesis: alloy::genesis::Genesis,
     resolver: &impl MoveResolver<PartialVMError>,
     storage_trie: &T,
-) -> ChangeSet
-where
-    storage::Error: From<<T as StorageTrieRepository<'a>>::Err>,
-{
+) -> ChangeSet {
     let mut result = ChangeSet::new();
     let empty_changes = AccountChangeSet::new();
     let mut account_changes = AccountChangeSet::new();
@@ -82,13 +79,10 @@ where
     result
 }
 
-pub fn extract_evm_changes<'a, T: StorageTrieRepository<'a>>(
+pub fn extract_evm_changes<'a, T: StorageTrieRepository>(
     extensions: &NativeContextExtensions,
     storage_trie: &T,
-) -> ChangeSet
-where
-    storage::Error: From<<T as StorageTrieRepository<'a>>::Err>,
-{
+) -> ChangeSet {
     let evm_native_ctx = extensions.get::<NativeEVMContext>();
     let mut result = ChangeSet::new();
     let mut account_changes = AccountChangeSet::new();
@@ -119,16 +113,14 @@ where
     result
 }
 
-fn add_account_changes<'a, T: StorageTrieRepository<'a>>(
+fn add_account_changes<'a, T: StorageTrieRepository>(
     address: &Address,
     account: &Account,
     resolver: &dyn MoveResolver<PartialVMError>,
     prior_changes: &AccountChangeSet,
     result: &mut AccountChangeSet,
     storage_trie: &T,
-) where
-    storage::Error: From<<T as StorageTrieRepository<'a>>::Err>,
-{
+) {
     debug_assert!(
         account.is_touched(),
         "Untouched accounts are filtered out before calling this function."

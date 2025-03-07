@@ -118,7 +118,7 @@ pub fn validate_entry_value(
                 // Signer must be the expected signer (you cannot forge the
                 // signature of another address).
                 if given_signer != expected_signer {
-                    Err(InvalidTransactionCause::InvalidSigner)?;
+                    Err(InvalidTransactionCause::InvalidSigner)?.backtrace();
                 }
             }
             (TypeTag::Vector(inner_tag), MoveValue::Vector(array)) => {

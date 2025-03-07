@@ -1,12 +1,14 @@
 use {
     super::{
         trie_types,
-        type_utils::{account_info_struct_tag, account_storage_struct_tag, code_hash_struct_tag},
+        type_utils::{account_info_struct_tag, code_hash_struct_tag},
         CODE_LAYOUT, EVM_NATIVE_ADDRESS,
     },
+    crate::storage::StorageTrieRepository,
     alloy::primitives::map::HashMap,
     aptos_types::vm_status::StatusCode,
     better_any::{Tid, TidAble},
+    eth_trie::DB,
     move_binary_format::errors::PartialVMError,
     move_core_types::{account_address::AccountAddress, resolver::MoveResolver},
     move_vm_types::values::{VMValueCast, Value},
@@ -16,7 +18,7 @@ use {
             utilities::KECCAK_EMPTY, Account, AccountInfo, Address, Bytecode, B256, U256,
         },
     },
-    std::sync::RwLock,
+    std::{error::Error, sync::RwLock},
 };
 
 pub const FRAMEWORK_ADDRESS: AccountAddress = AccountAddress::ONE;
@@ -33,7 +35,8 @@ pub struct HeaderForExecution {
 #[derive(Tid)]
 pub struct NativeEVMContext<'a> {
     pub resolver: &'a dyn MoveResolver<PartialVMError>,
-    pub db: CacheDB<ResolverBackedDB<'a>>,
+    pub storage_trie: Box<dyn StorageTrieRepository<Err = PartialVMError>>,
+    // pub storage_trie: &'a dyn StorageTrieRepository<Storage = D>,
     pub state_changes: Vec<HashMap<Address, Account>>,
     pub block_header: HeaderForExecution,
 }
@@ -41,13 +44,12 @@ pub struct NativeEVMContext<'a> {
 impl<'a> NativeEVMContext<'a> {
     pub fn new(
         state: &'a impl MoveResolver<PartialVMError>,
+        storage_trie: Box<dyn StorageTrieRepository<Err = PartialVMError>>,
         block_header: HeaderForExecution,
     ) -> Self {
-        let inner_db = ResolverBackedDB::new(state);
-        let db = CacheDB::new(inner_db);
         Self {
             resolver: state,
-            db,
+            storage_trie,
             state_changes: Vec::new(),
             block_header,
         }
@@ -55,49 +57,18 @@ impl<'a> NativeEVMContext<'a> {
 }
 
 pub struct ResolverBackedDB<'a> {
+    storage_trie: &'a dyn StorageTrieRepository<Err = PartialVMError>,
     resolver: &'a dyn MoveResolver<PartialVMError>,
-    // This cache is used because each EVM account has a single resource for all
-    // its storage slots and therefore may be a large amount of data that takes
-    // a non-trivial amount of time to deserialize. By caching the storage representation
-    // in memory we only have to do the deserialization once per transaction. This
-    // optimization is likely helpful because it is common to access more than one
-    // storage slot for an EVM smart contract even in a single transaction. In the
-    // future if we choose to split storage across multiple resources to limit the
-    // size of a single resource, a cache will still be useful since reconstructing
-    // the storage from all the resource pieces will also be non-trivial.
-    //
-    // The cache must be wrapped in a type that allows interior mutability
-    // because the `DatabaseRef` interface uses immutable references. Since this
-    // cache is only used for a single transaction execution it is unlikely that
-    // it will ever need to multi-threaded access, so a thread-unsafe type like
-    // `RefCell` would be sufficient. But at the same time, I don't think the overhead
-    // of `RwLock` is that large, so I think it is ok to use.
-    storage_cache: RwLock<HashMap<Address, trie_types::AccountStorage>>,
 }
 
 impl<'a> ResolverBackedDB<'a> {
-    pub fn new(resolver: &'a impl MoveResolver<PartialVMError>) -> Self {
+    pub fn new(
+        storage_trie: &'a impl StorageTrieRepository<Err = PartialVMError>,
+        resolver: &'a dyn MoveResolver<PartialVMError>,
+    ) -> Self {
         Self {
+            storage_trie,
             resolver,
-            storage_cache: RwLock::new(HashMap::default()),
-        }
-    }
-
-    pub fn storage_for(
-        &self,
-        address: &Address,
-    ) -> Result<trie_types::AccountStorage, PartialVMError> {
-        let struct_tag = account_storage_struct_tag(address);
-        match self
-            .resolver
-            .get_resource(&EVM_NATIVE_ADDRESS, &struct_tag)?
-        {
-            Some(bytes) => {
-                let storage = trie_types::AccountStorage::try_deserialize(&bytes)
-                    .expect("EVM account storage must deserialize correctly");
-                Ok(storage)
-            }
-            None => Ok(trie_types::AccountStorage::default()),
         }
     }
 
@@ -148,19 +119,9 @@ impl<'a> DatabaseRef for ResolverBackedDB<'a> {
     }
 
     fn storage_ref(&self, address: Address, index: U256) -> Result<U256, Self::Error> {
-        let mut cache_lock = self
-            .storage_cache
-            .write()
-            .expect("ResolverBackedDB::storage_cache not poisoned");
-
-        if let Some(storage) = cache_lock.get(&address) {
-            return Ok(storage.get(index));
-        }
-
-        let storage = self.storage_for(&address)?;
-        let value = storage.get(index);
-        cache_lock.insert(address, storage);
-        Ok(value)
+        let storage = self.storage_trie.for_account(&address);
+        let value = storage.get(&index).unwrap();
+        Ok(value.unwrap_or_default())
     }
 
     fn block_hash_ref(&self, _number: u64) -> Result<B256, Self::Error> {

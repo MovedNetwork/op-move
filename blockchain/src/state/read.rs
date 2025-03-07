@@ -16,7 +16,7 @@ use {
         vm_status::StatusCode,
     },
     move_table_extension::{TableHandle, TableResolver},
-    moved_evm_ext::ResolverBackedDB,
+    moved_evm_ext::{storage::StorageTrieRepository, ResolverBackedDB},
     moved_execution::{
         quick_get_eth_balance, quick_get_nonce,
         transaction::{L2_HIGHEST_ADDRESS, L2_LOWEST_ADDRESS},
@@ -141,8 +141,9 @@ pub fn proof_from_trie_and_resolver(
     storage_slots: &[U256],
     tree: &mut EthTrie<impl DB>,
     resolver: &impl MoveResolver<PartialVMError>,
+    storage_trie: &impl StorageTrieRepository,
 ) -> Option<ProofResponse> {
-    let evm_db = ResolverBackedDB::new(resolver);
+    let evm_db = ResolverBackedDB::new(resolver, storage_trie);
 
     // All L2 contract account data is part of the EVM state
     let account_info = evm_db.get_account(&address).ok()??;
@@ -158,23 +159,24 @@ pub fn proof_from_trie_and_resolver(
     let storage_proof = if storage_slots.is_empty() {
         Vec::new()
     } else {
-        let mut storage = evm_db.storage_for(&address).ok()?;
+        let mut storage = storage_trie.for_account(&address);
 
         storage_slots
             .iter()
-            .filter_map(|&index| {
+            .filter_map(|index| {
                 let key = keccak256::<[u8; 32]>(index.to_be_bytes());
-                storage.trie.get_proof(key.as_slice()).ok().map(|proof| {
-                    let value = storage.get(index);
+                storage.proof(key.as_slice()).ok().map(|proof| {
+                    let value = storage.get(index)?.unwrap_or_default();
 
-                    StorageProof {
+                    Ok(StorageProof {
                         key: index.into(),
                         value,
                         proof: proof.into_iter().map(Into::into).collect(),
-                    }
+                    })
                 })
             })
-            .collect()
+            .collect::<Result<_, _>>()
+            .unwrap()
     };
 
     Some(ProofResponse {

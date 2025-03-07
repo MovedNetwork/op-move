@@ -35,17 +35,6 @@ pub fn code_hash_struct_tag(code_hash: &B256) -> StructTag {
     }
 }
 
-pub fn account_storage_struct_tag(address: &Address) -> StructTag {
-    let name = format!("{ACCOUNT_STORAGE_PREFIX}{}", address.encode_hex());
-    let name = Identifier::new(name).expect("Account storage name is valid");
-    StructTag {
-        address: EVM_NATIVE_ADDRESS,
-        module: EVM_NATIVE_MODULE.into(),
-        name,
-        type_args: Vec::new(),
-    }
-}
-
 pub fn get_account_code_hash(info: &AccountInfo) -> B256 {
     if let Some(code) = &info.code {
         if code.is_empty() {

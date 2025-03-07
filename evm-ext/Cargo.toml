@@ -9,6 +9,8 @@ default = []
 test-doubles = []
 
 [dependencies]
+anyhow.workspace = true
+auto_impl = "1.2.1"
 alloy.workspace = true
 aptos-gas-algebra.workspace = true
 aptos-native-interface.workspace = true
@@ -23,3 +25,4 @@ move-vm-types.workspace = true
 moved-shared.workspace = true
 revm.workspace = true
 smallvec.workspace = true
+thiserror.workspace = true

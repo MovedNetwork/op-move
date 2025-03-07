@@ -22,6 +22,7 @@ mod solidity_abi;
 mod state_changes;
 pub mod trie_types;
 pub mod type_utils;
+pub mod storage;
 
 /// Address where the EVM native is stored
 pub const EVM_NATIVE_ADDRESS: AccountAddress = AccountAddress::ONE;

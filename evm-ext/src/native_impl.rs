@@ -5,18 +5,21 @@ use {
         type_utils::evm_result_to_move_value,
         EVM_NATIVE_ADDRESS, EVM_NATIVE_MODULE,
     },
+    crate::ResolverBackedDB,
     aptos_gas_algebra::{GasExpression, GasQuantity, InternalGasUnit},
     aptos_native_interface::{
         safely_pop_arg, SafeNativeBuilder, SafeNativeContext, SafeNativeError, SafeNativeResult,
     },
     aptos_types::vm_status::StatusCode,
+    better_any::TidAble,
+    eth_trie::DB,
     move_binary_format::errors::PartialVMError,
     move_core_types::{account_address::AccountAddress, ident_str, identifier::IdentStr},
     move_vm_runtime::native_functions::NativeFunctionTable,
     move_vm_types::{loaded_data::runtime_types::Type, values::Value},
     moved_shared::primitives::{ToEthAddress, ToU256},
     revm::{
-        db::DatabaseCommit,
+        db::{CacheDB, DatabaseCommit},
         primitives::{Address, BlobExcessGasAndPrice, BlockEnv, EVMError, TxEnv, TxKind, U256},
         Evm,
     },
@@ -26,7 +29,10 @@ use {
 
 pub const EVM_CALL_FN_NAME: &IdentStr = ident_str!("system_evm_call");
 
-pub fn append_evm_natives(natives: &mut NativeFunctionTable, builder: &SafeNativeBuilder) {
+pub fn append_evm_natives<'a, D: DB + TidAble<'a>>(
+    natives: &mut NativeFunctionTable,
+    builder: &SafeNativeBuilder,
+) {
     type NativeFn = fn(
         &mut SafeNativeContext,
         Vec<Type>,
@@ -107,8 +113,12 @@ fn evm_transact_inner(
     let gas_limit: u64 = context.gas_balance().into();
 
     let evm_native_ctx = context.extensions_mut().get_mut::<NativeEVMContext>();
+    let mut db = CacheDB::new(ResolverBackedDB::new(
+        &evm_native_ctx.storage_trie,
+        evm_native_ctx.resolver,
+    ));
     let mut evm = Evm::builder()
-        .with_db(&mut evm_native_ctx.db)
+        .with_db(&mut db)
         .with_tx_env(TxEnv {
             caller,
             gas_limit,
@@ -165,7 +175,7 @@ fn evm_transact_inner(
 
     // Commit the changes to the DB so that future Move transactions using
     // the same session will see them.
-    evm_native_ctx.db.commit(outcome.state);
+    db.commit(outcome.state);
 
     let gas_used = EvmGasUsed::new(outcome.result.gas_used());
     context.charge(gas_used)?;

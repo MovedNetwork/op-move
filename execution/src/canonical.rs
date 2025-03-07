@@ -20,6 +20,7 @@ use {
         module_traversal::{TraversalContext, TraversalStorage},
         session::Session,
     },
+    moved_evm_ext::storage::StorageTrieRepository,
     moved_genesis::config::GenesisConfig,
     moved_shared::{
         error::{
@@ -100,10 +101,11 @@ pub(super) fn verify_transaction<B: BaseTokenAccounts>(
 
 pub(super) fn execute_canonical_transaction<
     S: MoveResolver<PartialVMError> + TableResolver,
+    ST: StorageTrieRepository,
     F: L2GasFee,
     B: BaseTokenAccounts,
 >(
-    input: CanonicalExecutionInput<S, F, B>,
+    input: CanonicalExecutionInput<S, ST, F, B>,
 ) -> moved_shared::error::Result<TransactionExecutionOutcome> {
     let sender_move_address = input.tx.signer.to_move_address();
 
@@ -118,7 +120,7 @@ pub(super) fn execute_canonical_transaction<
         input.block_header,
         tx_data.script_hash(),
     );
-    let mut session = create_vm_session(&move_vm, input.state, session_id);
+    let mut session = create_vm_session(&move_vm, input.state, session_id, input.storage_trie);
     let traversal_storage = TraversalStorage::new();
     let mut traversal_context = TraversalContext::new(&traversal_storage);
 
@@ -220,7 +222,7 @@ pub(super) fn execute_canonical_transaction<
     let (mut changes, mut extensions) = session.finish_with_extensions()?;
     let mut logs = extensions.logs();
     logs.extend(evm_logs);
-    let evm_changes = moved_evm_ext::extract_evm_changes(&extensions);
+    let evm_changes = moved_evm_ext::extract_evm_changes(&extensions, input.storage_trie);
     changes
         .squash(evm_changes)
         .expect("EVM changes must merge with other session changes");

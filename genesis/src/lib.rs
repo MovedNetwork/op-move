@@ -9,7 +9,8 @@ pub use {
 
 use {
     self::config::GenesisConfig, move_core_types::effects::ChangeSet,
-    move_table_extension::TableChangeSet, moved_state::State,
+    move_table_extension::TableChangeSet, moved_evm_ext::storage::StorageTrieRepository,
+    moved_state::State,
 };
 
 pub mod config;
@@ -22,12 +23,14 @@ pub fn build(
     vm: &impl CreateMoveVm,
     config: &GenesisConfig,
     state: &impl State,
+    storage_trie: &impl StorageTrieRepository,
 ) -> (ChangeSet, TableChangeSet) {
     // Deploy Move/Aptos/Sui frameworks
     let (changes_framework, table_changes) = framework::init_state(vm, state);
 
     // Deploy OP stack L2 contracts
-    let changes_l2 = l2_contracts::init_state(config.l2_contract_genesis.clone(), state);
+    let changes_l2 =
+        l2_contracts::init_state(config.l2_contract_genesis.clone(), state, storage_trie);
 
     let mut changes = ChangeSet::new();
 
@@ -62,7 +65,12 @@ pub fn apply(
     );
 }
 
-pub fn build_and_apply(vm: &impl CreateMoveVm, config: &GenesisConfig, state: &mut impl State) {
-    let (changes, table_changes) = build(vm, config, state);
+pub fn build_and_apply(
+    vm: &impl CreateMoveVm,
+    config: &GenesisConfig,
+    state: &mut impl State,
+    storage_trie: &impl StorageTrieRepository,
+) {
+    let (changes, table_changes) = build(vm, config, state, storage_trie);
     apply(changes, table_changes, config, state);
 }

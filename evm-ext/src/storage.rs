@@ -101,6 +101,7 @@ impl StorageTrie {
     }
 }
 
+#[derive(Default)]
 pub struct InMemoryStorageTrieRepository {
     accounts: HashMap<Address, B256>,
     storages: HashMap<B256, Arc<BoxedTrieDb>>,

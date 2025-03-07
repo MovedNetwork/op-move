@@ -22,10 +22,10 @@ use {
     },
 };
 
-pub fn genesis_state_changes<'a, T: StorageTrieRepository>(
+pub fn genesis_state_changes<'a>(
     genesis: alloy::genesis::Genesis,
     resolver: &impl MoveResolver<PartialVMError>,
-    storage_trie: &T,
+    storage_trie: &impl StorageTrieRepository,
 ) -> ChangeSet {
     let mut result = ChangeSet::new();
     let empty_changes = AccountChangeSet::new();

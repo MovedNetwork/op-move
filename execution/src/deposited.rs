@@ -24,6 +24,7 @@ use {
     },
 };
 
+use moved_evm_ext::storage::StorageTrieRepository;
 #[cfg(any(feature = "test-doubles", test))]
 use {
     crate::transaction::DepositedTx, moved_evm_ext::HeaderForExecution,
@@ -36,8 +37,11 @@ const ETH_BRIDGE_FINALIZED: B256 = B256::new(hex!(
     "31b2166ff604fc5672ea5df08a78081d2bc6d746cadce880747f3643d819e83d"
 ));
 
-pub(super) fn execute_deposited_transaction<S: MoveResolver<PartialVMError> + TableResolver>(
-    input: DepositExecutionInput<S>,
+pub(super) fn execute_deposited_transaction<
+    S: MoveResolver<PartialVMError> + TableResolver,
+    ST: StorageTrieRepository,
+>(
+    input: DepositExecutionInput<S, ST>,
 ) -> moved_shared::error::Result<TransactionExecutionOutcome> {
     #[cfg(any(feature = "test-doubles", test))]
     if input.tx.data.is_empty() {
@@ -45,6 +49,7 @@ pub(super) fn execute_deposited_transaction<S: MoveResolver<PartialVMError> + Ta
             input.tx,
             input.tx_hash,
             input.state,
+            input.storage_trie,
             input.genesis_config,
             input.block_header,
         );
@@ -57,7 +62,7 @@ pub(super) fn execute_deposited_transaction<S: MoveResolver<PartialVMError> + Ta
         input.genesis_config,
         input.block_header,
     );
-    let mut session = create_vm_session(&move_vm, input.state, session_id);
+    let mut session = create_vm_session(&move_vm, input.state, session_id, input.storage_trie);
     let traversal_storage = TraversalStorage::new();
     let mut traversal_context = TraversalContext::new(&traversal_storage);
     // The type of `tx.gas` is essentially `[u64; 1]` so taking the 0th element
@@ -118,7 +123,7 @@ pub(super) fn execute_deposited_transaction<S: MoveResolver<PartialVMError> + Ta
 
     let (mut changes, extensions) = session.finish_with_extensions()?;
     let gas_used = total_gas_used(&gas_meter, input.genesis_config);
-    let evm_changes = extract_evm_changes(&extensions);
+    let evm_changes = extract_evm_changes(&extensions, input.storage_trie);
     changes
         .squash(evm_changes)
         .expect("EVM changes must merge with other session changes");
@@ -171,6 +176,7 @@ fn direct_mint(
     tx: &DepositedTx,
     tx_hash: &B256,
     state: &(impl MoveResolver<PartialVMError> + TableResolver),
+    storage_trie: &impl StorageTrieRepository,
     genesis_config: &GenesisConfig,
     block_header: HeaderForExecution,
 ) -> moved_shared::error::Result<TransactionExecutionOutcome> {
@@ -181,7 +187,7 @@ fn direct_mint(
 
     let move_vm = create_move_vm()?;
     let session_id = SessionId::new_from_deposited(tx, tx_hash, genesis_config, block_header);
-    let mut session = create_vm_session(&move_vm, state, session_id);
+    let mut session = create_vm_session(&move_vm, state, session_id, storage_trie);
     let traversal_storage = TraversalStorage::new();
     let mut traversal_context = TraversalContext::new(&traversal_storage);
     // The type of `tx.gas` is essentially `[u64; 1]` so taking the 0th element

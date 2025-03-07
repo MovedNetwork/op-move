@@ -20,4 +20,5 @@ bcs.workspace = true
 move-core-types.workspace = true
 move-table-extension.workspace = true
 moved-genesis.workspace = true
+moved-evm-ext.workspace = true
 moved-state.workspace = true

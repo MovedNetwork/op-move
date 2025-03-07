@@ -11,7 +11,6 @@ use {
         safely_pop_arg, SafeNativeBuilder, SafeNativeContext, SafeNativeError, SafeNativeResult,
     },
     aptos_types::vm_status::StatusCode,
-    better_any::TidAble,
     eth_trie::DB,
     move_binary_format::errors::PartialVMError,
     move_core_types::{account_address::AccountAddress, ident_str, identifier::IdentStr},
@@ -29,10 +28,7 @@ use {
 
 pub const EVM_CALL_FN_NAME: &IdentStr = ident_str!("system_evm_call");
 
-pub fn append_evm_natives<'a, D: DB + TidAble<'a>>(
-    natives: &mut NativeFunctionTable,
-    builder: &SafeNativeBuilder,
-) {
+pub fn append_evm_natives(natives: &mut NativeFunctionTable, builder: &SafeNativeBuilder) {
     type NativeFn = fn(
         &mut SafeNativeContext,
         Vec<Type>,
@@ -114,7 +110,7 @@ fn evm_transact_inner(
 
     let evm_native_ctx = context.extensions_mut().get_mut::<NativeEVMContext>();
     let mut db = CacheDB::new(ResolverBackedDB::new(
-        &evm_native_ctx.storage_trie,
+        evm_native_ctx.storage_trie,
         evm_native_ctx.resolver,
     ));
     // todo: storage trie repository factory?

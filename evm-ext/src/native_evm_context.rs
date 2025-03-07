@@ -35,7 +35,7 @@ pub struct HeaderForExecution {
 #[derive(Tid)]
 pub struct NativeEVMContext<'a> {
     pub resolver: &'a dyn MoveResolver<PartialVMError>,
-    pub storage_trie: Box<dyn StorageTrieRepository>,
+    pub storage_trie: &'a dyn StorageTrieRepository,
     // pub storage_trie: &'a dyn StorageTrieRepository<Storage = D>,
     pub state_changes: Vec<HashMap<Address, Account>>,
     pub block_header: HeaderForExecution,
@@ -44,7 +44,7 @@ pub struct NativeEVMContext<'a> {
 impl<'a> NativeEVMContext<'a> {
     pub fn new(
         state: &'a impl MoveResolver<PartialVMError>,
-        storage_trie: Box<dyn StorageTrieRepository>,
+        storage_trie: &'a impl StorageTrieRepository,
         block_header: HeaderForExecution,
     ) -> Self {
         Self {
@@ -63,7 +63,7 @@ pub struct ResolverBackedDB<'a> {
 
 impl<'a> ResolverBackedDB<'a> {
     pub fn new(
-        storage_trie: &'a impl StorageTrieRepository,
+        storage_trie: &'a dyn StorageTrieRepository,
         resolver: &'a dyn MoveResolver<PartialVMError>,
     ) -> Self {
         Self {

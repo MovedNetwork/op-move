@@ -16,7 +16,10 @@ use {
         vm_status::StatusCode,
     },
     move_table_extension::{TableHandle, TableResolver},
-    moved_evm_ext::{storage::StorageTrieRepository, ResolverBackedDB},
+    moved_evm_ext::{
+        storage::{self, StorageTrieRepository},
+        ResolverBackedDB,
+    },
     moved_execution::{
         quick_get_eth_balance, quick_get_nonce,
         transaction::{L2_HIGHEST_ADDRESS, L2_LOWEST_ADDRESS},
@@ -143,7 +146,7 @@ pub fn proof_from_trie_and_resolver(
     resolver: &impl MoveResolver<PartialVMError>,
     storage_trie: &impl StorageTrieRepository,
 ) -> Option<ProofResponse> {
-    let evm_db = ResolverBackedDB::new(resolver, storage_trie);
+    let evm_db = ResolverBackedDB::new(storage_trie, resolver);
 
     // All L2 contract account data is part of the EVM state
     let account_info = evm_db.get_account(&address).ok()??;
@@ -168,8 +171,8 @@ pub fn proof_from_trie_and_resolver(
                 storage.proof(key.as_slice()).ok().map(|proof| {
                     let value = storage.get(index)?.unwrap_or_default();
 
-                    Ok(StorageProof {
-                        key: index.into(),
+                    Ok::<StorageProof, storage::Error>(StorageProof {
+                        key: (*index).into(),
                         value,
                         proof: proof.into_iter().map(Into::into).collect(),
                     })

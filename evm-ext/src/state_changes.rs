@@ -79,10 +79,7 @@ pub fn genesis_state_changes<'a>(
     result
 }
 
-pub fn extract_evm_changes<'a, T: StorageTrieRepository>(
-    extensions: &NativeContextExtensions,
-    storage_trie: &T,
-) -> ChangeSet {
+pub fn extract_evm_changes<'a>(extensions: &NativeContextExtensions) -> ChangeSet {
     let evm_native_ctx = extensions.get::<NativeEVMContext>();
     let mut result = ChangeSet::new();
     let mut account_changes = AccountChangeSet::new();
@@ -100,7 +97,7 @@ pub fn extract_evm_changes<'a, T: StorageTrieRepository>(
                 evm_native_ctx.resolver,
                 &account_changes,
                 &mut single_account_changes,
-                storage_trie,
+                evm_native_ctx.storage_trie,
             );
         }
         account_changes
@@ -113,13 +110,13 @@ pub fn extract_evm_changes<'a, T: StorageTrieRepository>(
     result
 }
 
-fn add_account_changes<'a, T: StorageTrieRepository>(
+fn add_account_changes<'a>(
     address: &Address,
     account: &Account,
     resolver: &dyn MoveResolver<PartialVMError>,
     prior_changes: &AccountChangeSet,
     result: &mut AccountChangeSet,
-    storage_trie: &T,
+    storage_trie: &dyn StorageTrieRepository,
 ) {
     debug_assert!(
         account.is_touched(),

@@ -123,7 +123,7 @@ pub(super) fn execute_deposited_transaction<
 
     let (mut changes, extensions) = session.finish_with_extensions()?;
     let gas_used = total_gas_used(&gas_meter, input.genesis_config);
-    let evm_changes = extract_evm_changes(&extensions, input.storage_trie);
+    let evm_changes = extract_evm_changes(&extensions);
     changes
         .squash(evm_changes)
         .expect("EVM changes must merge with other session changes");

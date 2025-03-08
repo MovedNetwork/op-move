@@ -222,7 +222,7 @@ pub(super) fn execute_canonical_transaction<
     let (mut changes, mut extensions) = session.finish_with_extensions()?;
     let mut logs = extensions.logs();
     logs.extend(evm_logs);
-    let evm_changes = moved_evm_ext::extract_evm_changes(&extensions, input.storage_trie);
+    let evm_changes = moved_evm_ext::extract_evm_changes(&extensions);
     changes
         .squash(evm_changes)
         .expect("EVM changes must merge with other session changes");

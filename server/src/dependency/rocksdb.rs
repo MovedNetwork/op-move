@@ -15,6 +15,7 @@ pub type StateQueries = moved_storage_rocksdb::RocksDbStateQueries<'static>;
 pub type ReceiptRepository = moved_storage_rocksdb::receipt::RocksDbReceiptRepository;
 pub type ReceiptQueries = moved_storage_rocksdb::receipt::RocksDbReceiptQueries;
 pub type PayloadQueries = moved_storage_rocksdb::payload::RocksDbPayloadQueries;
+pub type StorageTrieRepository = moved_storage_rocksdb::evm::RocksDbStorageTrieRepository;
 pub type TransactionRepository = moved_storage_rocksdb::transaction::RocksDbTransactionRepository;
 pub type TransactionQueries = moved_storage_rocksdb::transaction::RocksDbTransactionQueries;
 pub type BlockQueries = moved_storage_rocksdb::block::RocksDbBlockQueries;
@@ -124,6 +125,10 @@ pub fn block_queries() -> BlockQueries {
 
 pub fn payload_queries() -> PayloadQueries {
     moved_storage_rocksdb::payload::RocksDbPayloadQueries::new(db())
+}
+
+pub fn storage_trie_repository() -> StorageTrieRepository {
+    moved_storage_rocksdb::evm::RocksDbStorageTrieRepository::new();
 }
 
 lazy_static::lazy_static! {

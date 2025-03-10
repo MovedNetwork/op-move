@@ -522,7 +522,7 @@ mod tests {
 
         let move_vm = create_move_vm().unwrap();
         let state = InMemoryState::new();
-        let evm_storage = InMemoryStorageTrieRepository::default();
+        let evm_storage = InMemoryStorageTrieRepository::new();
         let mut session = create_vm_session(
             &move_vm,
             state.resolver(),
@@ -601,7 +601,7 @@ mod tests {
 
         let move_vm = create_move_vm().unwrap();
         let state = InMemoryState::new();
-        let evm_storage = InMemoryStorageTrieRepository::default();
+        let evm_storage = InMemoryStorageTrieRepository::new();
         let mut session = create_vm_session(
             &move_vm,
             state.resolver(),

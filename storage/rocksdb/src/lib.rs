@@ -1,5 +1,6 @@
 mod all;
 pub mod block;
+pub mod evm;
 pub mod generic;
 pub mod payload;
 pub mod receipt;

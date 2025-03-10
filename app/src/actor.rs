@@ -935,7 +935,7 @@ mod tests {
             InMemoryReceiptRepository::new(),
             InMemoryReceiptQueries::new(),
             InMemoryPayloadQueries::new(),
-            InMemoryStorageTrieRepository::default(),
+            InMemoryStorageTrieRepository::new(),
             StateActor::on_tx_noop(),
             StateActor::on_tx_batch_noop(),
             StateActor::on_payload_noop(),
@@ -1012,7 +1012,7 @@ mod tests {
         let mut repository = InMemoryBlockRepository::new();
         repository.add(&mut memory, genesis_block).unwrap();
 
-        let evm_storage = InMemoryStorageTrieRepository::default();
+        let evm_storage = InMemoryStorageTrieRepository::new();
         let mut state = InMemoryState::new();
         let (genesis_changes, table_changes) = moved_genesis_image::load();
         state

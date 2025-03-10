@@ -128,7 +128,7 @@ mod tests {
             InMemoryReceiptRepository::new(),
             InMemoryReceiptQueries::new(),
             InMemoryPayloadQueries::new(),
-            InMemoryStorageTrieRepository::default(),
+            InMemoryStorageTrieRepository::new(),
             moved_app::StateActor::on_tx_noop(),
             moved_app::StateActor::on_tx_batch_noop(),
             moved_app::StateActor::on_payload_in_memory(),

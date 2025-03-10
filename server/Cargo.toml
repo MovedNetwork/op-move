@@ -25,6 +25,7 @@ move-core-types.workspace = true
 moved-api.workspace = true
 moved-app.workspace = true
 moved-blockchain.workspace = true
+moved-evm-ext.workspace = true
 moved-execution.workspace = true
 moved-genesis.workspace = true
 moved-shared.workspace = true

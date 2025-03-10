@@ -15,6 +15,7 @@ use {
         state::StateQueries,
         transaction::{TransactionQueries, TransactionRepository},
     },
+    moved_evm_ext::storage::StorageTrieRepository,
     moved_execution::{
         BaseTokenAccounts, CreateEcotoneL1GasFee, CreateL1GasFee, CreateL2GasFee,
         CreateMovedL2GasFee,
@@ -153,6 +154,7 @@ pub fn initialize_state_actor(
     impl ReceiptRepository<Storage = dependency::ReceiptStorage> + Send + Sync + 'static,
     impl ReceiptQueries<Storage = dependency::ReceiptStorage> + Send + Sync + 'static,
     impl PayloadQueries<Storage = dependency::SharedStorage> + Send + Sync + 'static,
+    impl StorageTrieRepository + Send + Sync + 'static,
 > {
     let block_hash = dependency::block_hash();
     let base_token = dependency::base_token(&genesis_config);
@@ -167,6 +169,7 @@ pub fn initialize_state_actor(
     let receipt_repository = dependency::receipt_repository();
     let receipt_queries = dependency::receipt_queries();
     let payload_queries = dependency::payload_queries();
+    let evm_storage = dependency::storage_trie_repository();
 
     let (genesis_changes, table_changes) = {
         #[cfg(test)]
@@ -175,7 +178,12 @@ pub fn initialize_state_actor(
         }
         #[cfg(not(test))]
         {
-            moved_genesis::build(&moved_genesis::MovedVm, &genesis_config, &state)
+            moved_genesis::build(
+                &moved_genesis::MovedVm,
+                &genesis_config,
+                &state,
+                &evm_storage,
+            )
         }
     };
     moved_genesis::apply(genesis_changes, table_changes, &genesis_config, &mut state);
@@ -211,6 +219,7 @@ pub fn initialize_state_actor(
         receipt_repository,
         receipt_queries,
         payload_queries,
+        evm_storage,
         dependency::on_tx(),
         dependency::on_tx_batch(),
         dependency::on_payload(),

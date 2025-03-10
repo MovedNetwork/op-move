@@ -431,7 +431,7 @@ mod tests {
     }
 
     fn mint_one_eth(state: &mut impl State, addr: AccountAddress) -> ChangeSet {
-        let evm_storage = InMemoryStorageTrieRepository::default();
+        let evm_storage = InMemoryStorageTrieRepository::new();
         let move_vm = create_move_vm().unwrap();
         let mut session = create_vm_session(
             &move_vm,
@@ -461,7 +461,7 @@ mod tests {
 
     #[test]
     fn test_query_fetches_latest_balance() {
-        let evm_storage = InMemoryStorageTrieRepository::default();
+        let evm_storage = InMemoryStorageTrieRepository::new();
         let state = InMemoryState::new();
         let mut state = StateSpy(state, ChangeSet::new());
 
@@ -489,7 +489,7 @@ mod tests {
 
     #[test]
     fn test_query_fetches_older_balance() {
-        let evm_storage = InMemoryStorageTrieRepository::default();
+        let evm_storage = InMemoryStorageTrieRepository::new();
         let state = InMemoryState::new();
         let mut state = StateSpy(state, ChangeSet::new());
 
@@ -521,7 +521,7 @@ mod tests {
 
     #[test]
     fn test_query_fetches_latest_and_previous_balance() {
-        let evm_storage = InMemoryStorageTrieRepository::default();
+        let evm_storage = InMemoryStorageTrieRepository::new();
         let state = InMemoryState::new();
         let mut state = StateSpy(state, ChangeSet::new());
 
@@ -560,7 +560,7 @@ mod tests {
 
     #[test]
     fn test_query_fetches_zero_balance_for_non_existent_account() {
-        let evm_storage = InMemoryStorageTrieRepository::default();
+        let evm_storage = InMemoryStorageTrieRepository::new();
         let state = InMemoryState::new();
         let mut state = StateSpy(state, ChangeSet::new());
 
@@ -587,7 +587,7 @@ mod tests {
     }
 
     fn inc_one_nonce(old_nonce: u64, state: &mut impl State, addr: AccountAddress) -> ChangeSet {
-        let evm_storage = InMemoryStorageTrieRepository::default();
+        let evm_storage = InMemoryStorageTrieRepository::new();
         let move_vm = create_move_vm().unwrap();
         let mut session = create_vm_session(
             &move_vm,
@@ -617,7 +617,7 @@ mod tests {
 
     #[test]
     fn test_query_fetches_latest_nonce() {
-        let evm_storage = InMemoryStorageTrieRepository::default();
+        let evm_storage = InMemoryStorageTrieRepository::new();
         let state = InMemoryState::new();
         let mut state = StateSpy(state, ChangeSet::new());
 
@@ -645,7 +645,7 @@ mod tests {
 
     #[test]
     fn test_query_fetches_older_nonce() {
-        let evm_storage = InMemoryStorageTrieRepository::default();
+        let evm_storage = InMemoryStorageTrieRepository::new();
         let state = InMemoryState::new();
         let mut state = StateSpy(state, ChangeSet::new());
 
@@ -677,7 +677,7 @@ mod tests {
 
     #[test]
     fn test_query_fetches_latest_and_previous_nonce() {
-        let evm_storage = InMemoryStorageTrieRepository::default();
+        let evm_storage = InMemoryStorageTrieRepository::new();
         let state = InMemoryState::new();
         let mut state = StateSpy(state, ChangeSet::new());
 
@@ -716,7 +716,7 @@ mod tests {
 
     #[test]
     fn test_query_fetches_zero_nonce_for_non_existent_account() {
-        let evm_storage = InMemoryStorageTrieRepository::default();
+        let evm_storage = InMemoryStorageTrieRepository::new();
         let state = InMemoryState::new();
         let mut state = StateSpy(state, ChangeSet::new());
 

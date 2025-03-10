@@ -104,7 +104,7 @@ pub mod tests {
             InMemoryReceiptRepository::new(),
             InMemoryReceiptQueries::new(),
             InMemoryPayloadQueries::new(),
-            InMemoryStorageTrieRepository::default(),
+            InMemoryStorageTrieRepository::new(),
             StateActor::on_tx_noop(),
             StateActor::on_tx_batch_noop(),
             StateActor::on_payload_in_memory(),

@@ -92,7 +92,7 @@ impl TestContext {
 
         Self {
             state,
-            evm_storage: InMemoryStorageTrieRepository::default(),
+            evm_storage: InMemoryStorageTrieRepository::new(),
             genesis_config,
             signer: Signer::new(&PRIVATE_KEY),
             move_address: EVM_ADDRESS.to_move_address(),

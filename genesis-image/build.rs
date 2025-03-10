@@ -12,7 +12,7 @@ use {
 
 fn main() {
     let state = InMemoryState::default();
-    let storage_trie = InMemoryStorageTrieRepository::default();
+    let storage_trie = InMemoryStorageTrieRepository::new();
     let genesis_config = GenesisConfig::default();
     let vm = MovedVm;
 

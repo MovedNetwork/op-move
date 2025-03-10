@@ -107,6 +107,12 @@ pub struct InMemoryStorageTrieRepository {
     storages: HashMap<B256, Arc<BoxedTrieDb>>,
 }
 
+impl InMemoryStorageTrieRepository {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
 impl StorageTrieRepository for InMemoryStorageTrieRepository {
     fn for_account(&self, account: &Address) -> StorageTrie {
         if let Some((db, storage_root)) = self

@@ -7,7 +7,9 @@ use {
     moved_execution::{BaseTokenAccounts, CreateL1GasFee, CreateL2GasFee, MovedBaseTokenAccounts},
     moved_genesis::config::GenesisConfig,
     moved_state::State,
-    moved_storage_heed::{block, heed::EnvOpenOptions, payload, receipt, state, transaction, trie},
+    moved_storage_heed::{
+        block, evm, heed::EnvOpenOptions, payload, receipt, state, transaction, trie,
+    },
 };
 
 pub type SharedStorage = &'static moved_storage_heed::Env;
@@ -16,6 +18,7 @@ pub type StateQueries = state::HeedStateQueries<'static>;
 pub type ReceiptRepository = receipt::HeedReceiptRepository;
 pub type ReceiptQueries = receipt::HeedReceiptQueries;
 pub type PayloadQueries = payload::HeedPayloadQueries;
+pub type StorageTrieRepository = evm::HeedStorageTrieRepository;
 pub type TransactionRepository = transaction::HeedTransactionRepository;
 pub type TransactionQueries = transaction::HeedTransactionQueries;
 pub type BlockQueries = block::HeedBlockQueries;
@@ -120,6 +123,10 @@ pub fn block_queries() -> BlockQueries {
 
 pub fn payload_queries() -> PayloadQueries {
     payload::HeedPayloadQueries::new(db())
+}
+
+pub fn storage_trie_repository() -> StorageTrieRepository {
+    evm::HeedStorageTrieRepository::new()
 }
 
 lazy_static::lazy_static! {

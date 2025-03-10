@@ -129,7 +129,11 @@ impl StorageTrieRepository for InMemoryStorageTrieRepository {
     }
 
     fn for_account_with_root(&self, account: &Address, storage_root: &B256) -> StorageTrie {
-        if let Some(db) = self.storages.get(storage_root).cloned() {
+        if let Some(db) = self
+            .accounts
+            .get(account)
+            .and_then(|index| self.storages.get(index).cloned().map(|v| v))
+        {
             StorageTrie::from(db, *storage_root).unwrap()
         } else {
             StorageTrie::new(Arc::new(BoxedTrieDb::new(EthTrieDbWithLocalError(

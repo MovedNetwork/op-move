@@ -1,4 +1,7 @@
-use {super::*, moved_genesis::config::CHAIN_ID};
+use {
+    super::*, moved_evm_ext::storage::InMemoryStorageTrieRepository,
+    moved_genesis::config::CHAIN_ID,
+};
 
 /// Represents the base token state for a test transaction
 #[derive(Debug)]
@@ -70,6 +73,7 @@ impl TestTransaction {
 pub struct TestContext {
     /// The in-memory state for testing
     pub state: InMemoryState,
+    pub evm_storage: InMemoryStorageTrieRepository,
     /// Genesis configuration
     pub genesis_config: GenesisConfig,
     /// Transaction signer
@@ -88,6 +92,7 @@ impl TestContext {
 
         Self {
             state,
+            evm_storage: InMemoryStorageTrieRepository::default(),
             genesis_config,
             signer: Signer::new(&PRIVATE_KEY),
             move_address: EVM_ADDRESS.to_move_address(),
@@ -262,6 +267,7 @@ impl TestContext {
                     tx,
                     tx_hash: &tx_hash,
                     state: self.state.resolver(),
+                    storage_trie: &self.evm_storage,
                     genesis_config: &self.genesis_config,
                     l1_cost: 0,
                     l2_fee,
@@ -274,6 +280,7 @@ impl TestContext {
                     tx,
                     tx_hash: &tx_hash,
                     state: self.state.resolver(),
+                    storage_trie: &self.evm_storage,
                     genesis_config: &self.genesis_config,
                     block_header: Default::default(),
                 }
@@ -284,6 +291,7 @@ impl TestContext {
                     tx,
                     tx_hash: &tx_hash,
                     state: self.state.resolver(),
+                    storage_trie: &self.evm_storage,
                     genesis_config: &self.genesis_config,
                     l1_cost,
                     l2_fee,
@@ -296,6 +304,7 @@ impl TestContext {
                     tx,
                     tx_hash: &tx_hash,
                     state: self.state.resolver(),
+                    storage_trie: &self.evm_storage,
                     genesis_config: &self.genesis_config,
                     block_header: Default::default(),
                 }
@@ -376,7 +385,11 @@ impl TestContext {
     /// # Returns
     /// The balance as a u64
     pub fn get_balance(&self, address: Address) -> U256 {
-        quick_get_eth_balance(&address.to_move_address(), self.state.resolver())
+        quick_get_eth_balance(
+            &address.to_move_address(),
+            self.state.resolver(),
+            &self.evm_storage,
+        )
     }
 
     /// Compiles a Move module

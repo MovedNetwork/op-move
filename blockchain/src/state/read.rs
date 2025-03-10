@@ -62,6 +62,7 @@ pub trait StateQueries {
     fn balance_at(
         &self,
         db: Arc<impl DB>,
+        evm_storage: &impl StorageTrieRepository,
         account: AccountAddress,
         height: BlockHeight,
     ) -> Option<Balance>;
@@ -71,6 +72,7 @@ pub trait StateQueries {
     fn nonce_at(
         &self,
         db: Arc<impl DB>,
+        evm_storage: &impl StorageTrieRepository,
         account: AccountAddress,
         height: BlockHeight,
     ) -> Option<Nonce>;
@@ -78,6 +80,7 @@ pub trait StateQueries {
     fn proof_at(
         &self,
         db: Arc<impl DB>,
+        evm_storage: &impl StorageTrieRepository,
         account: AccountAddress,
         storage_slots: &[U256],
         height: BlockHeight,
@@ -197,28 +200,31 @@ impl StateQueries for InMemoryStateQueries {
     fn balance_at(
         &self,
         db: Arc<impl DB>,
+        evm_storage: &impl StorageTrieRepository,
         account: AccountAddress,
         height: BlockHeight,
     ) -> Option<Balance> {
         let resolver = self.storage.resolver(db, height)?;
 
-        Some(quick_get_eth_balance(&account, &resolver))
+        Some(quick_get_eth_balance(&account, &resolver, evm_storage))
     }
 
     fn nonce_at(
         &self,
         db: Arc<impl DB>,
+        evm_storage: &impl StorageTrieRepository,
         account: AccountAddress,
         height: BlockHeight,
     ) -> Option<Nonce> {
         let resolver = self.storage.resolver(db, height)?;
 
-        Some(quick_get_nonce(&account, &resolver))
+        Some(quick_get_nonce(&account, &resolver, evm_storage))
     }
 
     fn proof_at(
         &self,
         db: Arc<impl DB>,
+        evm_storage: &impl StorageTrieRepository,
         account: AccountAddress,
         storage_slots: &[U256],
         height: BlockHeight,
@@ -234,7 +240,7 @@ impl StateQueries for InMemoryStateQueries {
         let resolver = self.storage.resolver(db.clone(), height)?;
         let mut tree = EthTrie::from(db, root).expect(IN_MEMORY_EXPECT_MSG);
 
-        proof_from_trie_and_resolver(address, storage_slots, &mut tree, &resolver)
+        proof_from_trie_and_resolver(address, storage_slots, &mut tree, &resolver, evm_storage)
     }
 }
 
@@ -338,6 +344,7 @@ pub mod test_doubles {
         fn balance_at(
             &self,
             _db: Arc<impl DB>,
+            _evm_storage: &impl StorageTrieRepository,
             account: AccountAddress,
             height: BlockHeight,
         ) -> Option<Balance> {
@@ -350,6 +357,7 @@ pub mod test_doubles {
         fn nonce_at(
             &self,
             _db: Arc<impl DB>,
+            _evm_storage: &impl StorageTrieRepository,
             account: AccountAddress,
             height: BlockHeight,
         ) -> Option<Nonce> {
@@ -362,6 +370,7 @@ pub mod test_doubles {
         fn proof_at(
             &self,
             _db: Arc<impl DB>,
+            _evm_storage: &impl StorageTrieRepository,
             _account: AccountAddress,
             _storage_slots: &[U256],
             _height: BlockHeight,
@@ -380,6 +389,7 @@ mod tests {
         move_table_extension::TableChangeSet,
         move_vm_runtime::module_traversal::{TraversalContext, TraversalStorage},
         move_vm_types::gas::UnmeteredGasMeter,
+        moved_evm_ext::storage::InMemoryStorageTrieRepository,
         moved_execution::{
             check_nonce, create_move_vm, create_vm_session, mint_eth, session_id::SessionId,
         },
@@ -421,8 +431,14 @@ mod tests {
     }
 
     fn mint_one_eth(state: &mut impl State, addr: AccountAddress) -> ChangeSet {
+        let evm_storage = InMemoryStorageTrieRepository::default();
         let move_vm = create_move_vm().unwrap();
-        let mut session = create_vm_session(&move_vm, state.resolver(), SessionId::default());
+        let mut session = create_vm_session(
+            &move_vm,
+            state.resolver(),
+            SessionId::default(),
+            &evm_storage,
+        );
         let traversal_storage = TraversalStorage::new();
         let mut traversal_context = TraversalContext::new(&traversal_storage);
         let mut gas_meter = UnmeteredGasMeter;
@@ -445,6 +461,7 @@ mod tests {
 
     #[test]
     fn test_query_fetches_latest_balance() {
+        let evm_storage = InMemoryStorageTrieRepository::default();
         let state = InMemoryState::new();
         let mut state = StateSpy(state, ChangeSet::new());
 
@@ -463,7 +480,7 @@ mod tests {
         let query = InMemoryStateQueries::new(storage);
 
         let actual_balance = query
-            .balance_at(state.db(), addr, 1)
+            .balance_at(state.db(), &evm_storage, addr, 1)
             .expect("Block height should exist");
         let expected_balance = U256::from(1u64);
 
@@ -472,6 +489,7 @@ mod tests {
 
     #[test]
     fn test_query_fetches_older_balance() {
+        let evm_storage = InMemoryStorageTrieRepository::default();
         let state = InMemoryState::new();
         let mut state = StateSpy(state, ChangeSet::new());
 
@@ -494,7 +512,7 @@ mod tests {
         let query = InMemoryStateQueries::new(storage);
 
         let actual_balance = query
-            .balance_at(state.db(), addr, 1)
+            .balance_at(state.db(), &evm_storage, addr, 1)
             .expect("Block height should exist");
         let expected_balance = U256::from(1u64);
 
@@ -503,6 +521,7 @@ mod tests {
 
     #[test]
     fn test_query_fetches_latest_and_previous_balance() {
+        let evm_storage = InMemoryStorageTrieRepository::default();
         let state = InMemoryState::new();
         let mut state = StateSpy(state, ChangeSet::new());
 
@@ -525,14 +544,14 @@ mod tests {
         let query = InMemoryStateQueries::new(storage);
 
         let actual_balance = query
-            .balance_at(state.db(), addr, 1)
+            .balance_at(state.db(), &evm_storage, addr, 1)
             .expect("Block height should exist");
         let expected_balance = U256::from(1u64);
 
         assert_eq!(actual_balance, expected_balance);
 
         let actual_balance = query
-            .balance_at(state.db(), addr, 2)
+            .balance_at(state.db(), &evm_storage, addr, 2)
             .expect("Block height should exist");
         let expected_balance = U256::from(3u64);
 
@@ -541,6 +560,7 @@ mod tests {
 
     #[test]
     fn test_query_fetches_zero_balance_for_non_existent_account() {
+        let evm_storage = InMemoryStorageTrieRepository::default();
         let state = InMemoryState::new();
         let mut state = StateSpy(state, ChangeSet::new());
 
@@ -559,7 +579,7 @@ mod tests {
         let query = InMemoryStateQueries::new(storage);
 
         let actual_balance = query
-            .balance_at(state.db(), addr, 0)
+            .balance_at(state.db(), &evm_storage, addr, 0)
             .expect("Block height should exist");
         let expected_balance = U256::ZERO;
 
@@ -567,8 +587,14 @@ mod tests {
     }
 
     fn inc_one_nonce(old_nonce: u64, state: &mut impl State, addr: AccountAddress) -> ChangeSet {
+        let evm_storage = InMemoryStorageTrieRepository::default();
         let move_vm = create_move_vm().unwrap();
-        let mut session = create_vm_session(&move_vm, state.resolver(), SessionId::default());
+        let mut session = create_vm_session(
+            &move_vm,
+            state.resolver(),
+            SessionId::default(),
+            &evm_storage,
+        );
         let traversal_storage = TraversalStorage::new();
         let mut traversal_context = TraversalContext::new(&traversal_storage);
         let mut gas_meter = UnmeteredGasMeter;
@@ -591,6 +617,7 @@ mod tests {
 
     #[test]
     fn test_query_fetches_latest_nonce() {
+        let evm_storage = InMemoryStorageTrieRepository::default();
         let state = InMemoryState::new();
         let mut state = StateSpy(state, ChangeSet::new());
 
@@ -609,7 +636,7 @@ mod tests {
         let query = InMemoryStateQueries::new(storage);
 
         let actual_nonce = query
-            .nonce_at(state.db(), addr, 1)
+            .nonce_at(state.db(), &evm_storage, addr, 1)
             .expect("Block height should exist");
         let expected_nonce = 1u64;
 
@@ -618,6 +645,7 @@ mod tests {
 
     #[test]
     fn test_query_fetches_older_nonce() {
+        let evm_storage = InMemoryStorageTrieRepository::default();
         let state = InMemoryState::new();
         let mut state = StateSpy(state, ChangeSet::new());
 
@@ -640,7 +668,7 @@ mod tests {
         let query = InMemoryStateQueries::new(storage);
 
         let actual_nonce = query
-            .nonce_at(state.db(), addr, 1)
+            .nonce_at(state.db(), &evm_storage, addr, 1)
             .expect("Block height should exist");
         let expected_nonce = 1u64;
 
@@ -649,6 +677,7 @@ mod tests {
 
     #[test]
     fn test_query_fetches_latest_and_previous_nonce() {
+        let evm_storage = InMemoryStorageTrieRepository::default();
         let state = InMemoryState::new();
         let mut state = StateSpy(state, ChangeSet::new());
 
@@ -671,14 +700,14 @@ mod tests {
         let query = InMemoryStateQueries::new(storage);
 
         let actual_nonce = query
-            .nonce_at(state.db(), addr, 1)
+            .nonce_at(state.db(), &evm_storage, addr, 1)
             .expect("Block height should exist");
         let expected_nonce = 1u64;
 
         assert_eq!(actual_nonce, expected_nonce);
 
         let actual_nonce = query
-            .nonce_at(state.db(), addr, 2)
+            .nonce_at(state.db(), &evm_storage, addr, 2)
             .expect("Block height should exist");
         let expected_nonce = 3u64;
 
@@ -687,6 +716,7 @@ mod tests {
 
     #[test]
     fn test_query_fetches_zero_nonce_for_non_existent_account() {
+        let evm_storage = InMemoryStorageTrieRepository::default();
         let state = InMemoryState::new();
         let mut state = StateSpy(state, ChangeSet::new());
 
@@ -705,7 +735,7 @@ mod tests {
         let query = InMemoryStateQueries::new(storage);
 
         let actual_nonce = query
-            .nonce_at(state.db(), addr, 0)
+            .nonce_at(state.db(), &evm_storage, addr, 0)
             .expect("Block height should exist");
         let expected_nonce = 0u64;
 

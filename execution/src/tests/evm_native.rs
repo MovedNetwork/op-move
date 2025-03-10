@@ -31,8 +31,8 @@ use {
         values::{Struct, Value},
     },
     moved_evm_ext::{
-        extract_evm_changes, extract_evm_result, EvmNativeOutcome, CODE_LAYOUT, EVM_NATIVE_ADDRESS,
-        EVM_NATIVE_MODULE,
+        extract_evm_changes, extract_evm_result, storage::InMemoryStorageTrieRepository,
+        EvmNativeOutcome, CODE_LAYOUT, EVM_NATIVE_ADDRESS, EVM_NATIVE_MODULE,
     },
     moved_shared::primitives::{ToEthAddress, ToMoveAddress, ToMoveU256},
     moved_state::{InMemoryState, State},
@@ -67,8 +67,11 @@ fn test_evm() {
     );
 
     // -------- Deploy ERC-20 token
-    let (outcome, mut changes, extensions) =
-        evm_quick_create(deploy.calldata().to_vec(), ctx.state.resolver());
+    let (outcome, mut changes, extensions) = evm_quick_create(
+        deploy.calldata().to_vec(),
+        ctx.state.resolver(),
+        &ctx.evm_storage,
+    );
 
     assert!(outcome.is_success, "Contract deploy must succeed");
 
@@ -113,18 +116,20 @@ fn test_evm() {
     ctx.state.apply(outcome.changes).unwrap();
 
     // -------- Validate ERC-20 balances
-    let balance_of = |address, state: &InMemoryState| {
-        let balance_of_call = deployed_contract.balanceOf(address);
-        let (outcome, _, _) = evm_quick_call(
-            EVM_NATIVE_ADDRESS,
-            contract_move_address,
-            balance_of_call.calldata().to_vec(),
-            state.resolver(),
-        );
-        U256::from_be_slice(&outcome.output)
-    };
-    let sender_balance = balance_of(EVM_ADDRESS, &ctx.state);
-    let receiver_balance = balance_of(ALT_EVM_ADDRESS, &ctx.state);
+    let balance_of =
+        |address, state: &InMemoryState, evm_storage: &InMemoryStorageTrieRepository| {
+            let balance_of_call = deployed_contract.balanceOf(address);
+            let (outcome, _, _) = evm_quick_call(
+                EVM_NATIVE_ADDRESS,
+                contract_move_address,
+                balance_of_call.calldata().to_vec(),
+                state.resolver(),
+                evm_storage,
+            );
+            U256::from_be_slice(&outcome.output)
+        };
+    let sender_balance = balance_of(EVM_ADDRESS, &ctx.state, &ctx.evm_storage);
+    let receiver_balance = balance_of(ALT_EVM_ADDRESS, &ctx.state, &ctx.evm_storage);
 
     assert_eq!(sender_balance, mint_amount - transfer_amount);
     assert_eq!(receiver_balance, transfer_amount);
@@ -140,8 +145,8 @@ fn test_evm() {
     );
 
     // -------- Validate ERC-20 balances (again)
-    let sender_balance = balance_of(EVM_ADDRESS, &ctx.state);
-    let receiver_balance = balance_of(ALT_EVM_ADDRESS, &ctx.state);
+    let sender_balance = balance_of(EVM_ADDRESS, &ctx.state, &ctx.evm_storage);
+    let receiver_balance = balance_of(ALT_EVM_ADDRESS, &ctx.state, &ctx.evm_storage);
 
     assert_eq!(
         sender_balance,
@@ -173,6 +178,7 @@ fn test_solidity_fixed_bytes() {
             tx: &tx,
             tx_hash: &tx_hash,
             state: state.resolver(),
+            storage_trie: &ctx.evm_storage,
             genesis_config: &ctx.genesis_config,
             l1_cost: 0,
             l2_fee: U256::ZERO,
@@ -203,13 +209,14 @@ fn test_solidity_fixed_bytes() {
 
 /// Create MoveVM instance and invoke EVM create native.
 /// For tests only since it does not use an existing session or charge gas.
-fn evm_quick_create(
+fn evm_quick_create<'a>(
     contract_bytecode: Vec<u8>,
-    resolver: &(impl MoveResolver<PartialVMError> + TableResolver),
-) -> (EvmNativeOutcome, ChangeSet, NativeContextExtensions) {
+    resolver: &'a (impl MoveResolver<PartialVMError> + TableResolver),
+    evm_storage: &'a impl StorageTrieRepository,
+) -> (EvmNativeOutcome, ChangeSet, NativeContextExtensions<'a>) {
     let move_vm = create_move_vm().unwrap();
     let session_id = SessionId::default();
-    let mut session = create_vm_session(&move_vm, resolver, session_id);
+    let mut session = create_vm_session(&move_vm, resolver, session_id, evm_storage);
     let traversal_storage = TraversalStorage::new();
     let mut traversal_context = TraversalContext::new(&traversal_storage);
     let mut gas_meter = UnmeteredGasMeter;
@@ -246,15 +253,16 @@ fn evm_quick_create(
 
 /// Create MoveVM instance and invoke EVM call native.
 /// For tests only since it does not use an existing session or charge gas.
-fn evm_quick_call(
+fn evm_quick_call<'a>(
     from: AccountAddress,
     to: AccountAddress,
     data: Vec<u8>,
-    resolver: &(impl MoveResolver<PartialVMError> + TableResolver),
-) -> (EvmNativeOutcome, ChangeSet, NativeContextExtensions) {
+    resolver: &'a (impl MoveResolver<PartialVMError> + TableResolver),
+    evm_storage: &'a impl StorageTrieRepository,
+) -> (EvmNativeOutcome, ChangeSet, NativeContextExtensions<'a>) {
     let move_vm = create_move_vm().unwrap();
     let session_id = SessionId::default();
-    let mut session = create_vm_session(&move_vm, resolver, session_id);
+    let mut session = create_vm_session(&move_vm, resolver, session_id, evm_storage);
     let traversal_storage = TraversalStorage::new();
     let mut traversal_context = TraversalContext::new(&traversal_storage);
     let mut gas_meter = UnmeteredGasMeter;

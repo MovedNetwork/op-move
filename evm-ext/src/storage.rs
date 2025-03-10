@@ -30,7 +30,7 @@ pub struct StorageTrie(pub EthTrie<BoxedTrieDb>);
 pub trait StorageTrieRepository {
     fn for_account(&self, account: &Address) -> StorageTrie;
 
-    fn by_root(&self, storage_root: &B256) -> StorageTrie;
+    fn for_account_with_root(&self, account: &Address, storage_root: &B256) -> StorageTrie;
 }
 
 pub struct BoxedTrieDb(pub Box<dyn DB<Error = Error>>);
@@ -122,19 +122,19 @@ impl StorageTrieRepository for InMemoryStorageTrieRepository {
         {
             StorageTrie::from(db, storage_root).unwrap()
         } else {
-            StorageTrie::new(Arc::new(BoxedTrieDb::new(KokotWrapper(MemoryDB::new(
-                false,
-            )))))
+            StorageTrie::new(Arc::new(BoxedTrieDb::new(EthTrieDbWithLocalError(
+                MemoryDB::new(false),
+            ))))
         }
     }
 
-    fn by_root(&self, storage_root: &B256) -> StorageTrie {
+    fn for_account_with_root(&self, account: &Address, storage_root: &B256) -> StorageTrie {
         if let Some(db) = self.storages.get(storage_root).cloned() {
             StorageTrie::from(db, *storage_root).unwrap()
         } else {
-            StorageTrie::new(Arc::new(BoxedTrieDb::new(KokotWrapper(MemoryDB::new(
-                false,
-            )))))
+            StorageTrie::new(Arc::new(BoxedTrieDb::new(EthTrieDbWithLocalError(
+                MemoryDB::new(false),
+            ))))
         }
     }
 }
@@ -151,9 +151,9 @@ impl InMemoryStorageTrieRepository {
     }
 }
 
-pub struct KokotWrapper<T>(T);
+pub struct EthTrieDbWithLocalError<T>(T);
 
-impl<E, T: DB<Error = E>> DB for KokotWrapper<T>
+impl<E, T: DB<Error = E>> DB for EthTrieDbWithLocalError<T>
 where
     Error: From<E>,
 {
@@ -177,11 +177,11 @@ where
 }
 
 impl StorageTrieRepository for () {
-    fn for_account(&self, account: &Address) -> StorageTrie {
+    fn for_account(&self, _: &Address) -> StorageTrie {
         todo!()
     }
 
-    fn by_root(&self, storage_root: &B256) -> StorageTrie {
+    fn for_account_with_root(&self, _: &Address, _: &B256) -> StorageTrie {
         todo!()
     }
 }

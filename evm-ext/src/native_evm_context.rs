@@ -122,7 +122,9 @@ impl<'a> DatabaseRef for ResolverBackedDB<'a> {
         let Some(storage_root) = self.get_account(&address)?.map(|v| v.inner.storage_root) else {
             return Ok(Default::default());
         };
-        let storage = self.storage_trie.by_root(&storage_root);
+        let storage = self
+            .storage_trie
+            .for_account_with_root(&address, &storage_root);
         let value = storage.get(&index).unwrap();
         Ok(value.unwrap_or_default())
     }

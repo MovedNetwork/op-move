@@ -16,7 +16,7 @@ impl StorageTrieRepository for RocksDbStorageTrieRepository {
         todo!()
     }
 
-    fn by_root(&self, storage_root: &B256) -> StorageTrie {
+    fn for_account_with_root(&self, account: &Address, storage_root: &B256) -> StorageTrie {
         todo!()
     }
 }

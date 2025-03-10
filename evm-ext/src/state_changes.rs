@@ -142,7 +142,7 @@ fn add_account_changes<'a>(
             .unwrap_or(false)
     };
 
-    let mut storage = storage_trie.for_account(address);
+    let mut storage = storage_trie.for_account(&address);
     for (index, value) in account.changed_storage_slots() {
         storage.insert(index, &value.present_value).unwrap();
     }

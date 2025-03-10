@@ -122,8 +122,14 @@ impl StorageTrieRepository for InMemoryStorageTrieRepository {
         }
     }
 
-    fn by_root(&self, _storage_root: &B256) -> StorageTrie {
-        unimplemented!()
+    fn by_root(&self, storage_root: &B256) -> StorageTrie {
+        if let Some(db) = self.storages.get(storage_root).cloned() {
+            StorageTrie::from(db, *storage_root).unwrap()
+        } else {
+            StorageTrie::new(Arc::new(BoxedTrieDb::new(KokotWrapper(MemoryDB::new(
+                false,
+            )))))
+        }
     }
 }
 

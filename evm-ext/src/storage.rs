@@ -169,3 +169,13 @@ where
         Ok(self.0.flush()?)
     }
 }
+
+impl StorageTrieRepository for () {
+    fn for_account(&self, account: &Address) -> StorageTrie {
+        todo!()
+    }
+
+    fn by_root(&self, storage_root: &B256) -> StorageTrie {
+        todo!()
+    }
+}

@@ -47,6 +47,7 @@ pub mod tests {
                 TransactionRepository,
             },
         },
+        moved_evm_ext::storage::{InMemoryStorageTrieRepository, StorageTrieRepository},
         moved_execution::{
             transaction::{DepositedTx, ExtendedTxEnvelope},
             BaseTokenAccounts, CreateL1GasFee, CreateL2GasFee, MovedBaseTokenAccounts,
@@ -103,6 +104,7 @@ pub mod tests {
             InMemoryReceiptRepository::new(),
             InMemoryReceiptQueries::new(),
             InMemoryPayloadQueries::new(),
+            InMemoryStorageTrieRepository::default(),
             StateActor::on_tx_noop(),
             StateActor::on_tx_batch_noop(),
             StateActor::on_payload_in_memory(),
@@ -193,6 +195,7 @@ pub mod tests {
             impl ReceiptRepository<Storage = ()>,
             impl ReceiptQueries<Storage = ()>,
             impl PayloadQueries<Storage = ()>,
+            impl StorageTrieRepository,
         >,
         Sender<StateMessage>,
     ) {
@@ -215,6 +218,7 @@ pub mod tests {
             (),
             (),
             MockStateQueries(address, height),
+            (),
             (),
             (),
             (),

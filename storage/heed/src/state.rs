@@ -15,6 +15,7 @@ use {
         proof_from_trie_and_resolver, Balance, BlockHeight, EthTrieResolver, Nonce, ProofResponse,
         StateQueries,
     },
+    moved_evm_ext::storage::StorageTrieRepository,
     moved_execution::{
         quick_get_eth_balance, quick_get_nonce,
         transaction::{L2_HIGHEST_ADDRESS, L2_LOWEST_ADDRESS},
@@ -174,28 +175,31 @@ impl<'db> StateQueries for HeedStateQueries<'db> {
     fn balance_at(
         &self,
         db: Arc<impl DB>,
+        evm_storage: &impl StorageTrieRepository,
         account: AccountAddress,
         height: BlockHeight,
     ) -> Option<Balance> {
         let resolver = self.resolver(db, height).ok()?;
 
-        Some(quick_get_eth_balance(&account, &resolver))
+        Some(quick_get_eth_balance(&account, &resolver, evm_storage))
     }
 
     fn nonce_at(
         &self,
         db: Arc<impl DB>,
+        evm_storage: &impl StorageTrieRepository,
         account: AccountAddress,
         height: BlockHeight,
     ) -> Option<Nonce> {
         let resolver = self.resolver(db, height).ok()?;
 
-        Some(quick_get_nonce(&account, &resolver))
+        Some(quick_get_nonce(&account, &resolver, evm_storage))
     }
 
     fn proof_at(
         &self,
         db: Arc<impl DB>,
+        evm_storage: &impl StorageTrieRepository,
         account: AccountAddress,
         storage_slots: &[U256],
         height: BlockHeight,
@@ -210,7 +214,7 @@ impl<'db> StateQueries for HeedStateQueries<'db> {
         let mut tree = self.tree(db.clone(), height).ok()?;
         let resolver = self.resolver(db, height).ok()?;
 
-        proof_from_trie_and_resolver(address, storage_slots, &mut tree, &resolver)
+        proof_from_trie_and_resolver(address, storage_slots, &mut tree, &resolver, evm_storage)
     }
 }
 

@@ -24,7 +24,7 @@ use {
         state::{InMemoryStateQueries, StateQueries},
         transaction::{ExtendedTransaction, TransactionQueries, TransactionRepository},
     },
-    moved_evm_ext::HeaderForExecution,
+    moved_evm_ext::{storage::StorageTrieRepository, HeaderForExecution},
     moved_execution::{
         execute_transaction,
         simulate::{call_transaction, simulate_transaction},
@@ -62,6 +62,7 @@ pub type InMemStateActor = StateActor<
     moved_blockchain::receipt::InMemoryReceiptRepository,
     moved_blockchain::receipt::InMemoryReceiptQueries,
     moved_blockchain::payload::InMemoryPayloadQueries,
+    moved_evm_ext::storage::InMemoryStorageTrieRepository,
 >;
 
 /// A function invoked on a completion of new transaction execution batch.
@@ -80,7 +81,7 @@ pub type OnPayload<S> = Box<
         + 'static,
 >;
 
-pub struct StateActor<S, P, H, R, G, L1G, L2G, B, Q, M, SQ, T, TQ, N, RR, RQ, PQ> {
+pub struct StateActor<S, P, H, R, G, L1G, L2G, B, Q, M, SQ, T, TQ, N, RR, RQ, PQ, ST> {
     genesis_config: GenesisConfig,
     rx: Receiver<StateMessage>,
     head: B256,
@@ -91,6 +92,7 @@ pub struct StateActor<S, P, H, R, G, L1G, L2G, B, Q, M, SQ, T, TQ, N, RR, RQ, PQ
     payload_queries: PQ,
     mem_pool: HashMap<B256, (ExtendedTxEnvelope, L1GasFeeInput)>,
     state: S,
+    evm_storage: ST,
     block_repository: R,
     block_queries: Q,
     l1_fee: L1G,
@@ -126,7 +128,8 @@ impl<
         RR: ReceiptRepository<Storage = N> + Send + Sync + 'static,
         RQ: ReceiptQueries<Storage = N> + Send + Sync + 'static,
         PQ: PayloadQueries<Storage = M> + Send + Sync + 'static,
-    > StateActor<S, P, H, R, G, L1G, L2G, B, Q, M, SQ, T, TQ, N, RR, RQ, PQ>
+        ST: StorageTrieRepository + Send + Sync + 'static,
+    > StateActor<S, P, H, R, G, L1G, L2G, B, Q, M, SQ, T, TQ, N, RR, RQ, PQ, ST>
 {
     pub fn spawn(mut self) -> JoinHandle<()> {
         tokio::spawn(async move {
@@ -158,7 +161,8 @@ impl<
         RR: ReceiptRepository<Storage = N>,
         RQ: ReceiptQueries<Storage = N>,
         PQ: PayloadQueries<Storage = M>,
-    > StateActor<S, P, H, R, G, L1G, L2G, B, Q, M, SQ, T, TQ, N, RR, RQ, PQ>
+        ST: StorageTrieRepository,
+    > StateActor<S, P, H, R, G, L1G, L2G, B, Q, M, SQ, T, TQ, N, RR, RQ, PQ, ST>
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -183,6 +187,7 @@ impl<
         receipt_repository: RR,
         receipt_queries: RQ,
         payload_queries: PQ,
+        evm_storage: ST,
         on_tx: OnTx<Self>,
         on_tx_batch: OnTxBatch<Self>,
         on_payload: OnPayload<Self>,
@@ -213,6 +218,7 @@ impl<
             receipt_repository,
             receipt_queries,
             on_payload,
+            evm_storage,
         }
     }
 
@@ -258,14 +264,14 @@ impl<
                 response_channel,
                 height,
             } => response_channel
-                .send(self.state_queries.balance_at(self.state.db(), address.to_move_address(), self.resolve_height(height)))
+                .send(self.state_queries.balance_at(self.state.db(), &self.evm_storage, address.to_move_address(), self.resolve_height(height)))
                 .ok(),
             Query::NonceByHeight {
                 address,
                 response_channel,
                 height,
             } => response_channel
-                .send(self.state_queries.nonce_at(self.state.db(), address.to_move_address(), self.resolve_height(height)))
+                .send(self.state_queries.nonce_at(self.state.db(), &self.evm_storage, address.to_move_address(), self.resolve_height(height)))
                 .ok(),
             Query::BlockByHash {
                 hash,
@@ -303,7 +309,7 @@ impl<
                     Earliest => 0,
                 };
                 // TODO: simulation should account for gas from non-zero L1 fee
-                let outcome = simulate_transaction(transaction, self.state.resolver(), &self.genesis_config, &self.base_token, block_height);
+                let outcome = simulate_transaction(transaction, self.state.resolver(), &self.evm_storage, &self.genesis_config, &self.base_token, block_height);
                 match outcome {
                     Ok(outcome) => response_channel.send(Ok(1000 * outcome.gas_used)).ok(),
                     Err(e) => response_channel.send(Err(e)).ok(),
@@ -315,7 +321,7 @@ impl<
                 ..
             } => {
                 // TODO: Support transaction call from arbitrary blocks
-                let outcome = call_transaction(transaction, self.state.resolver(), &self.genesis_config, &self.base_token);
+                let outcome = call_transaction(transaction, self.state.resolver(), &self.evm_storage, &self.genesis_config, &self.base_token);
                 response_channel.send(outcome).ok()
             }
             Query::TransactionReceipt { tx_hash, response_channel } => {
@@ -329,6 +335,7 @@ impl<
                     self.height_from_block_id(height).and_then(|height| {
                         self.state_queries.proof_at(
                             self.state.db(),
+                            &self.evm_storage,
                             address.to_move_address(),
                             &storage_slots,
                             height,
@@ -534,6 +541,7 @@ impl<
                     tx,
                     tx_hash: &tx_hash,
                     state: self.state.resolver(),
+                    storage_trie: &self.evm_storage,
                     genesis_config: &self.genesis_config,
                     l1_cost: l1_fee
                         .as_ref()
@@ -549,6 +557,7 @@ impl<
                     tx,
                     tx_hash: &tx_hash,
                     state: self.state.resolver(),
+                    storage_trie: &self.evm_storage,
                     genesis_config: &self.genesis_config,
                     block_header: block_header.clone(),
                 }
@@ -671,7 +680,8 @@ impl<
         RR: ReceiptRepository<Storage = N>,
         RQ: ReceiptQueries<Storage = N>,
         PQ: PayloadQueries,
-    > StateActor<S, P, H, R, G, L1G, L2G, B, Q, M, InMemoryStateQueries, T, TQ, N, RR, RQ, PQ>
+        ST: StorageTrieRepository,
+    > StateActor<S, P, H, R, G, L1G, L2G, B, Q, M, InMemoryStateQueries, T, TQ, N, RR, RQ, PQ, ST>
 {
     pub fn on_tx_in_memory() -> OnTx<Self> {
         Box::new(|| Box::new(|_state, _changes| ()))
@@ -705,7 +715,9 @@ impl<
         RR: ReceiptRepository<Storage = N>,
         RQ: ReceiptQueries<Storage = N>,
         SQ: StateQueries,
-    > StateActor<S, P, H, R, G, L1G, L2G, B, Q, M, SQ, T, TQ, N, RR, RQ, InMemoryPayloadQueries>
+        ST: StorageTrieRepository,
+    >
+    StateActor<S, P, H, R, G, L1G, L2G, B, Q, M, SQ, T, TQ, N, RR, RQ, InMemoryPayloadQueries, ST>
 {
     pub fn on_payload_in_memory() -> OnPayload<Self> {
         Box::new(|| {
@@ -839,7 +851,10 @@ mod tests {
 
     pub const EVM_ADDRESS: Address = address!("8fd379246834eac74b8419ffda202cf8051f7a03");
 
-    use {alloy::signers::local::PrivateKeySigner, moved_blockchain::state::BlockHeight};
+    use {
+        alloy::signers::local::PrivateKeySigner, moved_blockchain::state::BlockHeight,
+        moved_evm_ext::storage::InMemoryStorageTrieRepository,
+    };
 
     #[derive(Debug)]
     pub struct Signer {
@@ -878,6 +893,7 @@ mod tests {
             impl ReceiptRepository<Storage = ReceiptMemory>,
             impl ReceiptQueries<Storage = ReceiptMemory, Err = Infallible>,
             impl PayloadQueries<Storage = SharedMemory>,
+            impl StorageTrieRepository,
         >,
         Sender<StateMessage>,
     ) {
@@ -919,6 +935,7 @@ mod tests {
             InMemoryReceiptRepository::new(),
             InMemoryReceiptQueries::new(),
             InMemoryPayloadQueries::new(),
+            InMemoryStorageTrieRepository::default(),
             StateActor::on_tx_noop(),
             StateActor::on_tx_batch_noop(),
             StateActor::on_payload_noop(),
@@ -926,9 +943,19 @@ mod tests {
         (state, state_channel)
     }
 
-    fn mint_eth(state: &impl State, addr: AccountAddress, amount: U256) -> ChangeSet {
+    fn mint_eth(
+        state: &impl State,
+        evm_storage: &impl StorageTrieRepository,
+        addr: AccountAddress,
+        amount: U256,
+    ) -> ChangeSet {
         let move_vm = create_move_vm().unwrap();
-        let mut session = create_vm_session(&move_vm, state.resolver(), SessionId::default());
+        let mut session = create_vm_session(
+            &move_vm,
+            state.resolver(),
+            SessionId::default(),
+            evm_storage,
+        );
         let traversal_storage = TraversalStorage::new();
         let mut traversal_context = TraversalContext::new(&traversal_storage);
         let mut gas_meter = UnmeteredGasMeter;
@@ -968,6 +995,7 @@ mod tests {
             impl ReceiptRepository<Storage = ReceiptMemory>,
             impl ReceiptQueries<Storage = ReceiptMemory, Err = Infallible>,
             impl PayloadQueries<Storage = SharedMemory>,
+            impl StorageTrieRepository,
         >,
         Sender<StateMessage>,
     ) {
@@ -984,12 +1012,13 @@ mod tests {
         let mut repository = InMemoryBlockRepository::new();
         repository.add(&mut memory, genesis_block).unwrap();
 
+        let evm_storage = InMemoryStorageTrieRepository::default();
         let mut state = InMemoryState::new();
         let (genesis_changes, table_changes) = moved_genesis_image::load();
         state
             .apply_with_tables(genesis_changes.clone(), table_changes)
             .unwrap();
-        let changes_addition = mint_eth(&state, addr, initial_balance);
+        let changes_addition = mint_eth(&state, &evm_storage, addr, initial_balance);
         state.apply(changes_addition.clone()).unwrap();
 
         let state_queries = InMemoryStateQueries::from_genesis(state.state_root());
@@ -1016,6 +1045,7 @@ mod tests {
             InMemoryReceiptRepository::new(),
             InMemoryReceiptQueries::new(),
             InMemoryPayloadQueries::new(),
+            evm_storage,
             StateActor::on_tx_in_memory(),
             StateActor::on_tx_batch_in_memory(),
             StateActor::on_payload_in_memory(),

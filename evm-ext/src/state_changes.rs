@@ -5,7 +5,7 @@ use {
         CODE_LAYOUT, EVM_NATIVE_ADDRESS,
     },
     crate::{
-        storage::{self, StorageTrieRepository},
+        storage::{self, StorageChanges, StorageTrieRepository},
         trie_types,
     },
     move_binary_format::errors::PartialVMError,
@@ -20,7 +20,14 @@ use {
         utilities::KECCAK_EMPTY, Account, AccountInfo, AccountStatus, Address, Bytecode,
         EvmStorageSlot, U256,
     },
+    std::collections::HashMap,
 };
+
+#[derive(Debug)]
+pub struct Changes {
+    accounts: ChangeSet,
+    storage: HashMap<Address, StorageChanges>,
+}
 
 pub fn genesis_state_changes<'a>(
     genesis: alloy::genesis::Genesis,
@@ -146,6 +153,7 @@ fn add_account_changes<'a>(
     for (index, value) in account.changed_storage_slots() {
         storage.insert(index, &value.present_value).unwrap();
     }
+    let storage_changes = storage.commit().unwrap();
 
     // Push AccountInfo resource
     let struct_tag = account_info_struct_tag(address);
@@ -153,7 +161,7 @@ fn add_account_changes<'a>(
         account.info.nonce,
         account.info.balance,
         account.info.code_hash,
-        storage.root_hash().unwrap(),
+        storage_changes.root,
     );
     let account_bytes = account_info.serialize();
     let is_created = !resource_exists(&struct_tag);

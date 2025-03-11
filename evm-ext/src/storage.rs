@@ -1,9 +1,11 @@
 use {
     alloy::{primitives::keccak256, rlp},
     auto_impl::auto_impl,
-    eth_trie::{EthTrie, MemDBError, MemoryDB, Trie, TrieError, DB},
+    eth_trie::{EthTrie, MemDBError, MemoryDB, RootWithTrieDiff, Trie, TrieError, DB},
     moved_shared::primitives::{Address, B256, U256},
-    std::{collections::HashMap, convert::Infallible, error, fmt::Debug, result, sync::Arc},
+    std::{
+        collections::HashMap, convert::Infallible, error, fmt::Debug, ops::Add, result, sync::Arc,
+    },
     thiserror::Error,
 };
 
@@ -61,6 +63,31 @@ impl DB for BoxedTrieDb {
     }
 }
 
+#[derive(Debug)]
+pub struct StorageChanges {
+    pub root: B256,
+    pub trie_diff: HashMap<B256, Vec<u8>>,
+}
+
+impl Add for StorageChanges {
+    type Output = Self;
+
+    fn add(mut self, rhs: Self) -> Self::Output {
+        self.root = rhs.root;
+        self.trie_diff.extend(rhs.trie_diff.into_iter());
+        self
+    }
+}
+
+impl From<RootWithTrieDiff> for StorageChanges {
+    fn from(value: RootWithTrieDiff) -> Self {
+        Self {
+            root: value.root,
+            trie_diff: value.trie_diff.into_iter().collect(),
+        }
+    }
+}
+
 impl StorageTrie {
     pub fn new(db: Arc<BoxedTrieDb>) -> Self {
         Self(EthTrie::new(db))
@@ -98,6 +125,10 @@ impl StorageTrie {
         }
 
         Ok(())
+    }
+
+    pub fn commit(&mut self) -> Result<StorageChanges> {
+        Ok(self.0.root_hash_with_changed_nodes().map(Into::into)?)
     }
 }
 

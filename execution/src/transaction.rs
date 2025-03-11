@@ -234,6 +234,15 @@ impl NormalizedExtendedTxEnvelope {
     }
 }
 
+type MoveChanges = ChangeSet;
+type EvmChanges = moved_evm_ext::Changes;
+
+#[derive(Debug)]
+pub struct Changes {
+    pub r#move: MoveChanges,
+    pub evm: EvmChanges,
+}
+
 #[derive(Debug)]
 pub struct TransactionExecutionOutcome {
     /// The final outcome of the transaction execution.

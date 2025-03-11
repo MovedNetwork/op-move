@@ -8,7 +8,7 @@ use {
 };
 
 /// [`result::Result`] with its `Err` variant set to [`Error`].
-type Result<T> = result::Result<T, Error>;
+pub type Result<T> = result::Result<T, Error>;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -213,7 +213,6 @@ impl StorageTrieRepository for InMemoryStorageTrieRepository {
     }
 
     fn apply(&mut self, changes: StorageTriesChanges) -> Result<()> {
-        // eprintln!("{changes:#?}");
         for (account, changes) in changes {
             let storage_root = changes.root;
             let storage_trie = self.for_account(&account);
@@ -230,7 +229,7 @@ impl InMemoryStorageTrieRepository {
     }
 }
 
-pub struct EthTrieDbWithLocalError<T>(T);
+pub struct EthTrieDbWithLocalError<T>(pub T);
 
 impl<E, T: DB<Error = E>> DB for EthTrieDbWithLocalError<T>
 where

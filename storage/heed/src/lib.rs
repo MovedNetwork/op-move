@@ -12,3 +12,4 @@ pub mod receipt;
 pub mod state;
 pub mod transaction;
 pub mod trie;
+pub mod trie2;

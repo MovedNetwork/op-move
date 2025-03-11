@@ -126,7 +126,7 @@ pub fn payload_queries() -> PayloadQueries {
 }
 
 pub fn storage_trie_repository() -> StorageTrieRepository {
-    evm::HeedStorageTrieRepository::new()
+    evm::HeedStorageTrieRepository::new(db())
 }
 
 lazy_static::lazy_static! {
@@ -152,7 +152,7 @@ fn create_db() -> moved_storage_heed::Env {
 
     let env = unsafe {
         EnvOpenOptions::new()
-            .max_dbs(moved_storage_heed::DATABASES.len() as u32)
+            .max_dbs(moved_storage_heed::DATABASES.len() as u32 + 10000000)
             .map_size(1024 * 1024 * 1024 * 1024) // 1 TiB
             .open(path)
             .expect("Database dir should be accessible")

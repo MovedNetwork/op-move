@@ -86,6 +86,7 @@ fn test_evm() {
     drop(extensions);
 
     ctx.state.apply(changes).unwrap();
+    ctx.evm_storage.apply(evm_changes.storage).unwrap();
 
     // -------- Transfer ERC-20 tokens
     let transfer_amount = parse_ether("0.35").unwrap();
@@ -161,50 +162,54 @@ fn test_solidity_fixed_bytes() {
     let mut ctx = TestContext::new();
     let contract = ctx.deploy_contract("solidity_fixed_bytes");
 
-    let mut call_contract = |input: Vec<u8>, state: &InMemoryState| {
-        let arg = MoveValue::vector_u8(input);
-        let entry_fn = EntryFunction::new(
-            contract.clone(),
-            ident_str!("encode_fixed_bytes").into(),
-            Vec::new(),
-            vec![bcs::to_bytes(&arg).unwrap()],
-        );
-        let (tx_hash, tx) = create_transaction(
-            &mut ctx.signer,
-            TxKind::Call(EVM_ADDRESS),
-            bcs::to_bytes(&TransactionData::EntryFunction(entry_fn)).unwrap(),
-        );
-        let tx = tx.into_canonical().unwrap();
-        let input = CanonicalExecutionInput {
-            tx: &tx,
-            tx_hash: &tx_hash,
-            state: state.resolver(),
-            storage_trie: &ctx.evm_storage,
-            genesis_config: &ctx.genesis_config,
-            l1_cost: 0,
-            l2_fee: U256::ZERO,
-            l2_input: (u64::MAX, U256::ZERO).into(),
-            base_token: &(),
-            block_header: HeaderForExecution::default(),
+    let mut call_contract =
+        |input: Vec<u8>, state: &InMemoryState, evm_storage: &InMemoryStorageTrieRepository| {
+            let arg = MoveValue::vector_u8(input);
+            let entry_fn = EntryFunction::new(
+                contract.clone(),
+                ident_str!("encode_fixed_bytes").into(),
+                Vec::new(),
+                vec![bcs::to_bytes(&arg).unwrap()],
+            );
+            let (tx_hash, tx) = create_transaction(
+                &mut ctx.signer,
+                TxKind::Call(EVM_ADDRESS),
+                bcs::to_bytes(&TransactionData::EntryFunction(entry_fn)).unwrap(),
+            );
+            let tx = tx.into_canonical().unwrap();
+            let input = CanonicalExecutionInput {
+                tx: &tx,
+                tx_hash: &tx_hash,
+                state: state.resolver(),
+                storage_trie: evm_storage,
+                genesis_config: &ctx.genesis_config,
+                l1_cost: 0,
+                l2_fee: U256::ZERO,
+                l2_input: (u64::MAX, U256::ZERO).into(),
+                base_token: &(),
+                block_header: HeaderForExecution::default(),
+            };
+            execute_transaction(input.into()).unwrap()
         };
-        execute_transaction(input.into()).unwrap()
-    };
 
     // Calling with empty bytes is an error
-    let outcome = call_contract(Vec::new(), &ctx.state);
+    let outcome = call_contract(Vec::new(), &ctx.state, &ctx.evm_storage);
     outcome.vm_outcome.unwrap_err();
     ctx.state.apply(outcome.changes.r#move).unwrap();
+    ctx.evm_storage.apply(outcome.changes.evm).unwrap();
 
     // Calling with bytes longer than 32 is an error
-    let outcome = call_contract(vec![0x88; 33], &ctx.state);
+    let outcome = call_contract(vec![0x88; 33], &ctx.state, &ctx.evm_storage);
     outcome.vm_outcome.unwrap_err();
     ctx.state.apply(outcome.changes.r#move).unwrap();
+    ctx.evm_storage.apply(outcome.changes.evm).unwrap();
 
     // Calling with any length between 1 and 32 (inclusive) works
     for n in 1..=32 {
-        let outcome = call_contract(vec![0x88; n], &ctx.state);
+        let outcome = call_contract(vec![0x88; n], &ctx.state, &ctx.evm_storage);
         outcome.vm_outcome.unwrap();
         ctx.state.apply(outcome.changes.r#move).unwrap();
+        ctx.evm_storage.apply(outcome.changes.evm).unwrap();
     }
 }
 

@@ -40,6 +40,7 @@ fn test_transaction_replay_is_forbidden() {
     let outcome = ctx.execute_tx(&transaction).unwrap();
     outcome.vm_outcome.unwrap();
     ctx.state.apply(outcome.changes.r#move).unwrap();
+    ctx.evm_storage.apply(outcome.changes.evm).unwrap();
 
     // Send the same transaction again without state update; this fails with a nonce error
     let err = ctx.execute_tx(&transaction).unwrap_err();

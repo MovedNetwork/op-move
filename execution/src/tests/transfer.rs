@@ -25,6 +25,7 @@ fn test_deposit_tx() {
     let outcome = ctx.execute_tx(&test_tx).unwrap();
     outcome.vm_outcome.unwrap();
     ctx.state.apply(outcome.changes.r#move).unwrap();
+    ctx.evm_storage.apply(outcome.changes.evm).unwrap();
 
     let balance = ctx.get_balance(dest_account);
     assert_eq!(balance, mint_amount);

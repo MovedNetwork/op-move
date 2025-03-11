@@ -237,7 +237,7 @@ impl NormalizedExtendedTxEnvelope {
 type MoveChanges = ChangeSet;
 type EvmChanges = moved_evm_ext::storage::StorageTriesChanges;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Changes {
     pub r#move: MoveChanges,
     pub evm: EvmChanges,

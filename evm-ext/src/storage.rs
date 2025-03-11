@@ -64,7 +64,7 @@ impl DB for BoxedTrieDb {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct StorageTriesChanges {
     pub tries: HashMap<Address, StorageTrieChanges>,
 }
@@ -95,7 +95,7 @@ impl StorageTriesChanges {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct StorageTrieChanges {
     pub root: B256,
     pub trie_diff: HashMap<B256, Vec<u8>>,

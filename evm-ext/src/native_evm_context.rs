@@ -34,7 +34,6 @@ pub struct HeaderForExecution {
 pub struct NativeEVMContext<'a> {
     pub resolver: &'a dyn MoveResolver<PartialVMError>,
     pub storage_trie: &'a dyn StorageTrieRepository,
-    // pub storage_trie: &'a dyn StorageTrieRepository<Storage = D>,
     pub state_changes: Vec<HashMap<Address, Account>>,
     pub block_header: HeaderForExecution,
 }
@@ -117,12 +116,7 @@ impl<'a> DatabaseRef for ResolverBackedDB<'a> {
     }
 
     fn storage_ref(&self, address: Address, index: U256) -> Result<U256, Self::Error> {
-        let Some(storage_root) = self.get_account(&address)?.map(|v| v.inner.storage_root) else {
-            return Ok(Default::default());
-        };
-        let storage = self
-            .storage_trie
-            .for_account_with_root(&address, &storage_root);
+        let storage = self.storage_trie.for_account(&address);
         let value = storage.get(&index).unwrap();
         Ok(value.unwrap_or_default())
     }

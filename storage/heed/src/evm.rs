@@ -1,5 +1,5 @@
 use {
-    moved_evm_ext::storage::{StorageTrie, StorageTrieRepository},
+    moved_evm_ext::storage::{StorageTrie, StorageTrieRepository, StorageTriesChanges},
     moved_shared::primitives::{Address, B256},
 };
 
@@ -17,6 +17,10 @@ impl StorageTrieRepository for HeedStorageTrieRepository {
     }
 
     fn for_account_with_root(&self, account: &Address, storage_root: &B256) -> StorageTrie {
+        todo!()
+    }
+
+    fn apply(&mut self, changes: StorageTriesChanges) -> Result<(), moved_evm_ext::storage::Error> {
         todo!()
     }
 }

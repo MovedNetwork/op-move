@@ -579,7 +579,11 @@ impl<
                 .unwrap_or_else(|e| {
                     panic!("ERROR: state update failed for transaction {tx:?}\n{e:?}")
                 });
-            // TODO: Apply EVM Storage Tries changes
+            self.evm_storage
+                .apply(outcome.changes.evm)
+                .unwrap_or_else(|e| {
+                    panic!("ERROR: EVM storage update failed for transaction {tx:?}\n{e:?}")
+                });
 
             cumulative_gas_used = cumulative_gas_used.saturating_add(outcome.gas_used as u128);
 

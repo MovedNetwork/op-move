@@ -3,9 +3,7 @@ use {
     auto_impl::auto_impl,
     eth_trie::{EthTrie, MemDBError, MemoryDB, RootWithTrieDiff, Trie, TrieError, DB},
     moved_shared::primitives::{Address, B256, U256},
-    std::{
-        collections::HashMap, convert::Infallible, error, fmt::Debug, ops::Add, result, sync::Arc,
-    },
+    std::{collections::HashMap, error, fmt::Debug, ops::Add, result, sync::Arc},
     thiserror::Error,
 };
 
@@ -33,6 +31,9 @@ pub trait StorageTrieRepository {
     fn for_account(&self, account: &Address) -> StorageTrie;
 
     fn for_account_with_root(&self, account: &Address, storage_root: &B256) -> StorageTrie;
+
+    // todo: do not include here
+    fn apply(&mut self, changes: StorageTriesChanges) -> Result<()>;
 }
 
 pub struct BoxedTrieDb(pub Box<dyn DB<Error = Error>>);
@@ -66,6 +67,15 @@ impl DB for BoxedTrieDb {
 #[derive(Debug)]
 pub struct StorageTriesChanges {
     pub tries: HashMap<Address, StorageTrieChanges>,
+}
+
+impl IntoIterator for StorageTriesChanges {
+    type Item = (Address, StorageTrieChanges);
+    type IntoIter = <HashMap<Address, StorageTrieChanges> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.tries.into_iter()
+    }
 }
 
 impl StorageTriesChanges {
@@ -152,12 +162,27 @@ impl StorageTrie {
     pub fn commit(&mut self) -> Result<StorageTrieChanges> {
         Ok(self.0.root_hash_with_changed_nodes().map(Into::into)?)
     }
+
+    pub fn apply(&self, changes: StorageTrieChanges) -> Result<()> {
+        let mut keys = Vec::with_capacity(changes.trie_diff.len());
+        let mut values = Vec::with_capacity(changes.trie_diff.len());
+        for (k, v) in changes.trie_diff.into_iter() {
+            keys.push(k.to_vec());
+            values.push(v);
+        }
+
+        self.0
+            .db
+            .insert_batch(keys, values)
+            .map_err(|e| TrieError::DB(e.to_string()))?;
+
+        Ok(())
+    }
 }
 
 #[derive(Default)]
 pub struct InMemoryStorageTrieRepository {
-    accounts: HashMap<Address, B256>,
-    storages: HashMap<B256, Arc<BoxedTrieDb>>,
+    accounts: HashMap<Address, (Arc<BoxedTrieDb>, B256)>,
 }
 
 impl InMemoryStorageTrieRepository {
@@ -168,11 +193,7 @@ impl InMemoryStorageTrieRepository {
 
 impl StorageTrieRepository for InMemoryStorageTrieRepository {
     fn for_account(&self, account: &Address) -> StorageTrie {
-        if let Some((db, storage_root)) = self
-            .accounts
-            .get(account)
-            .and_then(|index| self.storages.get(index).cloned().map(|v| (v, *index)))
-        {
+        if let Some((db, storage_root)) = self.accounts.get(account).cloned() {
             StorageTrie::from(db, storage_root).unwrap()
         } else {
             StorageTrie::new(Arc::new(BoxedTrieDb::new(EthTrieDbWithLocalError(
@@ -182,11 +203,7 @@ impl StorageTrieRepository for InMemoryStorageTrieRepository {
     }
 
     fn for_account_with_root(&self, account: &Address, storage_root: &B256) -> StorageTrie {
-        if let Some(db) = self
-            .accounts
-            .get(account)
-            .and_then(|index| self.storages.get(index).cloned().map(|v| v))
-        {
+        if let Some(db) = self.accounts.get(account).map(|(db, _)| db).cloned() {
             StorageTrie::from(db, *storage_root).unwrap()
         } else {
             StorageTrie::new(Arc::new(BoxedTrieDb::new(EthTrieDbWithLocalError(
@@ -194,17 +211,21 @@ impl StorageTrieRepository for InMemoryStorageTrieRepository {
             ))))
         }
     }
+
+    fn apply(&mut self, changes: StorageTriesChanges) -> Result<()> {
+        for (account, changes) in changes {
+            let storage_root = changes.root;
+            let storage_trie = self.for_account(&account);
+            storage_trie.apply(changes)?;
+            self.replace(account, storage_root, storage_trie.0.db);
+        }
+        Ok(())
+    }
 }
 
 impl InMemoryStorageTrieRepository {
-    pub fn apply(&mut self, account: Address, storage_root: B256) {
-        if let Some(root) = self.accounts.get_mut(&account) {
-            if let Some(storage) = self.storages.get(root) {
-                self.storages.insert(storage_root, storage.clone());
-            }
-            self.storages.remove(root);
-            *root = storage_root;
-        }
+    pub fn replace(&mut self, account: Address, storage_root: B256, storage: Arc<BoxedTrieDb>) {
+        self.accounts.insert(account, (storage, storage_root));
     }
 }
 
@@ -239,6 +260,10 @@ impl StorageTrieRepository for () {
     }
 
     fn for_account_with_root(&self, _: &Address, _: &B256) -> StorageTrie {
+        todo!()
+    }
+
+    fn apply(&mut self, _: StorageTriesChanges) -> Result<()> {
         todo!()
     }
 }

@@ -8,7 +8,8 @@ use {
         nonces::check_nonce,
         session_id::SessionId,
         transaction::{
-            NormalizedEthTransaction, ScriptOrModule, TransactionData, TransactionExecutionOutcome,
+            Changes, NormalizedEthTransaction, ScriptOrModule, TransactionData,
+            TransactionExecutionOutcome,
         },
         CanonicalExecutionInput, Logs,
     },
@@ -224,8 +225,9 @@ pub(super) fn execute_canonical_transaction<
     logs.extend(evm_logs);
     let evm_changes = moved_evm_ext::extract_evm_changes(&extensions);
     changes
-        .squash(evm_changes)
+        .squash(evm_changes.accounts)
         .expect("EVM changes must merge with other session changes");
+    let changes = Changes::new(changes, evm_changes.storage);
 
     match vm_outcome {
         Ok(_) => Ok(TransactionExecutionOutcome::new(

@@ -39,7 +39,7 @@ fn test_transaction_replay_is_forbidden() {
     let transaction = TestTransaction::new(tx, tx_hash);
     let outcome = ctx.execute_tx(&transaction).unwrap();
     outcome.vm_outcome.unwrap();
-    ctx.state.apply(outcome.changes).unwrap();
+    ctx.state.apply(outcome.changes.r#move).unwrap();
 
     // Send the same transaction again without state update; this fails with a nonce error
     let err = ctx.execute_tx(&transaction).unwrap_err();

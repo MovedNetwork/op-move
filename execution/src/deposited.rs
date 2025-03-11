@@ -24,7 +24,7 @@ use {
     },
 };
 
-use moved_evm_ext::storage::StorageTrieRepository;
+use {crate::transaction::Changes, moved_evm_ext::storage::StorageTrieRepository};
 #[cfg(any(feature = "test-doubles", test))]
 use {
     crate::transaction::DepositedTx, moved_evm_ext::HeaderForExecution,
@@ -125,8 +125,9 @@ pub(super) fn execute_deposited_transaction<
     let gas_used = total_gas_used(&gas_meter, input.genesis_config);
     let evm_changes = extract_evm_changes(&extensions);
     changes
-        .squash(evm_changes)
+        .squash(evm_changes.accounts)
         .expect("EVM changes must merge with other session changes");
+    let changes = Changes::new(changes, evm_changes.storage);
 
     Ok(TransactionExecutionOutcome::new(
         vm_outcome,
@@ -214,7 +215,7 @@ fn direct_mint(
 
     Ok(TransactionExecutionOutcome::new(
         Ok(()),
-        changes,
+        changes.into(),
         gas_used,
         // No L2 gas for deposited txs
         U256::ZERO,

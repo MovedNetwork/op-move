@@ -82,7 +82,7 @@ fn test_evm() {
     let contract_move_address = contract_address.to_move_address();
 
     let evm_changes = extract_evm_changes(&extensions);
-    changes.squash(evm_changes).unwrap();
+    changes.squash(evm_changes.accounts).unwrap();
     drop(extensions);
 
     ctx.state.apply(changes).unwrap();
@@ -113,7 +113,7 @@ fn test_evm() {
     let transaction = TestTransaction::new(tx, tx_hash);
     let outcome = ctx.execute_tx(&transaction).unwrap();
     outcome.vm_outcome.unwrap();
-    ctx.state.apply(outcome.changes).unwrap();
+    ctx.state.apply(outcome.changes.r#move).unwrap();
 
     // -------- Validate ERC-20 balances
     let balance_of =
@@ -192,18 +192,18 @@ fn test_solidity_fixed_bytes() {
     // Calling with empty bytes is an error
     let outcome = call_contract(Vec::new(), &ctx.state);
     outcome.vm_outcome.unwrap_err();
-    ctx.state.apply(outcome.changes).unwrap();
+    ctx.state.apply(outcome.changes.r#move).unwrap();
 
     // Calling with bytes longer than 32 is an error
     let outcome = call_contract(vec![0x88; 33], &ctx.state);
     outcome.vm_outcome.unwrap_err();
-    ctx.state.apply(outcome.changes).unwrap();
+    ctx.state.apply(outcome.changes.r#move).unwrap();
 
     // Calling with any length between 1 and 32 (inclusive) works
     for n in 1..=32 {
         let outcome = call_contract(vec![0x88; n], &ctx.state);
         outcome.vm_outcome.unwrap();
-        ctx.state.apply(outcome.changes).unwrap();
+        ctx.state.apply(outcome.changes.r#move).unwrap();
     }
 }
 

@@ -64,12 +64,34 @@ impl DB for BoxedTrieDb {
 }
 
 #[derive(Debug)]
-pub struct StorageChanges {
+pub struct StorageTriesChanges {
+    pub tries: HashMap<Address, StorageTrieChanges>,
+}
+
+impl StorageTriesChanges {
+    pub fn empty() -> Self {
+        Self {
+            tries: HashMap::new(),
+        }
+    }
+
+    pub fn with_trie_changes(mut self, address: Address, changes: StorageTrieChanges) -> Self {
+        let changes = match self.tries.remove(&address) {
+            Some(old) => old + changes,
+            None => changes,
+        };
+        self.tries.insert(address, changes);
+        self
+    }
+}
+
+#[derive(Debug)]
+pub struct StorageTrieChanges {
     pub root: B256,
     pub trie_diff: HashMap<B256, Vec<u8>>,
 }
 
-impl Add for StorageChanges {
+impl Add for StorageTrieChanges {
     type Output = Self;
 
     fn add(mut self, rhs: Self) -> Self::Output {
@@ -79,7 +101,7 @@ impl Add for StorageChanges {
     }
 }
 
-impl From<RootWithTrieDiff> for StorageChanges {
+impl From<RootWithTrieDiff> for StorageTrieChanges {
     fn from(value: RootWithTrieDiff) -> Self {
         Self {
             root: value.root,
@@ -127,7 +149,7 @@ impl StorageTrie {
         Ok(())
     }
 
-    pub fn commit(&mut self) -> Result<StorageChanges> {
+    pub fn commit(&mut self) -> Result<StorageTrieChanges> {
         Ok(self.0.root_hash_with_changed_nodes().map(Into::into)?)
     }
 }

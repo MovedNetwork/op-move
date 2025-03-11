@@ -572,11 +572,14 @@ impl<
 
             let l1_block_info = l1_fee.as_ref().and_then(|x| x.l1_block_info(l1_cost_input));
 
-            on_tx(self, outcome.changes.clone());
+            on_tx(self, outcome.changes.r#move.clone());
 
-            self.state.apply(outcome.changes).unwrap_or_else(|e| {
-                panic!("ERROR: state update failed for transaction {tx:?}\n{e:?}")
-            });
+            self.state
+                .apply(outcome.changes.r#move)
+                .unwrap_or_else(|e| {
+                    panic!("ERROR: state update failed for transaction {tx:?}\n{e:?}")
+                });
+            // TODO: Apply EVM Storage Tries changes
 
             cumulative_gas_used = cumulative_gas_used.saturating_add(outcome.gas_used as u128);
 

@@ -111,7 +111,7 @@ impl TestContext {
         let (tx_hash, tx) = create_transaction(&mut self.signer, TxKind::Create, module_bytes);
         let transaction = TestTransaction::new(tx, tx_hash);
         let outcome = self.execute_tx(&transaction).unwrap();
-        self.state.apply(outcome.changes).unwrap();
+        self.state.apply(outcome.changes.r#move).unwrap();
 
         let module_id = ModuleId::new(self.move_address, Identifier::new(module_name).unwrap());
         assert!(
@@ -141,7 +141,7 @@ impl TestContext {
         let (tx_hash, tx) = create_transaction(&mut self.signer, TxKind::Create, script_bytes);
         let transaction = TestTransaction::new(tx, tx_hash);
         let outcome = self.execute_tx(&transaction).unwrap();
-        self.state.apply(outcome.changes).unwrap();
+        self.state.apply(outcome.changes.r#move).unwrap();
         // Script transaction should succeed
         outcome.vm_outcome.unwrap();
         outcome.logs
@@ -178,7 +178,7 @@ impl TestContext {
         let mut transaction = TestTransaction::new(tx, tx_hash);
         transaction.with_cost_and_token(l1_cost, base_token, l2_gas_limit, l2_gas_price);
         let outcome = self.execute_tx(&transaction)?;
-        self.state.apply(outcome.changes.clone())?;
+        self.state.apply(outcome.changes.r#move.clone())?;
         let l2_gas_fee = CreateMovedL2GasFee.with_default_gas_fee_multiplier();
         let used_gas_input = L2GasFeeInput::new(outcome.gas_used, outcome.l2_price);
         let l2_cost = l2_gas_fee.l2_fee(used_gas_input);
@@ -215,7 +215,7 @@ impl TestContext {
         let outcome = self.execute_tx(&transaction).unwrap();
         // Entry function transaction should succeed
         outcome.vm_outcome.unwrap();
-        self.state.apply(outcome.changes).unwrap();
+        self.state.apply(outcome.changes.r#move).unwrap();
     }
 
     /// Executes a Move entry function expecting it to fail
@@ -339,7 +339,7 @@ impl TestContext {
         let transaction = TestTransaction::new(tx.try_into().unwrap(), tx_hash);
         let outcome = self.execute_tx(&transaction).unwrap();
         outcome.vm_outcome.unwrap();
-        self.state.apply(outcome.changes).unwrap();
+        self.state.apply(outcome.changes.r#move).unwrap();
 
         let balance_after = self.get_balance(to);
         assert_eq!(balance_after, balance_before + amount);

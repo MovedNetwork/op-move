@@ -1,4 +1,4 @@
-use {super::*, moved_evm_ext::storage::InMemoryStorageTrieRepository};
+use super::*;
 
 #[test]
 fn test_execute_natives_contract() {

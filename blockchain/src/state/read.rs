@@ -462,13 +462,20 @@ mod tests {
 
     #[test]
     fn test_query_fetches_latest_balance() {
-        let evm_storage = InMemoryStorageTrieRepository::new();
+        let mut evm_storage = InMemoryStorageTrieRepository::new();
         let state = InMemoryState::new();
         let mut state = StateSpy(state, ChangeSet::new());
 
         let genesis_config = GenesisConfig::default();
-        let (changes, tables) = moved_genesis_image::load();
-        moved_genesis::apply(changes, tables, &genesis_config, &mut state);
+        let (changes, tables, evm_storage_changes) = moved_genesis_image::load();
+        moved_genesis::apply(
+            changes,
+            tables,
+            evm_storage_changes,
+            &genesis_config,
+            &mut state,
+            &mut evm_storage,
+        );
 
         let mut state = state.0;
         let addr = AccountAddress::TWO;
@@ -490,13 +497,20 @@ mod tests {
 
     #[test]
     fn test_query_fetches_older_balance() {
-        let evm_storage = InMemoryStorageTrieRepository::new();
+        let mut evm_storage = InMemoryStorageTrieRepository::new();
         let state = InMemoryState::new();
         let mut state = StateSpy(state, ChangeSet::new());
 
         let genesis_config = GenesisConfig::default();
-        let (changes, tables) = moved_genesis_image::load();
-        moved_genesis::apply(changes, tables, &genesis_config, &mut state);
+        let (changes, tables, evm_storage_changes) = moved_genesis_image::load();
+        moved_genesis::apply(
+            changes,
+            tables,
+            evm_storage_changes,
+            &genesis_config,
+            &mut state,
+            &mut evm_storage,
+        );
 
         let mut state = state.0;
 
@@ -522,13 +536,20 @@ mod tests {
 
     #[test]
     fn test_query_fetches_latest_and_previous_balance() {
-        let evm_storage = InMemoryStorageTrieRepository::new();
+        let mut evm_storage = InMemoryStorageTrieRepository::new();
         let state = InMemoryState::new();
         let mut state = StateSpy(state, ChangeSet::new());
 
         let genesis_config = GenesisConfig::default();
-        let (changes, tables) = moved_genesis_image::load();
-        moved_genesis::apply(changes, tables, &genesis_config, &mut state);
+        let (changes, tables, evm_storage_changes) = moved_genesis_image::load();
+        moved_genesis::apply(
+            changes,
+            tables,
+            evm_storage_changes,
+            &genesis_config,
+            &mut state,
+            &mut evm_storage,
+        );
 
         let mut state = state.0;
 
@@ -561,13 +582,20 @@ mod tests {
 
     #[test]
     fn test_query_fetches_zero_balance_for_non_existent_account() {
-        let evm_storage = InMemoryStorageTrieRepository::new();
+        let mut evm_storage = InMemoryStorageTrieRepository::new();
         let state = InMemoryState::new();
         let mut state = StateSpy(state, ChangeSet::new());
 
         let genesis_config = GenesisConfig::default();
-        let (changes, tables) = moved_genesis_image::load();
-        moved_genesis::apply(changes, tables, &genesis_config, &mut state);
+        let (changes, tables, evm_storage_changes) = moved_genesis_image::load();
+        moved_genesis::apply(
+            changes,
+            tables,
+            evm_storage_changes,
+            &genesis_config,
+            &mut state,
+            &mut evm_storage,
+        );
 
         let state = state.0;
 
@@ -618,13 +646,20 @@ mod tests {
 
     #[test]
     fn test_query_fetches_latest_nonce() {
-        let evm_storage = InMemoryStorageTrieRepository::new();
+        let mut evm_storage = InMemoryStorageTrieRepository::new();
         let state = InMemoryState::new();
         let mut state = StateSpy(state, ChangeSet::new());
 
         let genesis_config = GenesisConfig::default();
-        let (changes, tables) = moved_genesis_image::load();
-        moved_genesis::apply(changes, tables, &genesis_config, &mut state);
+        let (changes, tables, evm_storage_changes) = moved_genesis_image::load();
+        moved_genesis::apply(
+            changes,
+            tables,
+            evm_storage_changes,
+            &genesis_config,
+            &mut state,
+            &mut evm_storage,
+        );
 
         let mut state = state.0;
         let addr = AccountAddress::TWO;
@@ -646,13 +681,20 @@ mod tests {
 
     #[test]
     fn test_query_fetches_older_nonce() {
-        let evm_storage = InMemoryStorageTrieRepository::new();
+        let mut evm_storage = InMemoryStorageTrieRepository::new();
         let state = InMemoryState::new();
         let mut state = StateSpy(state, ChangeSet::new());
 
         let genesis_config = GenesisConfig::default();
-        let (changes, tables) = moved_genesis_image::load();
-        moved_genesis::apply(changes, tables, &genesis_config, &mut state);
+        let (changes, tables, evm_storage_changes) = moved_genesis_image::load();
+        moved_genesis::apply(
+            changes,
+            tables,
+            evm_storage_changes,
+            &genesis_config,
+            &mut state,
+            &mut evm_storage,
+        );
 
         let mut state = state.0;
 
@@ -678,13 +720,20 @@ mod tests {
 
     #[test]
     fn test_query_fetches_latest_and_previous_nonce() {
-        let evm_storage = InMemoryStorageTrieRepository::new();
+        let mut evm_storage = InMemoryStorageTrieRepository::new();
         let state = InMemoryState::new();
         let mut state = StateSpy(state, ChangeSet::new());
 
         let genesis_config = GenesisConfig::default();
-        let (changes, tables) = moved_genesis_image::load();
-        moved_genesis::apply(changes, tables, &genesis_config, &mut state);
+        let (changes, tables, evm_storage_changes) = moved_genesis_image::load();
+        moved_genesis::apply(
+            changes,
+            tables,
+            evm_storage_changes,
+            &genesis_config,
+            &mut state,
+            &mut evm_storage,
+        );
 
         let mut state = state.0;
 
@@ -717,13 +766,20 @@ mod tests {
 
     #[test]
     fn test_query_fetches_zero_nonce_for_non_existent_account() {
-        let evm_storage = InMemoryStorageTrieRepository::new();
+        let mut evm_storage = InMemoryStorageTrieRepository::new();
         let state = InMemoryState::new();
         let mut state = StateSpy(state, ChangeSet::new());
 
         let genesis_config = GenesisConfig::default();
-        let (changes, tables) = moved_genesis_image::load();
-        moved_genesis::apply(changes, tables, &genesis_config, &mut state);
+        let (changes, tables, evm_storage_changes) = moved_genesis_image::load();
+        moved_genesis::apply(
+            changes,
+            tables,
+            evm_storage_changes,
+            &genesis_config,
+            &mut state,
+            &mut evm_storage,
+        );
 
         let state = state.0;
 

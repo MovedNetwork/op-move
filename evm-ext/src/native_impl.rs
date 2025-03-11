@@ -11,7 +11,6 @@ use {
         safely_pop_arg, SafeNativeBuilder, SafeNativeContext, SafeNativeError, SafeNativeResult,
     },
     aptos_types::vm_status::StatusCode,
-    eth_trie::DB,
     move_binary_format::errors::PartialVMError,
     move_core_types::{account_address::AccountAddress, ident_str, identifier::IdentStr},
     move_vm_runtime::native_functions::NativeFunctionTable,

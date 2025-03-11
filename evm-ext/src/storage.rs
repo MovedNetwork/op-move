@@ -3,7 +3,7 @@ use {
     auto_impl::auto_impl,
     eth_trie::{EthTrie, MemDBError, MemoryDB, RootWithTrieDiff, Trie, TrieError, DB},
     moved_shared::primitives::{Address, B256, U256},
-    std::{collections::HashMap, error, fmt::Debug, ops::Add, result, sync::Arc},
+    std::{collections::HashMap, fmt::Debug, ops::Add, result, sync::Arc},
     thiserror::Error,
 };
 
@@ -213,6 +213,7 @@ impl StorageTrieRepository for InMemoryStorageTrieRepository {
     }
 
     fn apply(&mut self, changes: StorageTriesChanges) -> Result<()> {
+        // eprintln!("{changes:#?}");
         for (account, changes) in changes {
             let storage_root = changes.root;
             let storage_trie = self.for_account(&account);

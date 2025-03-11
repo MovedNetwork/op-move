@@ -78,8 +78,16 @@ pub mod tests {
         repository.add(&mut memory, genesis_block).unwrap();
 
         let mut state = InMemoryState::new();
-        let (changes, table_changes) = moved_genesis_image::load();
-        moved_genesis::apply(changes.clone(), table_changes, &genesis_config, &mut state);
+        let mut evm_storage = InMemoryStorageTrieRepository::new();
+        let (changes, table_changes, evm_storage_changes) = moved_genesis_image::load();
+        moved_genesis::apply(
+            changes.clone(),
+            table_changes,
+            evm_storage_changes,
+            &genesis_config,
+            &mut state,
+            &mut evm_storage,
+        );
         let initial_state_root = genesis_config.initial_state_root;
 
         let state = StateActor::new(
@@ -104,7 +112,7 @@ pub mod tests {
             InMemoryReceiptRepository::new(),
             InMemoryReceiptQueries::new(),
             InMemoryPayloadQueries::new(),
-            InMemoryStorageTrieRepository::new(),
+            evm_storage,
             StateActor::on_tx_noop(),
             StateActor::on_tx_batch_noop(),
             StateActor::on_payload_in_memory(),

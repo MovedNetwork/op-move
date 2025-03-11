@@ -7,6 +7,8 @@ use {
         language_storage::{ModuleId, StructTag, TypeTag},
     },
     move_table_extension::{TableChange, TableChangeSet, TableHandle, TableInfo},
+    moved_evm_ext::storage::{StorageTrieChanges, StorageTriesChanges},
+    moved_shared::primitives::{Address, B256},
     std::collections::{BTreeMap, BTreeSet},
 };
 
@@ -174,11 +176,20 @@ impl From<TableChangeSet> for SerdeTableChangeSet {
 pub struct SerdeAllChanges {
     pub changes: SerdeChanges<Bytes, Bytes>,
     pub tables: SerdeTableChangeSet,
+    pub evm_storage: SerdeEvmStorageTriesChanges,
 }
 
 impl SerdeAllChanges {
-    pub fn new(changes: SerdeChanges<Bytes, Bytes>, tables: SerdeTableChangeSet) -> Self {
-        Self { changes, tables }
+    pub fn new(
+        changes: SerdeChanges<Bytes, Bytes>,
+        tables: SerdeTableChangeSet,
+        evm_storage: SerdeEvmStorageTriesChanges,
+    ) -> Self {
+        Self {
+            changes,
+            tables,
+            evm_storage,
+        }
     }
 }
 
@@ -196,6 +207,59 @@ impl From<SerdeTableChangeSet> for TableChangeSet {
                 .into_iter()
                 .map(|(k, v)| (TableHandle(k), v.into()))
                 .collect(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, serde::Serialize, serde::Deserialize)]
+pub struct SerdeEvmStorageTriesChanges {
+    pub tries: BTreeMap<Address, SerdeEvmStorageTrieChanges>,
+}
+
+impl From<StorageTriesChanges> for SerdeEvmStorageTriesChanges {
+    fn from(value: StorageTriesChanges) -> Self {
+        Self {
+            tries: value
+                .tries
+                .into_iter()
+                .map(|(k, v)| (k, v.into()))
+                .collect(),
+        }
+    }
+}
+
+impl From<SerdeEvmStorageTriesChanges> for StorageTriesChanges {
+    fn from(value: SerdeEvmStorageTriesChanges) -> Self {
+        Self {
+            tries: value
+                .tries
+                .into_iter()
+                .map(|(k, v)| (k, v.into()))
+                .collect(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, serde::Serialize, serde::Deserialize)]
+pub struct SerdeEvmStorageTrieChanges {
+    pub root: B256,
+    pub trie_diff: BTreeMap<B256, Vec<u8>>,
+}
+
+impl From<StorageTrieChanges> for SerdeEvmStorageTrieChanges {
+    fn from(value: StorageTrieChanges) -> Self {
+        Self {
+            root: value.root,
+            trie_diff: value.trie_diff.into_iter().collect(),
+        }
+    }
+}
+
+impl From<SerdeEvmStorageTrieChanges> for StorageTrieChanges {
+    fn from(value: SerdeEvmStorageTrieChanges) -> Self {
+        Self {
+            root: value.root,
+            trie_diff: value.trie_diff.into_iter().collect(),
         }
     }
 }

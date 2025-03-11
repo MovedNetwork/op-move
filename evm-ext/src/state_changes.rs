@@ -5,7 +5,7 @@ use {
         CODE_LAYOUT, EVM_NATIVE_ADDRESS,
     },
     crate::{
-        storage::{self, StorageTrieChanges, StorageTrieRepository, StorageTriesChanges},
+        storage::{StorageTrieChanges, StorageTrieRepository, StorageTriesChanges},
         trie_types,
     },
     move_binary_format::errors::PartialVMError,
@@ -20,7 +20,6 @@ use {
         utilities::KECCAK_EMPTY, Account, AccountInfo, AccountStatus, Address, Bytecode,
         EvmStorageSlot, U256,
     },
-    std::collections::HashMap,
 };
 
 #[derive(Debug)]
@@ -39,10 +38,11 @@ pub fn genesis_state_changes<'a>(
     genesis: alloy::genesis::Genesis,
     resolver: &impl MoveResolver<PartialVMError>,
     storage_trie: &impl StorageTrieRepository,
-) -> ChangeSet {
+) -> Changes {
     let mut result = ChangeSet::new();
     let empty_changes = AccountChangeSet::new();
     let mut account_changes = AccountChangeSet::new();
+    let mut storage_tries = StorageTriesChanges::empty();
     for (address, genesis_account) in genesis.alloc {
         let (code_hash, code) = match genesis_account.code {
             Some(raw) => {
@@ -77,7 +77,7 @@ pub fn genesis_state_changes<'a>(
             storage,
             status: AccountStatus::Touched,
         };
-        add_account_changes(
+        let storage_changes = add_account_changes(
             &address,
             &account,
             resolver,
@@ -85,11 +85,13 @@ pub fn genesis_state_changes<'a>(
             &mut account_changes,
             storage_trie,
         );
+        storage_tries = storage_tries.with_trie_changes(address, storage_changes);
     }
     result
         .add_account_changeset(EVM_NATIVE_ADDRESS, account_changes)
         .expect("EVM native changes must be added");
-    result
+
+    Changes::new(result, storage_tries)
 }
 
 pub fn extract_evm_changes<'a>(extensions: &NativeContextExtensions) -> Changes {

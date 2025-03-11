@@ -169,9 +169,9 @@ pub fn initialize_state_actor(
     let receipt_repository = dependency::receipt_repository();
     let receipt_queries = dependency::receipt_queries();
     let payload_queries = dependency::payload_queries();
-    let evm_storage = dependency::storage_trie_repository();
+    let mut evm_storage = dependency::storage_trie_repository();
 
-    let (genesis_changes, table_changes) = {
+    let (genesis_changes, table_changes, evm_storage_changes) = {
         #[cfg(test)]
         {
             moved_genesis_image::load()
@@ -186,7 +186,14 @@ pub fn initialize_state_actor(
             )
         }
     };
-    moved_genesis::apply(genesis_changes, table_changes, &genesis_config, &mut state);
+    moved_genesis::apply(
+        genesis_changes,
+        table_changes,
+        evm_storage_changes,
+        &genesis_config,
+        &mut state,
+        &mut evm_storage,
+    );
 
     let genesis_block = create_genesis_block(&block_hash, &genesis_config);
     let head = genesis_block.hash;

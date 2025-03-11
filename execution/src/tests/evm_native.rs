@@ -114,6 +114,7 @@ fn test_evm() {
     let outcome = ctx.execute_tx(&transaction).unwrap();
     outcome.vm_outcome.unwrap();
     ctx.state.apply(outcome.changes.r#move).unwrap();
+    ctx.evm_storage.apply(outcome.changes.evm).unwrap();
 
     // -------- Validate ERC-20 balances
     let balance_of =

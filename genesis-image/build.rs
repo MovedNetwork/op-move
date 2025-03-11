@@ -26,10 +26,10 @@ pub fn save(
     storage_trie: &impl StorageTrieRepository,
 ) -> (ChangeSet, TableChangeSet) {
     let path = std::env::var("OUT_DIR").unwrap() + "/genesis.bin";
-    let (changes, tables) = build(vm, config, state, storage_trie);
+    let (changes, tables, evm_storage) = build(vm, config, state, storage_trie);
     let changes = SerdeChanges::from(changes);
     let tables = SerdeTableChangeSet::from(tables);
-    let all_changes = SerdeAllChanges::new(changes, tables);
+    let all_changes = SerdeAllChanges::new(changes, tables, evm_storage.into());
     let contents = bcs::to_bytes(&all_changes).unwrap();
     let mut file = std::fs::File::create(path).unwrap();
     file.write_all(contents.as_slice()).unwrap();

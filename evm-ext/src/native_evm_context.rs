@@ -4,21 +4,19 @@ use {
         type_utils::{account_info_struct_tag, code_hash_struct_tag},
         CODE_LAYOUT, EVM_NATIVE_ADDRESS,
     },
-    crate::{storage, storage::StorageTrieRepository},
+    crate::storage::StorageTrieRepository,
     alloy::primitives::map::HashMap,
     aptos_types::vm_status::StatusCode,
     better_any::{Tid, TidAble},
-    eth_trie::DB,
     move_binary_format::errors::PartialVMError,
     move_core_types::{account_address::AccountAddress, resolver::MoveResolver},
     move_vm_types::values::{VMValueCast, Value},
     revm::{
-        db::{CacheDB, DatabaseRef},
+        db::DatabaseRef,
         primitives::{
             utilities::KECCAK_EMPTY, Account, AccountInfo, Address, Bytecode, B256, U256,
         },
     },
-    std::{error::Error, sync::RwLock},
 };
 
 pub const FRAMEWORK_ADDRESS: AccountAddress = AccountAddress::ONE;

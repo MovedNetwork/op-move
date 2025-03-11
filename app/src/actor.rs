@@ -917,8 +917,16 @@ mod tests {
         repository.add(&mut memory, genesis_block).unwrap();
 
         let mut state = InMemoryState::new();
-        let (changes, tables) = moved_genesis_image::load();
-        moved_genesis::apply(changes, tables, &genesis_config, &mut state);
+        let mut evm_storage = InMemoryStorageTrieRepository::new();
+        let (changes, tables, evm_storage_changes) = moved_genesis_image::load();
+        moved_genesis::apply(
+            changes,
+            tables,
+            evm_storage_changes,
+            &genesis_config,
+            &mut state,
+            &mut evm_storage,
+        );
 
         let state = StateActor::new(
             rx,
@@ -942,7 +950,7 @@ mod tests {
             InMemoryReceiptRepository::new(),
             InMemoryReceiptQueries::new(),
             InMemoryPayloadQueries::new(),
-            InMemoryStorageTrieRepository::new(),
+            evm_storage,
             StateActor::on_tx_noop(),
             StateActor::on_tx_batch_noop(),
             StateActor::on_payload_noop(),
@@ -1019,12 +1027,13 @@ mod tests {
         let mut repository = InMemoryBlockRepository::new();
         repository.add(&mut memory, genesis_block).unwrap();
 
-        let evm_storage = InMemoryStorageTrieRepository::new();
+        let mut evm_storage = InMemoryStorageTrieRepository::new();
         let mut state = InMemoryState::new();
-        let (genesis_changes, table_changes) = moved_genesis_image::load();
+        let (genesis_changes, table_changes, evm_storage_changes) = moved_genesis_image::load();
         state
             .apply_with_tables(genesis_changes.clone(), table_changes)
             .unwrap();
+        evm_storage.apply(evm_storage_changes).unwrap();
         let changes_addition = mint_eth(&state, &evm_storage, addr, initial_balance);
         state.apply(changes_addition.clone()).unwrap();
 

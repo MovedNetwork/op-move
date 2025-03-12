@@ -3,7 +3,13 @@ use {
     auto_impl::auto_impl,
     eth_trie::{EthTrie, MemDBError, MemoryDB, RootWithTrieDiff, Trie, TrieError, DB},
     moved_shared::primitives::{Address, B256, U256},
-    std::{collections::HashMap, fmt::Debug, ops::Add, result, sync::Arc},
+    std::{
+        collections::HashMap,
+        fmt::Debug,
+        ops::Add,
+        result,
+        sync::{Arc, RwLock},
+    },
     thiserror::Error,
 };
 
@@ -27,20 +33,64 @@ impl From<MemDBError> for Error {
 pub struct StorageTrie(pub EthTrie<BoxedTrieDb>);
 
 #[auto_impl(Box)]
-pub trait StorageTrieRepository {
-    fn for_account(&self, account: &Address) -> StorageTrie;
-
-    fn for_account_with_root(&self, account: &Address, storage_root: &B256) -> StorageTrie;
-
-    // todo: do not include here
-    fn apply(&mut self, changes: StorageTriesChanges) -> Result<()>;
+pub trait StorageTrieDb {
+    fn db(&self, account: Address) -> Arc<BoxedTrieDb>;
 }
 
-pub struct BoxedTrieDb(pub Box<dyn DB<Error = Error>>);
+pub trait StorageTrieRepository {
+    fn for_account(&self, account: &Address) -> Result<StorageTrie>;
+
+    fn for_account_with_root(&self, account: &Address, storage_root: &B256) -> Result<StorageTrie>;
+
+    fn apply(&self, changes: StorageTriesChanges) -> Result<()>;
+}
+
+impl<T: StorageTrieDb> StorageTrieRepository for T {
+    fn for_account(&self, account: &Address) -> Result<StorageTrie> {
+        let db = self.db(*account);
+
+        Ok(if let Some(root) = db.root()? {
+            StorageTrie::from(db, root)?
+        } else {
+            StorageTrie::new(db)
+        })
+    }
+
+    fn for_account_with_root(&self, account: &Address, storage_root: &B256) -> Result<StorageTrie> {
+        let db = self.db(*account);
+
+        Ok(StorageTrie::from(db, *storage_root)?)
+    }
+
+    fn apply(&self, changes: StorageTriesChanges) -> Result<()> {
+        for (account, changes) in changes {
+            self.for_account(&account)?.apply(changes)?;
+        }
+        Ok(())
+    }
+}
+
+pub struct BoxedTrieDb(pub Box<dyn DbWithRoot<Error = Error>>);
 
 impl BoxedTrieDb {
-    pub fn new(db: impl DB<Error = Error> + 'static) -> Self {
+    pub fn new(db: impl DbWithRoot<Error = Error> + 'static) -> Self {
         Self(Box::new(db))
+    }
+}
+
+pub trait DbWithRoot: DB {
+    fn root(&self) -> result::Result<Option<B256>, Self::Error>;
+
+    fn put_root(&self, root: B256) -> result::Result<(), Self::Error>;
+}
+
+impl DbWithRoot for BoxedTrieDb {
+    fn root(&self) -> result::Result<Option<B256>, Self::Error> {
+        self.0.root()
+    }
+
+    fn put_root(&self, root: B256) -> result::Result<(), Self::Error> {
+        self.0.put_root(root)
     }
 }
 
@@ -176,60 +226,99 @@ impl StorageTrie {
             .insert_batch(keys, values)
             .map_err(|e| TrieError::DB(e.to_string()))?;
 
+        self.0.db.put_root(changes.root)?;
+
+        Ok(())
+    }
+}
+
+pub struct InMemoryDb {
+    root: RwLock<Option<B256>>,
+    db: MemoryDB,
+}
+
+impl InMemoryDb {
+    pub fn empty() -> Self {
+        Self {
+            root: RwLock::new(None),
+            db: MemoryDB::new(false),
+        }
+    }
+}
+
+impl DB for InMemoryDb {
+    type Error = <MemoryDB as DB>::Error;
+
+    fn get(&self, key: &[u8]) -> result::Result<Option<Vec<u8>>, Self::Error> {
+        self.db.get(key)
+    }
+
+    fn insert(&self, key: &[u8], value: Vec<u8>) -> result::Result<(), Self::Error> {
+        self.db.insert(key, value)
+    }
+
+    fn remove(&self, key: &[u8]) -> result::Result<(), Self::Error> {
+        self.db.remove(key)
+    }
+
+    fn flush(&self) -> result::Result<(), Self::Error> {
+        self.db.flush()
+    }
+}
+
+impl DbWithRoot for InMemoryDb {
+    fn root(&self) -> result::Result<Option<B256>, Self::Error> {
+        Ok(*self.root.read().unwrap())
+    }
+
+    fn put_root(&self, root: B256) -> result::Result<(), Self::Error> {
+        self.root.write().unwrap().replace(root);
         Ok(())
     }
 }
 
 #[derive(Default)]
 pub struct InMemoryStorageTrieRepository {
-    accounts: HashMap<Address, (Arc<BoxedTrieDb>, B256)>,
+    accounts: RwLock<HashMap<Address, Arc<BoxedTrieDb>>>,
 }
 
 impl InMemoryStorageTrieRepository {
     pub fn new() -> Self {
         Self::default()
     }
-}
 
-impl StorageTrieRepository for InMemoryStorageTrieRepository {
-    fn for_account(&self, account: &Address) -> StorageTrie {
-        if let Some((db, storage_root)) = self.accounts.get(account).cloned() {
-            StorageTrie::from(db, storage_root).unwrap()
-        } else {
-            StorageTrie::new(Arc::new(BoxedTrieDb::new(EthTrieDbWithLocalError(
-                MemoryDB::new(false),
-            ))))
-        }
-    }
-
-    fn for_account_with_root(&self, account: &Address, storage_root: &B256) -> StorageTrie {
-        if let Some(db) = self.accounts.get(account).map(|(db, _)| db).cloned() {
-            StorageTrie::from(db, *storage_root).unwrap()
-        } else {
-            StorageTrie::new(Arc::new(BoxedTrieDb::new(EthTrieDbWithLocalError(
-                MemoryDB::new(false),
-            ))))
-        }
-    }
-
-    fn apply(&mut self, changes: StorageTriesChanges) -> Result<()> {
-        for (account, changes) in changes {
-            let storage_root = changes.root;
-            let storage_trie = self.for_account(&account);
-            storage_trie.apply(changes)?;
-            self.replace(account, storage_root, storage_trie.0.db);
-        }
-        Ok(())
+    pub fn create() -> Arc<BoxedTrieDb> {
+        Arc::new(BoxedTrieDb::new(EthTrieDbWithLocalError(
+            InMemoryDb::empty(),
+        )))
     }
 }
 
-impl InMemoryStorageTrieRepository {
-    pub fn replace(&mut self, account: Address, storage_root: B256, storage: Arc<BoxedTrieDb>) {
-        self.accounts.insert(account, (storage, storage_root));
+impl StorageTrieDb for InMemoryStorageTrieRepository {
+    fn db(&self, account: Address) -> Arc<BoxedTrieDb> {
+        self.accounts
+            .write()
+            .unwrap()
+            .entry(account)
+            .or_insert_with(Self::create)
+            .clone()
     }
 }
 
 pub struct EthTrieDbWithLocalError<T>(pub T);
+
+impl<E, T: DbWithRoot<Error = E>> DbWithRoot for EthTrieDbWithLocalError<T>
+where
+    Error: From<E>,
+{
+    fn root(&self) -> result::Result<Option<B256>, Self::Error> {
+        Ok(self.0.root()?)
+    }
+
+    fn put_root(&self, root: B256) -> result::Result<(), Self::Error> {
+        Ok(self.0.put_root(root)?)
+    }
+}
 
 impl<E, T: DB<Error = E>> DB for EthTrieDbWithLocalError<T>
 where
@@ -254,16 +343,8 @@ where
     }
 }
 
-impl StorageTrieRepository for () {
-    fn for_account(&self, _: &Address) -> StorageTrie {
-        todo!()
-    }
-
-    fn for_account_with_root(&self, _: &Address, _: &B256) -> StorageTrie {
-        todo!()
-    }
-
-    fn apply(&mut self, _: StorageTriesChanges) -> Result<()> {
+impl StorageTrieDb for () {
+    fn db(&self, _: Address) -> Arc<BoxedTrieDb> {
         todo!()
     }
 }

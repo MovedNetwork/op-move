@@ -3,10 +3,7 @@ use {
     eth_trie::{TrieError, DB},
     moved_evm_ext::{
         storage,
-        storage::{
-            BoxedTrieDb, EthTrieDbWithLocalError, StorageTrie, StorageTrieRepository,
-            StorageTriesChanges,
-        },
+        storage::{BoxedTrieDb, DbWithRoot, EthTrieDbWithLocalError, StorageTrieDb},
     },
     moved_shared::primitives::{Address, B256},
     std::{
@@ -47,59 +44,15 @@ impl HeedStorageTrieRepository {
     pub fn new(env: &'static heed::Env) -> Self {
         Self { env }
     }
-
-    pub fn replace(&self, account: Address, storage_root: B256) -> Result<(), Error> {
-        let db = HeedEthStorageTrieDb::new(self.env, account);
-        db.put_root(storage_root)?;
-        Ok(())
-    }
 }
 
-impl StorageTrieRepository for HeedStorageTrieRepository {
-    fn for_account(&self, account: &Address) -> StorageTrie {
-        let db = HeedEthStorageTrieDb::new(self.env, *account);
+impl StorageTrieDb for HeedStorageTrieRepository {
+    fn db(&self, account: Address) -> Arc<BoxedTrieDb> {
+        let db = HeedEthStorageTrieDb::new(self.env, account);
 
-        if let Some(storage_root) = db.root().unwrap() {
-            StorageTrie::from(
-                Arc::new(BoxedTrieDb::new(EthTrieDbWithLocalError(
-                    EthTrieDbWithHeedError::new(db),
-                ))),
-                storage_root,
-            )
-            .unwrap()
-        } else {
-            StorageTrie::new(Arc::new(BoxedTrieDb::new(EthTrieDbWithLocalError(
-                EthTrieDbWithHeedError::new(db),
-            ))))
-        }
-    }
-
-    fn for_account_with_root(&self, account: &Address, storage_root: &B256) -> StorageTrie {
-        let db = HeedEthStorageTrieDb::new(self.env, *account);
-
-        if db.root().unwrap().is_some() {
-            StorageTrie::from(
-                Arc::new(BoxedTrieDb::new(EthTrieDbWithLocalError(
-                    EthTrieDbWithHeedError::new(db),
-                ))),
-                *storage_root,
-            )
-            .unwrap()
-        } else {
-            StorageTrie::new(Arc::new(BoxedTrieDb::new(EthTrieDbWithLocalError(
-                EthTrieDbWithHeedError::new(db),
-            ))))
-        }
-    }
-
-    fn apply(&mut self, changes: StorageTriesChanges) -> storage::Result<()> {
-        for (account, changes) in changes {
-            let storage_root = changes.root;
-            let storage_trie = self.for_account(&account);
-            storage_trie.apply(changes)?;
-            self.replace(account, storage_root)?;
-        }
-        Ok(())
+        Arc::new(BoxedTrieDb::new(EthTrieDbWithLocalError(
+            EthTrieDbWithHeedError::new(db),
+        )))
     }
 }
 
@@ -108,6 +61,19 @@ pub struct EthTrieDbWithHeedError<T: DB>(pub T);
 impl<T: DB> EthTrieDbWithHeedError<T> {
     pub fn new(db: T) -> Self {
         Self(db)
+    }
+}
+
+impl<E, T: DB<Error = E> + DbWithRoot> DbWithRoot for EthTrieDbWithHeedError<T>
+where
+    Error: From<E>,
+{
+    fn root(&self) -> Result<Option<B256>, Self::Error> {
+        Ok(self.0.root()?)
+    }
+
+    fn put_root(&self, root: B256) -> Result<(), Self::Error> {
+        Ok(self.0.put_root(root)?)
     }
 }
 

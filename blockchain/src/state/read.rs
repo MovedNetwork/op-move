@@ -165,8 +165,9 @@ pub fn proof_from_trie_and_resolver(
     let storage_proof = if storage_slots.is_empty() {
         Vec::new()
     } else {
-        let mut storage =
-            storage_trie.for_account_with_root(&address, &account_info.inner.storage_root);
+        let mut storage = storage_trie
+            .for_account_with_root(&address, &account_info.inner.storage_root)
+            .ok()?;
 
         storage_slots
             .iter()

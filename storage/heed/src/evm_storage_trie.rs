@@ -5,6 +5,7 @@ use {
     },
     eth_trie::DB,
     heed::RoTxn,
+    moved_evm_ext::storage::DbWithRoot,
     moved_shared::primitives::{Address, B256},
 };
 
@@ -27,7 +28,13 @@ impl<'db> HeedEthStorageTrieDb<'db> {
         Self { env, account }
     }
 
-    pub fn root(&self) -> Result<Option<B256>, heed::Error> {
+    fn unique_key(&self, key: &[u8]) -> Vec<u8> {
+        [self.account.as_slice(), key].concat()
+    }
+}
+
+impl<'db> DbWithRoot for HeedEthStorageTrieDb<'db> {
+    fn root(&self) -> Result<Option<B256>, heed::Error> {
         let transaction = self.env.read_txn()?;
 
         let db = self.env.storage_root_database(&transaction)?;
@@ -39,7 +46,7 @@ impl<'db> HeedEthStorageTrieDb<'db> {
         Ok(root)
     }
 
-    pub fn put_root(&self, root: B256) -> Result<(), heed::Error> {
+    fn put_root(&self, root: B256) -> Result<(), heed::Error> {
         let mut transaction = self.env.write_txn()?;
 
         let db = self.env.storage_root_database(&transaction)?;
@@ -47,10 +54,6 @@ impl<'db> HeedEthStorageTrieDb<'db> {
         db.put(&mut transaction, &self.account, &root)?;
 
         transaction.commit()
-    }
-
-    fn unique_key(&self, key: &[u8]) -> Vec<u8> {
-        [self.account.as_slice(), key].concat()
     }
 }
 

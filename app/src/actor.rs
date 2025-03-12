@@ -1027,7 +1027,7 @@ mod tests {
         let mut repository = InMemoryBlockRepository::new();
         repository.add(&mut memory, genesis_block).unwrap();
 
-        let mut evm_storage = InMemoryStorageTrieRepository::new();
+        let evm_storage = InMemoryStorageTrieRepository::new();
         let mut state = InMemoryState::new();
         let (genesis_changes, table_changes, evm_storage_changes) = moved_genesis_image::load();
         state

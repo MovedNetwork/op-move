@@ -34,7 +34,7 @@ impl Changes {
     }
 }
 
-pub fn genesis_state_changes<'a>(
+pub fn genesis_state_changes(
     genesis: alloy::genesis::Genesis,
     resolver: &impl MoveResolver<PartialVMError>,
     storage_trie: &impl StorageTrieRepository,
@@ -94,7 +94,7 @@ pub fn genesis_state_changes<'a>(
     Changes::new(result, storage_tries)
 }
 
-pub fn extract_evm_changes<'a>(extensions: &NativeContextExtensions) -> Changes {
+pub fn extract_evm_changes(extensions: &NativeContextExtensions) -> Changes {
     let evm_native_ctx = extensions.get::<NativeEVMContext>();
     let mut evm_move_account_changes = ChangeSet::new();
     let mut account_changes = AccountChangeSet::new();
@@ -128,7 +128,7 @@ pub fn extract_evm_changes<'a>(extensions: &NativeContextExtensions) -> Changes 
     Changes::new(evm_move_account_changes, storage_tries)
 }
 
-fn add_account_changes<'a>(
+fn add_account_changes(
     address: &Address,
     account: &Account,
     resolver: &dyn MoveResolver<PartialVMError>,
@@ -160,7 +160,7 @@ fn add_account_changes<'a>(
             .unwrap_or(false)
     };
 
-    let mut storage = storage_trie.for_account(address);
+    let mut storage = storage_trie.for_account(address).unwrap();
     for (index, value) in account.changed_storage_slots() {
         storage.insert(index, &value.present_value).unwrap();
     }

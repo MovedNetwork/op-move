@@ -116,7 +116,7 @@ impl<'a> DatabaseRef for ResolverBackedDB<'a> {
     }
 
     fn storage_ref(&self, address: Address, index: U256) -> Result<U256, Self::Error> {
-        let storage = self.storage_trie.for_account(&address);
+        let storage = self.storage_trie.for_account(&address).unwrap();
         let value = storage.get(&index).unwrap();
         Ok(value.unwrap_or_default())
     }

@@ -1,5 +1,5 @@
 use {
-    crate::trie2::HeedEthTrie2Db,
+    crate::evm_storage_trie::HeedEthStorageTrieDb,
     eth_trie::{TrieError, DB},
     moved_evm_ext::{
         storage,
@@ -49,7 +49,7 @@ impl HeedStorageTrieRepository {
     }
 
     pub fn replace(&self, account: Address, storage_root: B256) -> Result<(), Error> {
-        let db = HeedEthTrie2Db::new(self.env, account);
+        let db = HeedEthStorageTrieDb::new(self.env, account);
         db.put_root(storage_root)?;
         Ok(())
     }
@@ -57,7 +57,7 @@ impl HeedStorageTrieRepository {
 
 impl StorageTrieRepository for HeedStorageTrieRepository {
     fn for_account(&self, account: &Address) -> StorageTrie {
-        let db = HeedEthTrie2Db::new(self.env, *account);
+        let db = HeedEthStorageTrieDb::new(self.env, *account);
 
         if let Some(storage_root) = db.root().unwrap() {
             StorageTrie::from(
@@ -75,9 +75,9 @@ impl StorageTrieRepository for HeedStorageTrieRepository {
     }
 
     fn for_account_with_root(&self, account: &Address, storage_root: &B256) -> StorageTrie {
-        let db = HeedEthTrie2Db::new(self.env, *account);
+        let db = HeedEthStorageTrieDb::new(self.env, *account);
 
-        if let Some(_) = db.root().unwrap() {
+        if db.root().unwrap().is_some() {
             StorageTrie::from(
                 Arc::new(BoxedTrieDb::new(EthTrieDbWithLocalError(
                     EthTrieDbWithHeedError::new(db),

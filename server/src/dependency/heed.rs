@@ -8,7 +8,8 @@ use {
     moved_genesis::config::GenesisConfig,
     moved_state::State,
     moved_storage_heed::{
-        block, evm, heed::EnvOpenOptions, payload, receipt, state, transaction, trie,
+        block, evm, evm_storage_trie, heed::EnvOpenOptions, payload, receipt, state, transaction,
+        trie,
     },
 };
 
@@ -140,7 +141,7 @@ fn db() -> &'static moved_storage_heed::Env {
 }
 
 fn create_db() -> moved_storage_heed::Env {
-    assert_eq!(moved_storage_heed::DATABASES.len(), 9);
+    assert_eq!(moved_storage_heed::DATABASES.len(), 11);
 
     let path = "db";
 
@@ -152,7 +153,7 @@ fn create_db() -> moved_storage_heed::Env {
 
     let env = unsafe {
         EnvOpenOptions::new()
-            .max_dbs(moved_storage_heed::DATABASES.len() as u32 + 10000000)
+            .max_dbs(moved_storage_heed::DATABASES.len() as u32)
             .map_size(1024 * 1024 * 1024 * 1024) // 1 TiB
             .open(path)
             .expect("Database dir should be accessible")
@@ -178,6 +179,12 @@ fn create_db() -> moved_storage_heed::Env {
             .expect("Database should be new");
         let _: trie::RootDb = env
             .create_database(&mut transaction, Some(trie::ROOT_DB))
+            .expect("Database should be new");
+        let _: evm_storage_trie::Db = env
+            .create_database(&mut transaction, Some(evm_storage_trie::DB))
+            .expect("Database should be new");
+        let _: evm_storage_trie::RootDb = env
+            .create_database(&mut transaction, Some(evm_storage_trie::ROOT_DB))
             .expect("Database should be new");
         let _: transaction::Db = env
             .create_database(&mut transaction, Some(transaction::DB))

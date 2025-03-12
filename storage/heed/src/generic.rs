@@ -4,7 +4,7 @@ use {
         types::{Bytes, U64},
         BoxedError, BytesDecode, BytesEncode,
     },
-    moved_shared::primitives::B256,
+    moved_shared::primitives::{Address, B256},
     serde::{Deserialize, Serialize},
     std::{borrow::Cow, fmt::Debug},
 };
@@ -25,6 +25,25 @@ impl<'item> BytesDecode<'item> for EncodableB256 {
 
     fn bytes_decode(bytes: &'item [u8]) -> Result<Self::DItem, BoxedError> {
         Ok(B256::try_from(bytes)?)
+    }
+}
+
+#[derive(Debug)]
+pub struct EncodableAddress;
+
+impl<'item> BytesEncode<'item> for EncodableAddress {
+    type EItem = Address;
+
+    fn bytes_encode(item: &'item Self::EItem) -> Result<Cow<'item, [u8]>, BoxedError> {
+        Ok(Cow::Borrowed(item.as_slice()))
+    }
+}
+
+impl<'item> BytesDecode<'item> for EncodableAddress {
+    type DItem = Address;
+
+    fn bytes_decode(bytes: &'item [u8]) -> Result<Self::DItem, BoxedError> {
+        Ok(Address::try_from(bytes)?)
     }
 }
 

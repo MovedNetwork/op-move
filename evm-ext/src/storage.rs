@@ -48,19 +48,19 @@ impl DB for BoxedTrieDb {
     type Error = Error;
 
     fn get(&self, key: &[u8]) -> result::Result<Option<Vec<u8>>, Self::Error> {
-        Ok(self.0.get(key)?)
+        self.0.get(key)
     }
 
     fn insert(&self, key: &[u8], value: Vec<u8>) -> result::Result<(), Self::Error> {
-        Ok(self.0.insert(key, value)?)
+        self.0.insert(key, value)
     }
 
     fn remove(&self, key: &[u8]) -> result::Result<(), Self::Error> {
-        Ok(self.0.remove(key)?)
+        self.0.remove(key)
     }
 
     fn flush(&self) -> result::Result<(), Self::Error> {
-        Ok(self.0.flush()?)
+        self.0.flush()
     }
 }
 
@@ -106,7 +106,7 @@ impl Add for StorageTrieChanges {
 
     fn add(mut self, rhs: Self) -> Self::Output {
         self.root = rhs.root;
-        self.trie_diff.extend(rhs.trie_diff.into_iter());
+        self.trie_diff.extend(rhs.trie_diff);
         self
     }
 }

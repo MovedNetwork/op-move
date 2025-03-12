@@ -5,8 +5,8 @@ use {
         CODE_LAYOUT, EVM_NATIVE_ADDRESS,
     },
     crate::{
+        account,
         storage::{StorageTrieChanges, StorageTrieRepository, StorageTriesChanges},
-        trie_types,
     },
     move_binary_format::errors::PartialVMError,
     move_core_types::{
@@ -168,7 +168,7 @@ fn add_account_changes(
 
     // Push AccountInfo resource
     let struct_tag = account_info_struct_tag(address);
-    let account_info = trie_types::Account::new(
+    let account_info = account::Account::new(
         account.info.nonce,
         account.info.balance,
         account.info.code_hash,

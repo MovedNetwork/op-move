@@ -7,7 +7,7 @@ use {
     },
     moved_app::StateMessage,
     moved_blockchain::state::ProofResponse,
-    moved_evm_ext::trie_types,
+    moved_evm_ext::account,
     moved_genesis::config::GenesisConfig,
     serde::de::DeserializeOwned,
     std::sync::Arc,
@@ -135,7 +135,7 @@ async fn test_get_proof() -> anyhow::Result<()> {
     .unwrap();
 
     // Proof contains the right account data
-    let account = trie_types::Account::new(
+    let account = account::Account::new(
         response.nonce,
         response.balance,
         response.code_hash,

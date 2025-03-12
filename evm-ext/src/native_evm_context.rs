@@ -1,6 +1,6 @@
 use {
     super::{
-        trie_types,
+        account,
         type_utils::{account_info_struct_tag, code_hash_struct_tag},
         CODE_LAYOUT, EVM_NATIVE_ADDRESS,
     },
@@ -72,13 +72,13 @@ impl<'a> ResolverBackedDB<'a> {
     pub fn get_account(
         &self,
         address: &Address,
-    ) -> Result<Option<trie_types::Account>, PartialVMError> {
+    ) -> Result<Option<account::Account>, PartialVMError> {
         let struct_tag = account_info_struct_tag(address);
         let resource = self
             .resolver
             .get_resource(&EVM_NATIVE_ADDRESS, &struct_tag)?;
         let value = resource.map(|bytes| {
-            trie_types::Account::try_deserialize(&bytes)
+            account::Account::try_deserialize(&bytes)
                 .expect("EVM account info must deserialize correctly.")
         });
         Ok(value)

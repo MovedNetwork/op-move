@@ -42,6 +42,7 @@ pub trait StorageTrieRepository {
 
     fn for_account_with_root(&self, account: &Address, storage_root: &B256) -> Result<StorageTrie>;
 
+    // TODO: move this out of repository
     fn apply(&self, changes: StorageTriesChanges) -> Result<()>;
 }
 

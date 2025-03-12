@@ -128,7 +128,7 @@ pub fn payload_queries() -> PayloadQueries {
 }
 
 pub fn storage_trie_repository() -> StorageTrieRepository {
-    moved_storage_rocksdb::evm::RocksDbStorageTrieRepository::new();
+    moved_storage_rocksdb::evm::RocksDbStorageTrieRepository::new(db())
 }
 
 lazy_static::lazy_static! {

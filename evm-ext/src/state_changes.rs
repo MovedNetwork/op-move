@@ -4,10 +4,7 @@ use {
         type_utils::{account_info_struct_tag, code_hash_struct_tag, get_account_code_hash},
         CODE_LAYOUT, EVM_NATIVE_ADDRESS,
     },
-    crate::{
-        account,
-        storage::{StorageTrieChanges, StorageTrieRepository, StorageTriesChanges},
-    },
+    crate::state::{self, StorageTrieChanges, StorageTrieRepository, StorageTriesChanges},
     move_binary_format::errors::PartialVMError,
     move_core_types::{
         effects::{AccountChangeSet, ChangeSet, Op},
@@ -168,7 +165,7 @@ fn add_account_changes(
 
     // Push AccountInfo resource
     let struct_tag = account_info_struct_tag(address);
-    let account_info = account::Account::new(
+    let account_info = state::Account::new(
         account.info.nonce,
         account.info.balance,
         account.info.code_hash,

@@ -15,7 +15,7 @@ use {
         state::StateQueries,
         transaction::{TransactionQueries, TransactionRepository},
     },
-    moved_evm_ext::storage::StorageTrieRepository,
+    moved_evm_ext::state::StorageTrieRepository,
     moved_execution::{
         BaseTokenAccounts, CreateEcotoneL1GasFee, CreateL1GasFee, CreateL2GasFee,
         CreateMovedL2GasFee,

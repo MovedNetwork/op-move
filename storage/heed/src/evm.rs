@@ -1,12 +1,10 @@
 use {
     crate::evm_storage_trie::HeedEthStorageTrieDb,
     eth_trie::{TrieError, DB},
-    moved_evm_ext::{
-        storage,
-        storage::{BoxedTrieDb, DbWithRoot, EthTrieDbWithLocalError, StorageTrieDb},
-    },
+    moved_evm_ext::state::{self, BoxedTrieDb, DbWithRoot, EthTrieDbWithLocalError, StorageTrieDb},
     moved_shared::primitives::{Address, B256},
     std::{
+        error,
         fmt::{Display, Formatter},
         sync::Arc,
     },
@@ -21,11 +19,11 @@ impl Display for Error {
     }
 }
 
-impl std::error::Error for Error {}
+impl error::Error for Error {}
 
-impl From<Error> for storage::Error {
+impl From<Error> for state::Error {
     fn from(value: Error) -> Self {
-        storage::Error::EthTrie(TrieError::DB(value.0.to_string()))
+        state::Error::EthTrie(TrieError::DB(value.0.to_string()))
     }
 }
 

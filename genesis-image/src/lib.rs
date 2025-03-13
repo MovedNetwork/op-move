@@ -1,6 +1,6 @@
 use {
     move_core_types::effects::ChangeSet, move_table_extension::TableChangeSet,
-    moved_evm_ext::storage::StorageTriesChanges, moved_genesis::SerdeAllChanges,
+    moved_evm_ext::state::StorageTriesChanges, moved_genesis::SerdeAllChanges,
 };
 
 pub fn load() -> (ChangeSet, TableChangeSet, StorageTriesChanges) {

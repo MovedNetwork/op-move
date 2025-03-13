@@ -5,7 +5,7 @@ use {
     },
     eth_trie::DB,
     heed::RoTxn,
-    moved_evm_ext::storage::DbWithRoot,
+    moved_evm_ext::state::DbWithRoot,
     moved_shared::primitives::{Address, B256},
 };
 

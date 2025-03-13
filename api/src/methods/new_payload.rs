@@ -174,7 +174,7 @@ mod tests {
             state::InMemoryStateQueries,
             transaction::{InMemoryTransactionQueries, InMemoryTransactionRepository},
         },
-        moved_evm_ext::storage::InMemoryStorageTrieRepository,
+        moved_evm_ext::state::InMemoryStorageTrieRepository,
         moved_genesis::config::GenesisConfig,
         moved_shared::primitives::{Address, Bytes, B2048, U256, U64},
         moved_state::InMemoryState,

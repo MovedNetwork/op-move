@@ -7,7 +7,7 @@ use {
         language_storage::{ModuleId, StructTag, TypeTag},
     },
     move_table_extension::{TableChange, TableChangeSet, TableHandle, TableInfo},
-    moved_evm_ext::storage::{StorageTrieChanges, StorageTriesChanges},
+    moved_evm_ext::state::{StorageTrieChanges, StorageTriesChanges},
     moved_shared::primitives::{Address, B256},
     std::collections::{BTreeMap, BTreeSet},
 };

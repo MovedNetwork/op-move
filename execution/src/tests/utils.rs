@@ -1,6 +1,5 @@
 use {
-    super::*, moved_evm_ext::storage::InMemoryStorageTrieRepository,
-    moved_genesis::config::CHAIN_ID,
+    super::*, moved_evm_ext::state::InMemoryStorageTrieRepository, moved_genesis::config::CHAIN_ID,
 };
 
 /// Represents the base token state for a test transaction

@@ -16,7 +16,7 @@ use {
     move_core_types::resolver::MoveResolver,
     move_table_extension::TableResolver,
     move_vm_runtime::module_traversal::{TraversalContext, TraversalStorage},
-    moved_evm_ext::{storage::StorageTrieRepository, HeaderForExecution},
+    moved_evm_ext::{state::StorageTrieRepository, HeaderForExecution},
     moved_genesis::config::GenesisConfig,
     moved_shared::{
         error::{Error::InvalidTransaction, InvalidTransactionCause},

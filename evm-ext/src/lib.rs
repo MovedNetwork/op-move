@@ -15,13 +15,12 @@ use {
     std::sync::LazyLock,
 };
 
-pub mod account;
 pub mod events;
 mod native_evm_context;
 mod native_impl;
 mod solidity_abi;
+pub mod state;
 mod state_changes;
-pub mod storage;
 pub mod type_utils;
 
 /// Address where the EVM native is stored

@@ -321,7 +321,7 @@ mod tests {
         crate::{create_move_vm, create_vm_session, session_id::SessionId, tests::EVM_ADDRESS},
         alloy::primitives::address,
         move_core_types::value::MoveStruct,
-        moved_evm_ext::storage::InMemoryStorageTrieRepository,
+        moved_evm_ext::state::InMemoryStorageTrieRepository,
         moved_shared::primitives::ToMoveAddress,
         moved_state::{InMemoryState, State},
     };

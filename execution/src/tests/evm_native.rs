@@ -31,7 +31,7 @@ use {
         values::{Struct, Value},
     },
     moved_evm_ext::{
-        extract_evm_changes, extract_evm_result, storage::InMemoryStorageTrieRepository,
+        extract_evm_changes, extract_evm_result, state::InMemoryStorageTrieRepository,
         EvmNativeOutcome, CODE_LAYOUT, EVM_NATIVE_ADDRESS, EVM_NATIVE_MODULE,
     },
     moved_shared::primitives::{ToEthAddress, ToMoveAddress, ToMoveU256},

@@ -1,7 +1,7 @@
 use {
     move_core_types::effects::ChangeSet,
     move_table_extension::TableChangeSet,
-    moved_evm_ext::storage::{InMemoryStorageTrieRepository, StorageTrieRepository},
+    moved_evm_ext::state::{InMemoryStorageTrieRepository, StorageTrieRepository},
     moved_genesis::{
         build, config::GenesisConfig, CreateMoveVm, MovedVm, SerdeAllChanges, SerdeChanges,
         SerdeTableChangeSet,

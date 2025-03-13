@@ -24,7 +24,7 @@ use {
         state::{InMemoryStateQueries, StateQueries},
         transaction::{ExtendedTransaction, TransactionQueries, TransactionRepository},
     },
-    moved_evm_ext::{storage::StorageTrieRepository, HeaderForExecution},
+    moved_evm_ext::{state::StorageTrieRepository, HeaderForExecution},
     moved_execution::{
         execute_transaction,
         simulate::{call_transaction, simulate_transaction},
@@ -62,7 +62,7 @@ pub type InMemStateActor = StateActor<
     moved_blockchain::receipt::InMemoryReceiptRepository,
     moved_blockchain::receipt::InMemoryReceiptQueries,
     moved_blockchain::payload::InMemoryPayloadQueries,
-    moved_evm_ext::storage::InMemoryStorageTrieRepository,
+    moved_evm_ext::state::InMemoryStorageTrieRepository,
 >;
 
 /// A function invoked on a completion of new transaction execution batch.
@@ -860,7 +860,7 @@ mod tests {
 
     use {
         alloy::signers::local::PrivateKeySigner, moved_blockchain::state::BlockHeight,
-        moved_evm_ext::storage::InMemoryStorageTrieRepository,
+        moved_evm_ext::state::InMemoryStorageTrieRepository,
     };
 
     #[derive(Debug)]

@@ -14,7 +14,7 @@ use {
         proof_from_trie_and_resolver, Balance, BlockHeight, EthTrieResolver, Nonce, ProofResponse,
         StateQueries,
     },
-    moved_evm_ext::storage::StorageTrieRepository,
+    moved_evm_ext::state::StorageTrieRepository,
     moved_execution::{
         quick_get_eth_balance, quick_get_nonce,
         transaction::{L2_HIGHEST_ADDRESS, L2_LOWEST_ADDRESS},

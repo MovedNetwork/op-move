@@ -21,7 +21,7 @@ use {
         module_traversal::{TraversalContext, TraversalStorage},
         session::Session,
     },
-    moved_evm_ext::storage::StorageTrieRepository,
+    moved_evm_ext::state::StorageTrieRepository,
     moved_genesis::config::GenesisConfig,
     moved_shared::{
         error::{

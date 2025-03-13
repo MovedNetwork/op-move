@@ -24,7 +24,7 @@ use {
     },
 };
 
-use {crate::transaction::Changes, moved_evm_ext::storage::StorageTrieRepository};
+use {crate::transaction::Changes, moved_evm_ext::state::StorageTrieRepository};
 #[cfg(any(feature = "test-doubles", test))]
 use {
     crate::transaction::DepositedTx, moved_evm_ext::HeaderForExecution,

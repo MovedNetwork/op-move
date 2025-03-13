@@ -1,6 +1,6 @@
 use {
     eth_trie::DB,
-    moved_evm_ext::storage::DbWithRoot,
+    moved_evm_ext::state::DbWithRoot,
     moved_shared::primitives::{Address, B256},
     rocksdb::{AsColumnFamilyRef, DB as RocksDb},
 };

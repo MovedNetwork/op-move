@@ -17,7 +17,7 @@ use {
     },
     move_table_extension::{TableHandle, TableResolver},
     moved_evm_ext::{
-        storage::{self, StorageTrieRepository},
+        state::{self, StorageTrieRepository},
         ResolverBackedDB,
     },
     moved_execution::{
@@ -176,7 +176,7 @@ pub fn proof_from_trie_and_resolver(
                 storage.proof(key.as_slice()).ok().map(|proof| {
                     let value = storage.get(index)?.unwrap_or_default();
 
-                    Ok::<StorageProof, storage::Error>(StorageProof {
+                    Ok::<StorageProof, state::Error>(StorageProof {
                         key: (*index).into(),
                         value,
                         proof: proof.into_iter().map(Into::into).collect(),
@@ -391,7 +391,7 @@ mod tests {
         move_table_extension::TableChangeSet,
         move_vm_runtime::module_traversal::{TraversalContext, TraversalStorage},
         move_vm_types::gas::UnmeteredGasMeter,
-        moved_evm_ext::storage::InMemoryStorageTrieRepository,
+        moved_evm_ext::state::InMemoryStorageTrieRepository,
         moved_execution::{
             check_nonce, create_move_vm, create_vm_session, mint_eth, session_id::SessionId,
         },

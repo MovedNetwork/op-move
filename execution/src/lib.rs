@@ -28,7 +28,7 @@ use {
     },
     moved_evm_ext::{
         events::{evm_logs_event_to_log, EVM_LOGS_EVENT_LAYOUT, EVM_LOGS_EVENT_TAG},
-        storage::StorageTrieRepository,
+        state::StorageTrieRepository,
         HeaderForExecution,
     },
     moved_genesis::{config::GenesisConfig, CreateMoveVm, MovedVm},

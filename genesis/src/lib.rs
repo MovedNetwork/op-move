@@ -11,7 +11,7 @@ use {
     self::config::GenesisConfig,
     move_core_types::effects::ChangeSet,
     move_table_extension::TableChangeSet,
-    moved_evm_ext::storage::{StorageTrieRepository, StorageTriesChanges},
+    moved_evm_ext::state::{StorageTrieRepository, StorageTriesChanges},
     moved_state::State,
 };
 

@@ -47,7 +47,7 @@ pub mod tests {
                 TransactionRepository,
             },
         },
-        moved_evm_ext::storage::{InMemoryStorageTrieRepository, StorageTrieRepository},
+        moved_evm_ext::state::{InMemoryStorageTrieRepository, StorageTrieRepository},
         moved_execution::{
             transaction::{DepositedTx, ExtendedTxEnvelope},
             BaseTokenAccounts, CreateL1GasFee, CreateL2GasFee, MovedBaseTokenAccounts,

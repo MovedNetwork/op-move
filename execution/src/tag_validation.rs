@@ -118,7 +118,7 @@ pub fn validate_entry_value(
                 // Signer must be the expected signer (you cannot forge the
                 // signature of another address).
                 if given_signer != expected_signer {
-                    Err(InvalidTransactionCause::InvalidSigner)?;
+                    Err(InvalidTransactionCause::InvalidSigner)?
                 }
             }
             (TypeTag::Vector(inner_tag), MoveValue::Vector(array)) => {
@@ -321,6 +321,7 @@ mod tests {
         crate::{create_move_vm, create_vm_session, session_id::SessionId, tests::EVM_ADDRESS},
         alloy::primitives::address,
         move_core_types::value::MoveStruct,
+        moved_evm_ext::state::InMemoryStorageTrieRepository,
         moved_shared::primitives::ToMoveAddress,
         moved_state::{InMemoryState, State},
     };
@@ -521,7 +522,13 @@ mod tests {
 
         let move_vm = create_move_vm().unwrap();
         let state = InMemoryState::new();
-        let mut session = create_vm_session(&move_vm, state.resolver(), SessionId::default());
+        let evm_storage = InMemoryStorageTrieRepository::new();
+        let mut session = create_vm_session(
+            &move_vm,
+            state.resolver(),
+            SessionId::default(),
+            &evm_storage,
+        );
         for (type_tag, test_case, expected_outcome) in test_cases {
             let actual_outcome =
                 validate_entry_value(type_tag, test_case, &correct_signer, &mut session)
@@ -594,7 +601,13 @@ mod tests {
 
         let move_vm = create_move_vm().unwrap();
         let state = InMemoryState::new();
-        let mut session = create_vm_session(&move_vm, state.resolver(), SessionId::default());
+        let evm_storage = InMemoryStorageTrieRepository::new();
+        let mut session = create_vm_session(
+            &move_vm,
+            state.resolver(),
+            SessionId::default(),
+            &evm_storage,
+        );
         for (type_tag, test_case, expected_outcome) in test_cases {
             let actual_outcome =
                 validate_entry_value(type_tag, test_case, &AccountAddress::ZERO, &mut session)

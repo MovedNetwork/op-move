@@ -18,6 +18,7 @@ pub(super) type StateActor<A, B, C, D, E, F, G, H> = moved_app::StateActor<
     ReceiptRepository,
     ReceiptQueries,
     PayloadQueries,
+    StorageTrieRepository,
 >;
 pub(super) type OnTxBatch<A, B, C, D, E, F, G, H> =
     moved_app::OnTxBatch<StateActor<A, B, C, D, E, F, G, H>>;

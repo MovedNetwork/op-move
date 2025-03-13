@@ -11,7 +11,6 @@ use {
 };
 
 pub const ACCOUNT_INFO_PREFIX: &str = "Account_";
-pub const ACCOUNT_STORAGE_PREFIX: &str = "Storage_";
 
 pub fn account_info_struct_tag(address: &Address) -> StructTag {
     let name = format!("{ACCOUNT_INFO_PREFIX}{}", address.encode_hex());
@@ -27,17 +26,6 @@ pub fn account_info_struct_tag(address: &Address) -> StructTag {
 pub fn code_hash_struct_tag(code_hash: &B256) -> StructTag {
     let name = format!("CodeHash_{}", code_hash.encode_hex());
     let name = Identifier::new(name).expect("Code hash name is valid");
-    StructTag {
-        address: EVM_NATIVE_ADDRESS,
-        module: EVM_NATIVE_MODULE.into(),
-        name,
-        type_args: Vec::new(),
-    }
-}
-
-pub fn account_storage_struct_tag(address: &Address) -> StructTag {
-    let name = format!("{ACCOUNT_STORAGE_PREFIX}{}", address.encode_hex());
-    let name = Identifier::new(name).expect("Account storage name is valid");
     StructTag {
         address: EVM_NATIVE_ADDRESS,
         module: EVM_NATIVE_MODULE.into(),

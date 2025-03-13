@@ -14,6 +14,7 @@ use {
         gas::{GasMeter, UnmeteredGasMeter},
         values::Value,
     },
+    moved_evm_ext::state::StorageTrieRepository,
     moved_genesis::FRAMEWORK_ADDRESS,
     moved_shared::error::{Error, InvalidTransactionCause, NonceChecking},
 };
@@ -28,9 +29,10 @@ const INCREMENT_NONCE_FUNCTION_NAME: &IdentStr = ident_str!("increment_sequence_
 pub fn quick_get_nonce(
     address: &AccountAddress,
     state: &(impl MoveResolver<PartialVMError> + TableResolver),
+    storage_trie: &impl StorageTrieRepository,
 ) -> u64 {
     let move_vm = super::create_move_vm().expect("Must create MoveVM");
-    let mut session = super::create_vm_session(&move_vm, state, SessionId::default());
+    let mut session = super::create_vm_session(&move_vm, state, SessionId::default(), storage_trie);
     let traversal_storage = TraversalStorage::new();
     let mut traversal_context = TraversalContext::new(&traversal_storage);
     let mut gas_meter = UnmeteredGasMeter;

@@ -1,13 +1,10 @@
 use {
     super::{
         native_evm_context::NativeEVMContext,
-        type_utils::{
-            account_info_struct_tag, account_storage_struct_tag, code_hash_struct_tag,
-            get_account_code_hash,
-        },
+        type_utils::{account_info_struct_tag, code_hash_struct_tag, get_account_code_hash},
         CODE_LAYOUT, EVM_NATIVE_ADDRESS,
     },
-    crate::trie_types,
+    crate::state::{self, StorageTrieChanges, StorageTrieRepository, StorageTriesChanges},
     move_binary_format::errors::PartialVMError,
     move_core_types::{
         effects::{AccountChangeSet, ChangeSet, Op},
@@ -22,13 +19,27 @@ use {
     },
 };
 
+#[derive(Debug)]
+pub struct Changes {
+    pub accounts: ChangeSet,
+    pub storage: StorageTriesChanges,
+}
+
+impl Changes {
+    pub fn new(accounts: ChangeSet, storage: StorageTriesChanges) -> Self {
+        Self { accounts, storage }
+    }
+}
+
 pub fn genesis_state_changes(
     genesis: alloy::genesis::Genesis,
     resolver: &impl MoveResolver<PartialVMError>,
-) -> ChangeSet {
+    storage_trie: &impl StorageTrieRepository,
+) -> Changes {
     let mut result = ChangeSet::new();
     let empty_changes = AccountChangeSet::new();
     let mut account_changes = AccountChangeSet::new();
+    let mut storage_tries = StorageTriesChanges::empty();
     for (address, genesis_account) in genesis.alloc {
         let (code_hash, code) = match genesis_account.code {
             Some(raw) => {
@@ -63,24 +74,28 @@ pub fn genesis_state_changes(
             storage,
             status: AccountStatus::Touched,
         };
-        add_account_changes(
+        let storage_changes = add_account_changes(
             &address,
             &account,
             resolver,
             &empty_changes,
             &mut account_changes,
+            storage_trie,
         );
+        storage_tries = storage_tries.with_trie_changes(address, storage_changes);
     }
     result
         .add_account_changeset(EVM_NATIVE_ADDRESS, account_changes)
         .expect("EVM native changes must be added");
-    result
+
+    Changes::new(result, storage_tries)
 }
 
-pub fn extract_evm_changes(extensions: &NativeContextExtensions) -> ChangeSet {
+pub fn extract_evm_changes(extensions: &NativeContextExtensions) -> Changes {
     let evm_native_ctx = extensions.get::<NativeEVMContext>();
-    let mut result = ChangeSet::new();
+    let mut evm_move_account_changes = ChangeSet::new();
     let mut account_changes = AccountChangeSet::new();
+    let mut storage_tries = StorageTriesChanges::empty();
     for state in &evm_native_ctx.state_changes {
         let mut single_account_changes = AccountChangeSet::new();
         for (address, account) in state {
@@ -89,22 +104,25 @@ pub fn extract_evm_changes(extensions: &NativeContextExtensions) -> ChangeSet {
                 continue;
             }
 
-            add_account_changes(
+            let storage_changes = add_account_changes(
                 address,
                 account,
                 evm_native_ctx.resolver,
                 &account_changes,
                 &mut single_account_changes,
+                evm_native_ctx.storage_trie,
             );
+            storage_tries = storage_tries.with_trie_changes(*address, storage_changes);
         }
         account_changes
             .squash(single_account_changes)
             .expect("Sequential EVM native changes must merge");
     }
-    result
+    evm_move_account_changes
         .add_account_changeset(EVM_NATIVE_ADDRESS, account_changes)
         .expect("EVM native changes must be added");
-    result
+
+    Changes::new(evm_move_account_changes, storage_tries)
 }
 
 fn add_account_changes(
@@ -113,7 +131,8 @@ fn add_account_changes(
     resolver: &dyn MoveResolver<PartialVMError>,
     prior_changes: &AccountChangeSet,
     result: &mut AccountChangeSet,
-) {
+    storage_trie: &dyn StorageTrieRepository,
+) -> StorageTrieChanges {
     debug_assert!(
         account.is_touched(),
         "Untouched accounts are filtered out before calling this function."
@@ -138,44 +157,19 @@ fn add_account_changes(
             .unwrap_or(false)
     };
 
-    let read_resource = |struct_tag: &StructTag| {
-        let exists_in_prior_changes = prior_changes.resources().get(struct_tag);
-        if let Some(prior) = exists_in_prior_changes {
-            return Ok(prior.clone().ok());
-        }
-        resolver.get_resource(&EVM_NATIVE_ADDRESS, struct_tag)
-    };
-
-    // TODO: need to handle self-destruct case.
-    // In that case the storage resource needs to be deleted instead.
-    let storage_tag = account_storage_struct_tag(address);
-    let mut storage = read_resource(&storage_tag)
-        .ok()
-        .flatten()
-        .and_then(|bytes| trie_types::AccountStorage::try_deserialize(&bytes))
-        .unwrap_or_default();
+    let mut storage = storage_trie.for_account(address).unwrap();
     for (index, value) in account.changed_storage_slots() {
-        storage.insert(*index, value.present_value);
+        storage.insert(index, &value.present_value).unwrap();
     }
-    let is_created = !resource_exists(&storage_tag);
-    let storage_root = storage.root_hash();
-    let storage_bytes = storage.serialize();
-    let op = if is_created {
-        Op::New(storage_bytes.into())
-    } else {
-        Op::Modify(storage_bytes.into())
-    };
-    result
-        .add_resource_op(storage_tag, op)
-        .expect("Resource cannot already exist in result");
+    let storage_changes = storage.commit().unwrap();
 
     // Push AccountInfo resource
     let struct_tag = account_info_struct_tag(address);
-    let account_info = trie_types::Account::new(
+    let account_info = state::Account::new(
         account.info.nonce,
         account.info.balance,
         account.info.code_hash,
-        storage_root,
+        storage_changes.root,
     );
     let account_bytes = account_info.serialize();
     let is_created = !resource_exists(&struct_tag);
@@ -206,4 +200,6 @@ fn add_account_changes(
             }
         }
     }
+
+    storage_changes
 }

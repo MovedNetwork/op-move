@@ -16,7 +16,7 @@ use {
     move_core_types::resolver::MoveResolver,
     move_table_extension::TableResolver,
     move_vm_runtime::module_traversal::{TraversalContext, TraversalStorage},
-    moved_evm_ext::HeaderForExecution,
+    moved_evm_ext::{state::StorageTrieRepository, HeaderForExecution},
     moved_genesis::config::GenesisConfig,
     moved_shared::{
         error::{Error::InvalidTransaction, InvalidTransactionCause},
@@ -28,13 +28,14 @@ use {
 pub fn simulate_transaction(
     request: TransactionRequest,
     state: &(impl MoveResolver<PartialVMError> + TableResolver),
+    storage_trie: &impl StorageTrieRepository,
     genesis_config: &GenesisConfig,
     base_token: &impl BaseTokenAccounts,
     block_height: u64,
 ) -> moved_shared::error::Result<TransactionExecutionOutcome> {
     let mut tx = NormalizedEthTransaction::from(request.clone());
     if request.from.is_some() && request.nonce.is_none() {
-        tx.nonce = quick_get_nonce(&tx.signer.to_move_address(), state);
+        tx.nonce = quick_get_nonce(&tx.signer.to_move_address(), state, storage_trie);
     }
 
     let block_header = HeaderForExecution {
@@ -52,6 +53,7 @@ pub fn simulate_transaction(
         tx: &tx,
         tx_hash: &B256::random(),
         state,
+        storage_trie,
         genesis_config,
         l1_cost: 0,
         l2_fee,
@@ -66,18 +68,19 @@ pub fn simulate_transaction(
 pub fn call_transaction(
     request: TransactionRequest,
     state: &(impl MoveResolver<PartialVMError> + TableResolver),
+    storage_trie: &impl StorageTrieRepository,
     genesis_config: &GenesisConfig,
     base_token: &impl BaseTokenAccounts,
 ) -> moved_shared::error::Result<Vec<u8>> {
     let mut tx = NormalizedEthTransaction::from(request.clone());
     if request.from.is_some() && request.nonce.is_none() {
-        tx.nonce = quick_get_nonce(&tx.signer.to_move_address(), state);
+        tx.nonce = quick_get_nonce(&tx.signer.to_move_address(), state, storage_trie);
     }
     let tx_data = TransactionData::parse_from(&tx)?;
 
     let move_vm = create_move_vm()?;
     let session_id = SessionId::default();
-    let mut session = create_vm_session(&move_vm, state, session_id);
+    let mut session = create_vm_session(&move_vm, state, session_id, storage_trie);
     let traversal_storage = TraversalStorage::new();
     let mut traversal_context = TraversalContext::new(&traversal_storage);
     let mut gas_meter = new_gas_meter(genesis_config, tx.gas_limit());

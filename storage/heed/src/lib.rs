@@ -5,6 +5,8 @@ pub use {
 
 mod all;
 pub mod block;
+pub mod evm;
+pub mod evm_storage_trie;
 pub mod generic;
 pub mod payload;
 pub mod receipt;

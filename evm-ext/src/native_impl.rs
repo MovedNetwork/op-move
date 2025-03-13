@@ -5,6 +5,7 @@ use {
         type_utils::evm_result_to_move_value,
         EVM_NATIVE_ADDRESS, EVM_NATIVE_MODULE,
     },
+    crate::ResolverBackedDB,
     aptos_gas_algebra::{GasExpression, GasQuantity, InternalGasUnit},
     aptos_native_interface::{
         safely_pop_arg, SafeNativeBuilder, SafeNativeContext, SafeNativeError, SafeNativeResult,
@@ -16,7 +17,7 @@ use {
     move_vm_types::{loaded_data::runtime_types::Type, values::Value},
     moved_shared::primitives::{ToEthAddress, ToU256},
     revm::{
-        db::DatabaseCommit,
+        db::{CacheDB, DatabaseCommit},
         primitives::{Address, BlobExcessGasAndPrice, BlockEnv, EVMError, TxEnv, TxKind, U256},
         Evm,
     },
@@ -107,8 +108,13 @@ fn evm_transact_inner(
     let gas_limit: u64 = context.gas_balance().into();
 
     let evm_native_ctx = context.extensions_mut().get_mut::<NativeEVMContext>();
+    let mut db = CacheDB::new(ResolverBackedDB::new(
+        evm_native_ctx.storage_trie,
+        evm_native_ctx.resolver,
+    ));
+    // todo: storage trie repository factory?
     let mut evm = Evm::builder()
-        .with_db(&mut evm_native_ctx.db)
+        .with_db(&mut db)
         .with_tx_env(TxEnv {
             caller,
             gas_limit,
@@ -165,7 +171,7 @@ fn evm_transact_inner(
 
     // Commit the changes to the DB so that future Move transactions using
     // the same session will see them.
-    evm_native_ctx.db.commit(outcome.state);
+    db.commit(outcome.state);
 
     let gas_used = EvmGasUsed::new(outcome.result.gas_used());
     context.charge(gas_used)?;

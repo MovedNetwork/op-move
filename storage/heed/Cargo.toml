@@ -11,6 +11,7 @@ move-binary-format.workspace = true
 move-core-types.workspace = true
 move-table-extension.workspace = true
 moved-blockchain.workspace = true
+moved-evm-ext.workspace = true
 moved-execution.workspace = true
 moved-shared.workspace = true
 moved-state.workspace = true

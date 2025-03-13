@@ -31,8 +31,8 @@ use {
         values::{Struct, Value},
     },
     moved_evm_ext::{
-        extract_evm_changes, extract_evm_result, EvmNativeOutcome, CODE_LAYOUT, EVM_NATIVE_ADDRESS,
-        EVM_NATIVE_MODULE,
+        extract_evm_changes, extract_evm_result, state::InMemoryStorageTrieRepository,
+        EvmNativeOutcome, CODE_LAYOUT, EVM_NATIVE_ADDRESS, EVM_NATIVE_MODULE,
     },
     moved_shared::primitives::{ToEthAddress, ToMoveAddress, ToMoveU256},
     moved_state::{InMemoryState, State},
@@ -67,8 +67,11 @@ fn test_evm() {
     );
 
     // -------- Deploy ERC-20 token
-    let (outcome, mut changes, extensions) =
-        evm_quick_create(deploy.calldata().to_vec(), ctx.state.resolver());
+    let (outcome, mut changes, extensions) = evm_quick_create(
+        deploy.calldata().to_vec(),
+        ctx.state.resolver(),
+        &ctx.evm_storage,
+    );
 
     assert!(outcome.is_success, "Contract deploy must succeed");
 
@@ -79,10 +82,11 @@ fn test_evm() {
     let contract_move_address = contract_address.to_move_address();
 
     let evm_changes = extract_evm_changes(&extensions);
-    changes.squash(evm_changes).unwrap();
+    changes.squash(evm_changes.accounts).unwrap();
     drop(extensions);
 
     ctx.state.apply(changes).unwrap();
+    ctx.evm_storage.apply(evm_changes.storage).unwrap();
 
     // -------- Transfer ERC-20 tokens
     let transfer_amount = parse_ether("0.35").unwrap();
@@ -110,21 +114,24 @@ fn test_evm() {
     let transaction = TestTransaction::new(tx, tx_hash);
     let outcome = ctx.execute_tx(&transaction).unwrap();
     outcome.vm_outcome.unwrap();
-    ctx.state.apply(outcome.changes).unwrap();
+    ctx.state.apply(outcome.changes.r#move).unwrap();
+    ctx.evm_storage.apply(outcome.changes.evm).unwrap();
 
     // -------- Validate ERC-20 balances
-    let balance_of = |address, state: &InMemoryState| {
-        let balance_of_call = deployed_contract.balanceOf(address);
-        let (outcome, _, _) = evm_quick_call(
-            EVM_NATIVE_ADDRESS,
-            contract_move_address,
-            balance_of_call.calldata().to_vec(),
-            state.resolver(),
-        );
-        U256::from_be_slice(&outcome.output)
-    };
-    let sender_balance = balance_of(EVM_ADDRESS, &ctx.state);
-    let receiver_balance = balance_of(ALT_EVM_ADDRESS, &ctx.state);
+    let balance_of =
+        |address, state: &InMemoryState, evm_storage: &InMemoryStorageTrieRepository| {
+            let balance_of_call = deployed_contract.balanceOf(address);
+            let (outcome, _, _) = evm_quick_call(
+                EVM_NATIVE_ADDRESS,
+                contract_move_address,
+                balance_of_call.calldata().to_vec(),
+                state.resolver(),
+                evm_storage,
+            );
+            U256::from_be_slice(&outcome.output)
+        };
+    let sender_balance = balance_of(EVM_ADDRESS, &ctx.state, &ctx.evm_storage);
+    let receiver_balance = balance_of(ALT_EVM_ADDRESS, &ctx.state, &ctx.evm_storage);
 
     assert_eq!(sender_balance, mint_amount - transfer_amount);
     assert_eq!(receiver_balance, transfer_amount);
@@ -140,8 +147,8 @@ fn test_evm() {
     );
 
     // -------- Validate ERC-20 balances (again)
-    let sender_balance = balance_of(EVM_ADDRESS, &ctx.state);
-    let receiver_balance = balance_of(ALT_EVM_ADDRESS, &ctx.state);
+    let sender_balance = balance_of(EVM_ADDRESS, &ctx.state, &ctx.evm_storage);
+    let receiver_balance = balance_of(ALT_EVM_ADDRESS, &ctx.state, &ctx.evm_storage);
 
     assert_eq!(
         sender_balance,
@@ -155,61 +162,67 @@ fn test_solidity_fixed_bytes() {
     let mut ctx = TestContext::new();
     let contract = ctx.deploy_contract("solidity_fixed_bytes");
 
-    let mut call_contract = |input: Vec<u8>, state: &InMemoryState| {
-        let arg = MoveValue::vector_u8(input);
-        let entry_fn = EntryFunction::new(
-            contract.clone(),
-            ident_str!("encode_fixed_bytes").into(),
-            Vec::new(),
-            vec![bcs::to_bytes(&arg).unwrap()],
-        );
-        let (tx_hash, tx) = create_transaction(
-            &mut ctx.signer,
-            TxKind::Call(EVM_ADDRESS),
-            bcs::to_bytes(&TransactionData::EntryFunction(entry_fn)).unwrap(),
-        );
-        let tx = tx.into_canonical().unwrap();
-        let input = CanonicalExecutionInput {
-            tx: &tx,
-            tx_hash: &tx_hash,
-            state: state.resolver(),
-            genesis_config: &ctx.genesis_config,
-            l1_cost: 0,
-            l2_fee: U256::ZERO,
-            l2_input: (u64::MAX, U256::ZERO).into(),
-            base_token: &(),
-            block_header: HeaderForExecution::default(),
+    let mut call_contract =
+        |input: Vec<u8>, state: &InMemoryState, evm_storage: &InMemoryStorageTrieRepository| {
+            let arg = MoveValue::vector_u8(input);
+            let entry_fn = EntryFunction::new(
+                contract.clone(),
+                ident_str!("encode_fixed_bytes").into(),
+                Vec::new(),
+                vec![bcs::to_bytes(&arg).unwrap()],
+            );
+            let (tx_hash, tx) = create_transaction(
+                &mut ctx.signer,
+                TxKind::Call(EVM_ADDRESS),
+                bcs::to_bytes(&TransactionData::EntryFunction(entry_fn)).unwrap(),
+            );
+            let tx = tx.into_canonical().unwrap();
+            let input = CanonicalExecutionInput {
+                tx: &tx,
+                tx_hash: &tx_hash,
+                state: state.resolver(),
+                storage_trie: evm_storage,
+                genesis_config: &ctx.genesis_config,
+                l1_cost: 0,
+                l2_fee: U256::ZERO,
+                l2_input: (u64::MAX, U256::ZERO).into(),
+                base_token: &(),
+                block_header: HeaderForExecution::default(),
+            };
+            execute_transaction(input.into()).unwrap()
         };
-        execute_transaction(input.into()).unwrap()
-    };
 
     // Calling with empty bytes is an error
-    let outcome = call_contract(Vec::new(), &ctx.state);
+    let outcome = call_contract(Vec::new(), &ctx.state, &ctx.evm_storage);
     outcome.vm_outcome.unwrap_err();
-    ctx.state.apply(outcome.changes).unwrap();
+    ctx.state.apply(outcome.changes.r#move).unwrap();
+    ctx.evm_storage.apply(outcome.changes.evm).unwrap();
 
     // Calling with bytes longer than 32 is an error
-    let outcome = call_contract(vec![0x88; 33], &ctx.state);
+    let outcome = call_contract(vec![0x88; 33], &ctx.state, &ctx.evm_storage);
     outcome.vm_outcome.unwrap_err();
-    ctx.state.apply(outcome.changes).unwrap();
+    ctx.state.apply(outcome.changes.r#move).unwrap();
+    ctx.evm_storage.apply(outcome.changes.evm).unwrap();
 
     // Calling with any length between 1 and 32 (inclusive) works
     for n in 1..=32 {
-        let outcome = call_contract(vec![0x88; n], &ctx.state);
+        let outcome = call_contract(vec![0x88; n], &ctx.state, &ctx.evm_storage);
         outcome.vm_outcome.unwrap();
-        ctx.state.apply(outcome.changes).unwrap();
+        ctx.state.apply(outcome.changes.r#move).unwrap();
+        ctx.evm_storage.apply(outcome.changes.evm).unwrap();
     }
 }
 
 /// Create MoveVM instance and invoke EVM create native.
 /// For tests only since it does not use an existing session or charge gas.
-fn evm_quick_create(
+fn evm_quick_create<'a>(
     contract_bytecode: Vec<u8>,
-    resolver: &(impl MoveResolver<PartialVMError> + TableResolver),
-) -> (EvmNativeOutcome, ChangeSet, NativeContextExtensions) {
+    resolver: &'a (impl MoveResolver<PartialVMError> + TableResolver),
+    evm_storage: &'a impl StorageTrieRepository,
+) -> (EvmNativeOutcome, ChangeSet, NativeContextExtensions<'a>) {
     let move_vm = create_move_vm().unwrap();
     let session_id = SessionId::default();
-    let mut session = create_vm_session(&move_vm, resolver, session_id);
+    let mut session = create_vm_session(&move_vm, resolver, session_id, evm_storage);
     let traversal_storage = TraversalStorage::new();
     let mut traversal_context = TraversalContext::new(&traversal_storage);
     let mut gas_meter = UnmeteredGasMeter;
@@ -246,15 +259,16 @@ fn evm_quick_create(
 
 /// Create MoveVM instance and invoke EVM call native.
 /// For tests only since it does not use an existing session or charge gas.
-fn evm_quick_call(
+fn evm_quick_call<'a>(
     from: AccountAddress,
     to: AccountAddress,
     data: Vec<u8>,
-    resolver: &(impl MoveResolver<PartialVMError> + TableResolver),
-) -> (EvmNativeOutcome, ChangeSet, NativeContextExtensions) {
+    resolver: &'a (impl MoveResolver<PartialVMError> + TableResolver),
+    evm_storage: &'a impl StorageTrieRepository,
+) -> (EvmNativeOutcome, ChangeSet, NativeContextExtensions<'a>) {
     let move_vm = create_move_vm().unwrap();
     let session_id = SessionId::default();
-    let mut session = create_vm_session(&move_vm, resolver, session_id);
+    let mut session = create_vm_session(&move_vm, resolver, session_id, evm_storage);
     let traversal_storage = TraversalStorage::new();
     let mut traversal_context = TraversalContext::new(&traversal_storage);
     let mut gas_meter = UnmeteredGasMeter;

@@ -1,12 +1,14 @@
-use crate::{block, payload, receipt, state, transaction, trie};
+use crate::{block, evm_storage_trie, payload, receipt, state, transaction, trie};
 
-pub const COLUMN_FAMILIES: [&str; 9] = [
+pub const COLUMN_FAMILIES: [&str; 11] = [
     block::BLOCK_COLUMN_FAMILY,
     block::HEIGHT_COLUMN_FAMILY,
     state::COLUMN_FAMILY,
     state::HEIGHT_COLUMN_FAMILY,
     trie::TRIE_COLUMN_FAMILY,
     trie::ROOT_COLUMN_FAMILY,
+    evm_storage_trie::TRIE_COLUMN_FAMILY,
+    evm_storage_trie::ROOT_COLUMN_FAMILY,
     transaction::COLUMN_FAMILY,
     receipt::COLUMN_FAMILY,
     payload::COLUMN_FAMILY,

@@ -8,8 +8,11 @@ pub use {
 };
 
 use {
-    self::config::GenesisConfig, move_core_types::effects::ChangeSet,
-    move_table_extension::TableChangeSet, moved_state::State,
+    self::config::GenesisConfig,
+    move_core_types::effects::ChangeSet,
+    move_table_extension::TableChangeSet,
+    moved_evm_ext::state::{StorageTrieRepository, StorageTriesChanges},
+    moved_state::State,
 };
 
 pub mod config;
@@ -22,12 +25,14 @@ pub fn build(
     vm: &impl CreateMoveVm,
     config: &GenesisConfig,
     state: &impl State,
-) -> (ChangeSet, TableChangeSet) {
+    storage_trie: &impl StorageTrieRepository,
+) -> (ChangeSet, TableChangeSet, StorageTriesChanges) {
     // Deploy Move/Aptos/Sui frameworks
     let (changes_framework, table_changes) = framework::init_state(vm, state);
 
     // Deploy OP stack L2 contracts
-    let changes_l2 = l2_contracts::init_state(config.l2_contract_genesis.clone(), state);
+    let changes_l2 =
+        l2_contracts::init_state(config.l2_contract_genesis.clone(), state, storage_trie);
 
     let mut changes = ChangeSet::new();
 
@@ -36,21 +41,26 @@ pub fn build(
         .expect("Framework changes should not be in conflict");
 
     changes
-        .squash(changes_l2)
+        .squash(changes_l2.accounts)
         .expect("L2 contract changes should not be in conflict");
 
-    (changes, table_changes)
+    (changes, table_changes, changes_l2.storage)
 }
 
 pub fn apply(
     changes: ChangeSet,
     table_changes: TableChangeSet,
+    evm_storage_changes: StorageTriesChanges,
     config: &GenesisConfig,
     state: &mut impl State,
+    storage_trie: &mut impl StorageTrieRepository,
 ) {
     state
         .apply_with_tables(changes, table_changes)
         .expect("Changes should be applicable");
+    storage_trie
+        .apply(evm_storage_changes)
+        .expect("EVM storage changes should be applicable");
 
     // Validate final state
     let actual_state_root = state.state_root();
@@ -62,7 +72,19 @@ pub fn apply(
     );
 }
 
-pub fn build_and_apply(vm: &impl CreateMoveVm, config: &GenesisConfig, state: &mut impl State) {
-    let (changes, table_changes) = build(vm, config, state);
-    apply(changes, table_changes, config, state);
+pub fn build_and_apply(
+    vm: &impl CreateMoveVm,
+    config: &GenesisConfig,
+    state: &mut impl State,
+    storage_trie: &mut impl StorageTrieRepository,
+) {
+    let (changes, table_changes, evm_storage) = build(vm, config, state, storage_trie);
+    apply(
+        changes,
+        table_changes,
+        evm_storage,
+        config,
+        state,
+        storage_trie,
+    );
 }

@@ -8,7 +8,8 @@ use {
         nonces::check_nonce,
         session_id::SessionId,
         transaction::{
-            NormalizedEthTransaction, ScriptOrModule, TransactionData, TransactionExecutionOutcome,
+            Changes, NormalizedEthTransaction, ScriptOrModule, TransactionData,
+            TransactionExecutionOutcome,
         },
         CanonicalExecutionInput, Logs,
     },
@@ -20,6 +21,7 @@ use {
         module_traversal::{TraversalContext, TraversalStorage},
         session::Session,
     },
+    moved_evm_ext::state::StorageTrieRepository,
     moved_genesis::config::GenesisConfig,
     moved_shared::{
         error::{
@@ -100,10 +102,11 @@ pub(super) fn verify_transaction<B: BaseTokenAccounts>(
 
 pub(super) fn execute_canonical_transaction<
     S: MoveResolver<PartialVMError> + TableResolver,
+    ST: StorageTrieRepository,
     F: L2GasFee,
     B: BaseTokenAccounts,
 >(
-    input: CanonicalExecutionInput<S, F, B>,
+    input: CanonicalExecutionInput<S, ST, F, B>,
 ) -> moved_shared::error::Result<TransactionExecutionOutcome> {
     let sender_move_address = input.tx.signer.to_move_address();
 
@@ -118,7 +121,7 @@ pub(super) fn execute_canonical_transaction<
         input.block_header,
         tx_data.script_hash(),
     );
-    let mut session = create_vm_session(&move_vm, input.state, session_id);
+    let mut session = create_vm_session(&move_vm, input.state, session_id, input.storage_trie);
     let traversal_storage = TraversalStorage::new();
     let mut traversal_context = TraversalContext::new(&traversal_storage);
 
@@ -222,8 +225,9 @@ pub(super) fn execute_canonical_transaction<
     logs.extend(evm_logs);
     let evm_changes = moved_evm_ext::extract_evm_changes(&extensions);
     changes
-        .squash(evm_changes)
+        .squash(evm_changes.accounts)
         .expect("EVM changes must merge with other session changes");
+    let changes = Changes::new(changes, evm_changes.storage);
 
     match vm_outcome {
         Ok(_) => Ok(TransactionExecutionOutcome::new(

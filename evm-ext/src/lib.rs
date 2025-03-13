@@ -3,7 +3,7 @@ pub use self::{
         HeaderForExecution, NativeEVMContext, ResolverBackedDB, FRAMEWORK_ADDRESS,
     },
     native_impl::{append_evm_natives, EVM_CALL_FN_NAME},
-    state_changes::{extract_evm_changes, genesis_state_changes},
+    state_changes::{extract_evm_changes, genesis_state_changes, Changes},
     type_utils::extract_evm_result,
 };
 
@@ -19,8 +19,8 @@ pub mod events;
 mod native_evm_context;
 mod native_impl;
 mod solidity_abi;
+pub mod state;
 mod state_changes;
-pub mod trie_types;
 pub mod type_utils;
 
 /// Address where the EVM native is stored

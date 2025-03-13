@@ -17,7 +17,12 @@ fn test_execute_tables_contract() {
     let vm = create_move_vm().unwrap();
     let traversal_storage = TraversalStorage::new();
 
-    let mut session = create_vm_session(&vm, ctx.state.resolver(), SessionId::default());
+    let mut session = create_vm_session(
+        &vm,
+        ctx.state.resolver(),
+        SessionId::default(),
+        &ctx.evm_storage,
+    );
     let mut traversal_context = TraversalContext::new(&traversal_storage);
 
     let move_address = EVM_ADDRESS.to_move_address();

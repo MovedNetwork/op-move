@@ -1,15 +1,17 @@
 use {
-    crate::{block, payload, receipt, state, transaction, trie},
+    crate::{block, evm_storage_trie, payload, receipt, state, transaction, trie},
     heed::{types::LazyDecode, BytesDecode, BytesEncode, RoTxn, RwTxn},
 };
 
-pub const DATABASES: [&str; 9] = [
+pub const DATABASES: [&str; 11] = [
     block::DB,
     block::HEIGHT_DB,
     state::DB,
     state::HEIGHT_DB,
     trie::DB,
     trie::ROOT_DB,
+    evm_storage_trie::DB,
+    evm_storage_trie::ROOT_DB,
     transaction::DB,
     receipt::DB,
     payload::DB,

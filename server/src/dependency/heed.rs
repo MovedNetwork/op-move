@@ -7,7 +7,10 @@ use {
     moved_execution::{BaseTokenAccounts, CreateL1GasFee, CreateL2GasFee, MovedBaseTokenAccounts},
     moved_genesis::config::GenesisConfig,
     moved_state::State,
-    moved_storage_heed::{block, heed::EnvOpenOptions, payload, receipt, state, transaction, trie},
+    moved_storage_heed::{
+        block, evm, evm_storage_trie, heed::EnvOpenOptions, payload, receipt, state, transaction,
+        trie,
+    },
 };
 
 pub type SharedStorage = &'static moved_storage_heed::Env;
@@ -16,6 +19,7 @@ pub type StateQueries = state::HeedStateQueries<'static>;
 pub type ReceiptRepository = receipt::HeedReceiptRepository;
 pub type ReceiptQueries = receipt::HeedReceiptQueries;
 pub type PayloadQueries = payload::HeedPayloadQueries;
+pub type StorageTrieRepository = evm::HeedStorageTrieRepository;
 pub type TransactionRepository = transaction::HeedTransactionRepository;
 pub type TransactionQueries = transaction::HeedTransactionQueries;
 pub type BlockQueries = block::HeedBlockQueries;
@@ -122,6 +126,10 @@ pub fn payload_queries() -> PayloadQueries {
     payload::HeedPayloadQueries::new(db())
 }
 
+pub fn storage_trie_repository() -> StorageTrieRepository {
+    evm::HeedStorageTrieRepository::new(db())
+}
+
 lazy_static::lazy_static! {
     static ref Database: moved_storage_heed::Env = {
         create_db()
@@ -133,7 +141,7 @@ fn db() -> &'static moved_storage_heed::Env {
 }
 
 fn create_db() -> moved_storage_heed::Env {
-    assert_eq!(moved_storage_heed::DATABASES.len(), 9);
+    assert_eq!(moved_storage_heed::DATABASES.len(), 11);
 
     let path = "db";
 
@@ -171,6 +179,12 @@ fn create_db() -> moved_storage_heed::Env {
             .expect("Database should be new");
         let _: trie::RootDb = env
             .create_database(&mut transaction, Some(trie::ROOT_DB))
+            .expect("Database should be new");
+        let _: evm_storage_trie::Db = env
+            .create_database(&mut transaction, Some(evm_storage_trie::DB))
+            .expect("Database should be new");
+        let _: evm_storage_trie::RootDb = env
+            .create_database(&mut transaction, Some(evm_storage_trie::ROOT_DB))
             .expect("Database should be new");
         let _: transaction::Db = env
             .create_database(&mut transaction, Some(transaction::DB))

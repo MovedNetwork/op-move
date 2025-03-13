@@ -16,7 +16,10 @@ use {
         vm_status::StatusCode,
     },
     move_table_extension::{TableHandle, TableResolver},
-    moved_evm_ext::ResolverBackedDB,
+    moved_evm_ext::{
+        state::{self, StorageTrieRepository},
+        ResolverBackedDB,
+    },
     moved_execution::{
         quick_get_eth_balance, quick_get_nonce,
         transaction::{L2_HIGHEST_ADDRESS, L2_LOWEST_ADDRESS},
@@ -59,6 +62,7 @@ pub trait StateQueries {
     fn balance_at(
         &self,
         db: Arc<impl DB>,
+        evm_storage: &impl StorageTrieRepository,
         account: AccountAddress,
         height: BlockHeight,
     ) -> Option<Balance>;
@@ -68,6 +72,7 @@ pub trait StateQueries {
     fn nonce_at(
         &self,
         db: Arc<impl DB>,
+        evm_storage: &impl StorageTrieRepository,
         account: AccountAddress,
         height: BlockHeight,
     ) -> Option<Nonce>;
@@ -75,6 +80,7 @@ pub trait StateQueries {
     fn proof_at(
         &self,
         db: Arc<impl DB>,
+        evm_storage: &impl StorageTrieRepository,
         account: AccountAddress,
         storage_slots: &[U256],
         height: BlockHeight,
@@ -141,8 +147,9 @@ pub fn proof_from_trie_and_resolver(
     storage_slots: &[U256],
     tree: &mut EthTrie<impl DB>,
     resolver: &impl MoveResolver<PartialVMError>,
+    storage_trie: &impl StorageTrieRepository,
 ) -> Option<ProofResponse> {
-    let evm_db = ResolverBackedDB::new(resolver);
+    let evm_db = ResolverBackedDB::new(storage_trie, resolver);
 
     // All L2 contract account data is part of the EVM state
     let account_info = evm_db.get_account(&address).ok()??;
@@ -158,23 +165,26 @@ pub fn proof_from_trie_and_resolver(
     let storage_proof = if storage_slots.is_empty() {
         Vec::new()
     } else {
-        let mut storage = evm_db.storage_for(&address).ok()?;
+        let mut storage = storage_trie
+            .for_account_with_root(&address, &account_info.inner.storage_root)
+            .ok()?;
 
         storage_slots
             .iter()
-            .filter_map(|&index| {
+            .filter_map(|index| {
                 let key = keccak256::<[u8; 32]>(index.to_be_bytes());
-                storage.trie.get_proof(key.as_slice()).ok().map(|proof| {
-                    let value = storage.get(index);
+                storage.proof(key.as_slice()).ok().map(|proof| {
+                    let value = storage.get(index)?.unwrap_or_default();
 
-                    StorageProof {
-                        key: index.into(),
+                    Ok::<StorageProof, state::Error>(StorageProof {
+                        key: (*index).into(),
                         value,
                         proof: proof.into_iter().map(Into::into).collect(),
-                    }
+                    })
                 })
             })
-            .collect()
+            .collect::<Result<_, _>>()
+            .unwrap()
     };
 
     Some(ProofResponse {
@@ -192,28 +202,31 @@ impl StateQueries for InMemoryStateQueries {
     fn balance_at(
         &self,
         db: Arc<impl DB>,
+        evm_storage: &impl StorageTrieRepository,
         account: AccountAddress,
         height: BlockHeight,
     ) -> Option<Balance> {
         let resolver = self.storage.resolver(db, height)?;
 
-        Some(quick_get_eth_balance(&account, &resolver))
+        Some(quick_get_eth_balance(&account, &resolver, evm_storage))
     }
 
     fn nonce_at(
         &self,
         db: Arc<impl DB>,
+        evm_storage: &impl StorageTrieRepository,
         account: AccountAddress,
         height: BlockHeight,
     ) -> Option<Nonce> {
         let resolver = self.storage.resolver(db, height)?;
 
-        Some(quick_get_nonce(&account, &resolver))
+        Some(quick_get_nonce(&account, &resolver, evm_storage))
     }
 
     fn proof_at(
         &self,
         db: Arc<impl DB>,
+        evm_storage: &impl StorageTrieRepository,
         account: AccountAddress,
         storage_slots: &[U256],
         height: BlockHeight,
@@ -229,7 +242,7 @@ impl StateQueries for InMemoryStateQueries {
         let resolver = self.storage.resolver(db.clone(), height)?;
         let mut tree = EthTrie::from(db, root).expect(IN_MEMORY_EXPECT_MSG);
 
-        proof_from_trie_and_resolver(address, storage_slots, &mut tree, &resolver)
+        proof_from_trie_and_resolver(address, storage_slots, &mut tree, &resolver, evm_storage)
     }
 }
 
@@ -333,6 +346,7 @@ pub mod test_doubles {
         fn balance_at(
             &self,
             _db: Arc<impl DB>,
+            _evm_storage: &impl StorageTrieRepository,
             account: AccountAddress,
             height: BlockHeight,
         ) -> Option<Balance> {
@@ -345,6 +359,7 @@ pub mod test_doubles {
         fn nonce_at(
             &self,
             _db: Arc<impl DB>,
+            _evm_storage: &impl StorageTrieRepository,
             account: AccountAddress,
             height: BlockHeight,
         ) -> Option<Nonce> {
@@ -357,6 +372,7 @@ pub mod test_doubles {
         fn proof_at(
             &self,
             _db: Arc<impl DB>,
+            _evm_storage: &impl StorageTrieRepository,
             _account: AccountAddress,
             _storage_slots: &[U256],
             _height: BlockHeight,
@@ -375,6 +391,7 @@ mod tests {
         move_table_extension::TableChangeSet,
         move_vm_runtime::module_traversal::{TraversalContext, TraversalStorage},
         move_vm_types::gas::UnmeteredGasMeter,
+        moved_evm_ext::state::InMemoryStorageTrieRepository,
         moved_execution::{
             check_nonce, create_move_vm, create_vm_session, mint_eth, session_id::SessionId,
         },
@@ -416,8 +433,14 @@ mod tests {
     }
 
     fn mint_one_eth(state: &mut impl State, addr: AccountAddress) -> ChangeSet {
+        let evm_storage = InMemoryStorageTrieRepository::new();
         let move_vm = create_move_vm().unwrap();
-        let mut session = create_vm_session(&move_vm, state.resolver(), SessionId::default());
+        let mut session = create_vm_session(
+            &move_vm,
+            state.resolver(),
+            SessionId::default(),
+            &evm_storage,
+        );
         let traversal_storage = TraversalStorage::new();
         let mut traversal_context = TraversalContext::new(&traversal_storage);
         let mut gas_meter = UnmeteredGasMeter;
@@ -440,12 +463,20 @@ mod tests {
 
     #[test]
     fn test_query_fetches_latest_balance() {
+        let mut evm_storage = InMemoryStorageTrieRepository::new();
         let state = InMemoryState::new();
         let mut state = StateSpy(state, ChangeSet::new());
 
         let genesis_config = GenesisConfig::default();
-        let (changes, tables) = moved_genesis_image::load();
-        moved_genesis::apply(changes, tables, &genesis_config, &mut state);
+        let (changes, tables, evm_storage_changes) = moved_genesis_image::load();
+        moved_genesis::apply(
+            changes,
+            tables,
+            evm_storage_changes,
+            &genesis_config,
+            &mut state,
+            &mut evm_storage,
+        );
 
         let mut state = state.0;
         let addr = AccountAddress::TWO;
@@ -458,7 +489,7 @@ mod tests {
         let query = InMemoryStateQueries::new(storage);
 
         let actual_balance = query
-            .balance_at(state.db(), addr, 1)
+            .balance_at(state.db(), &evm_storage, addr, 1)
             .expect("Block height should exist");
         let expected_balance = U256::from(1u64);
 
@@ -467,12 +498,20 @@ mod tests {
 
     #[test]
     fn test_query_fetches_older_balance() {
+        let mut evm_storage = InMemoryStorageTrieRepository::new();
         let state = InMemoryState::new();
         let mut state = StateSpy(state, ChangeSet::new());
 
         let genesis_config = GenesisConfig::default();
-        let (changes, tables) = moved_genesis_image::load();
-        moved_genesis::apply(changes, tables, &genesis_config, &mut state);
+        let (changes, tables, evm_storage_changes) = moved_genesis_image::load();
+        moved_genesis::apply(
+            changes,
+            tables,
+            evm_storage_changes,
+            &genesis_config,
+            &mut state,
+            &mut evm_storage,
+        );
 
         let mut state = state.0;
 
@@ -489,7 +528,7 @@ mod tests {
         let query = InMemoryStateQueries::new(storage);
 
         let actual_balance = query
-            .balance_at(state.db(), addr, 1)
+            .balance_at(state.db(), &evm_storage, addr, 1)
             .expect("Block height should exist");
         let expected_balance = U256::from(1u64);
 
@@ -498,12 +537,20 @@ mod tests {
 
     #[test]
     fn test_query_fetches_latest_and_previous_balance() {
+        let mut evm_storage = InMemoryStorageTrieRepository::new();
         let state = InMemoryState::new();
         let mut state = StateSpy(state, ChangeSet::new());
 
         let genesis_config = GenesisConfig::default();
-        let (changes, tables) = moved_genesis_image::load();
-        moved_genesis::apply(changes, tables, &genesis_config, &mut state);
+        let (changes, tables, evm_storage_changes) = moved_genesis_image::load();
+        moved_genesis::apply(
+            changes,
+            tables,
+            evm_storage_changes,
+            &genesis_config,
+            &mut state,
+            &mut evm_storage,
+        );
 
         let mut state = state.0;
 
@@ -520,14 +567,14 @@ mod tests {
         let query = InMemoryStateQueries::new(storage);
 
         let actual_balance = query
-            .balance_at(state.db(), addr, 1)
+            .balance_at(state.db(), &evm_storage, addr, 1)
             .expect("Block height should exist");
         let expected_balance = U256::from(1u64);
 
         assert_eq!(actual_balance, expected_balance);
 
         let actual_balance = query
-            .balance_at(state.db(), addr, 2)
+            .balance_at(state.db(), &evm_storage, addr, 2)
             .expect("Block height should exist");
         let expected_balance = U256::from(3u64);
 
@@ -536,12 +583,20 @@ mod tests {
 
     #[test]
     fn test_query_fetches_zero_balance_for_non_existent_account() {
+        let mut evm_storage = InMemoryStorageTrieRepository::new();
         let state = InMemoryState::new();
         let mut state = StateSpy(state, ChangeSet::new());
 
         let genesis_config = GenesisConfig::default();
-        let (changes, tables) = moved_genesis_image::load();
-        moved_genesis::apply(changes, tables, &genesis_config, &mut state);
+        let (changes, tables, evm_storage_changes) = moved_genesis_image::load();
+        moved_genesis::apply(
+            changes,
+            tables,
+            evm_storage_changes,
+            &genesis_config,
+            &mut state,
+            &mut evm_storage,
+        );
 
         let state = state.0;
 
@@ -554,7 +609,7 @@ mod tests {
         let query = InMemoryStateQueries::new(storage);
 
         let actual_balance = query
-            .balance_at(state.db(), addr, 0)
+            .balance_at(state.db(), &evm_storage, addr, 0)
             .expect("Block height should exist");
         let expected_balance = U256::ZERO;
 
@@ -562,8 +617,14 @@ mod tests {
     }
 
     fn inc_one_nonce(old_nonce: u64, state: &mut impl State, addr: AccountAddress) -> ChangeSet {
+        let evm_storage = InMemoryStorageTrieRepository::new();
         let move_vm = create_move_vm().unwrap();
-        let mut session = create_vm_session(&move_vm, state.resolver(), SessionId::default());
+        let mut session = create_vm_session(
+            &move_vm,
+            state.resolver(),
+            SessionId::default(),
+            &evm_storage,
+        );
         let traversal_storage = TraversalStorage::new();
         let mut traversal_context = TraversalContext::new(&traversal_storage);
         let mut gas_meter = UnmeteredGasMeter;
@@ -586,12 +647,20 @@ mod tests {
 
     #[test]
     fn test_query_fetches_latest_nonce() {
+        let mut evm_storage = InMemoryStorageTrieRepository::new();
         let state = InMemoryState::new();
         let mut state = StateSpy(state, ChangeSet::new());
 
         let genesis_config = GenesisConfig::default();
-        let (changes, tables) = moved_genesis_image::load();
-        moved_genesis::apply(changes, tables, &genesis_config, &mut state);
+        let (changes, tables, evm_storage_changes) = moved_genesis_image::load();
+        moved_genesis::apply(
+            changes,
+            tables,
+            evm_storage_changes,
+            &genesis_config,
+            &mut state,
+            &mut evm_storage,
+        );
 
         let mut state = state.0;
         let addr = AccountAddress::TWO;
@@ -604,7 +673,7 @@ mod tests {
         let query = InMemoryStateQueries::new(storage);
 
         let actual_nonce = query
-            .nonce_at(state.db(), addr, 1)
+            .nonce_at(state.db(), &evm_storage, addr, 1)
             .expect("Block height should exist");
         let expected_nonce = 1u64;
 
@@ -613,12 +682,20 @@ mod tests {
 
     #[test]
     fn test_query_fetches_older_nonce() {
+        let mut evm_storage = InMemoryStorageTrieRepository::new();
         let state = InMemoryState::new();
         let mut state = StateSpy(state, ChangeSet::new());
 
         let genesis_config = GenesisConfig::default();
-        let (changes, tables) = moved_genesis_image::load();
-        moved_genesis::apply(changes, tables, &genesis_config, &mut state);
+        let (changes, tables, evm_storage_changes) = moved_genesis_image::load();
+        moved_genesis::apply(
+            changes,
+            tables,
+            evm_storage_changes,
+            &genesis_config,
+            &mut state,
+            &mut evm_storage,
+        );
 
         let mut state = state.0;
 
@@ -635,7 +712,7 @@ mod tests {
         let query = InMemoryStateQueries::new(storage);
 
         let actual_nonce = query
-            .nonce_at(state.db(), addr, 1)
+            .nonce_at(state.db(), &evm_storage, addr, 1)
             .expect("Block height should exist");
         let expected_nonce = 1u64;
 
@@ -644,12 +721,20 @@ mod tests {
 
     #[test]
     fn test_query_fetches_latest_and_previous_nonce() {
+        let mut evm_storage = InMemoryStorageTrieRepository::new();
         let state = InMemoryState::new();
         let mut state = StateSpy(state, ChangeSet::new());
 
         let genesis_config = GenesisConfig::default();
-        let (changes, tables) = moved_genesis_image::load();
-        moved_genesis::apply(changes, tables, &genesis_config, &mut state);
+        let (changes, tables, evm_storage_changes) = moved_genesis_image::load();
+        moved_genesis::apply(
+            changes,
+            tables,
+            evm_storage_changes,
+            &genesis_config,
+            &mut state,
+            &mut evm_storage,
+        );
 
         let mut state = state.0;
 
@@ -666,14 +751,14 @@ mod tests {
         let query = InMemoryStateQueries::new(storage);
 
         let actual_nonce = query
-            .nonce_at(state.db(), addr, 1)
+            .nonce_at(state.db(), &evm_storage, addr, 1)
             .expect("Block height should exist");
         let expected_nonce = 1u64;
 
         assert_eq!(actual_nonce, expected_nonce);
 
         let actual_nonce = query
-            .nonce_at(state.db(), addr, 2)
+            .nonce_at(state.db(), &evm_storage, addr, 2)
             .expect("Block height should exist");
         let expected_nonce = 3u64;
 
@@ -682,12 +767,20 @@ mod tests {
 
     #[test]
     fn test_query_fetches_zero_nonce_for_non_existent_account() {
+        let mut evm_storage = InMemoryStorageTrieRepository::new();
         let state = InMemoryState::new();
         let mut state = StateSpy(state, ChangeSet::new());
 
         let genesis_config = GenesisConfig::default();
-        let (changes, tables) = moved_genesis_image::load();
-        moved_genesis::apply(changes, tables, &genesis_config, &mut state);
+        let (changes, tables, evm_storage_changes) = moved_genesis_image::load();
+        moved_genesis::apply(
+            changes,
+            tables,
+            evm_storage_changes,
+            &genesis_config,
+            &mut state,
+            &mut evm_storage,
+        );
 
         let state = state.0;
 
@@ -700,7 +793,7 @@ mod tests {
         let query = InMemoryStateQueries::new(storage);
 
         let actual_nonce = query
-            .nonce_at(state.db(), addr, 0)
+            .nonce_at(state.db(), &evm_storage, addr, 0)
             .expect("Block height should exist");
         let expected_nonce = 0u64;
 

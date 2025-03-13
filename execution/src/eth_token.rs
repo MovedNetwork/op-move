@@ -15,6 +15,7 @@ use {
         gas::{GasMeter, UnmeteredGasMeter},
         values::Value,
     },
+    moved_evm_ext::state::StorageTrieRepository,
     moved_genesis::FRAMEWORK_ADDRESS,
     moved_shared::{
         error::EthToken,
@@ -283,9 +284,10 @@ pub fn get_eth_balance<G: GasMeter>(
 pub fn quick_get_eth_balance(
     account: &AccountAddress,
     state: &(impl MoveResolver<PartialVMError> + TableResolver),
+    storage_trie: &impl StorageTrieRepository,
 ) -> U256 {
     let move_vm = super::create_move_vm().unwrap();
-    let mut session = super::create_vm_session(&move_vm, state, SessionId::default());
+    let mut session = super::create_vm_session(&move_vm, state, SessionId::default(), storage_trie);
     let traversal_storage = TraversalStorage::new();
     let mut traversal_context = TraversalContext::new(&traversal_storage);
     let mut gas_meter = UnmeteredGasMeter;

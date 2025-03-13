@@ -15,6 +15,7 @@ pub type StateQueries = moved_blockchain::state::InMemoryStateQueries;
 pub type ReceiptRepository = moved_blockchain::receipt::InMemoryReceiptRepository;
 pub type ReceiptQueries = moved_blockchain::receipt::InMemoryReceiptQueries;
 pub type PayloadQueries = moved_blockchain::payload::InMemoryPayloadQueries;
+pub type StorageTrieRepository = moved_evm_ext::state::InMemoryStorageTrieRepository;
 pub type TransactionRepository = moved_blockchain::transaction::InMemoryTransactionRepository;
 pub type TransactionQueries = moved_blockchain::transaction::InMemoryTransactionQueries;
 pub type BlockQueries = moved_blockchain::block::InMemoryBlockQueries;
@@ -110,4 +111,8 @@ pub fn block_queries() -> BlockQueries {
 
 pub fn payload_queries() -> PayloadQueries {
     moved_blockchain::payload::InMemoryPayloadQueries::new()
+}
+
+pub fn storage_trie_repository() -> StorageTrieRepository {
+    moved_evm_ext::state::InMemoryStorageTrieRepository::new()
 }

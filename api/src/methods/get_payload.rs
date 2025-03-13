@@ -57,6 +57,7 @@ mod tests {
             state::InMemoryStateQueries,
             transaction::{InMemoryTransactionQueries, InMemoryTransactionRepository},
         },
+        moved_evm_ext::state::InMemoryStorageTrieRepository,
         moved_genesis::config::GenesisConfig,
         moved_shared::primitives::{B256, U256},
         moved_state::InMemoryState,
@@ -101,8 +102,16 @@ mod tests {
         repository.add(&mut memory, genesis_block).unwrap();
 
         let mut state = InMemoryState::new();
-        let (changes, table_changes) = moved_genesis_image::load();
-        moved_genesis::apply(changes.clone(), table_changes, &genesis_config, &mut state);
+        let mut evm_storage = InMemoryStorageTrieRepository::new();
+        let (changes, table_changes, evm_storage_changes) = moved_genesis_image::load();
+        moved_genesis::apply(
+            changes.clone(),
+            table_changes,
+            evm_storage_changes,
+            &genesis_config,
+            &mut state,
+            &mut evm_storage,
+        );
         let initial_state_root = genesis_config.initial_state_root;
 
         let state = moved_app::StateActor::new(
@@ -127,6 +136,7 @@ mod tests {
             InMemoryReceiptRepository::new(),
             InMemoryReceiptQueries::new(),
             InMemoryPayloadQueries::new(),
+            evm_storage,
             moved_app::StateActor::on_tx_noop(),
             moved_app::StateActor::on_tx_batch_noop(),
             moved_app::StateActor::on_payload_in_memory(),
@@ -167,7 +177,7 @@ mod tests {
                 "executionPayload": {
                     "parentHash": "0xe56ec7ba741931e8c55b7f654a6e56ed61cf8b8279bf5e3ef6ac86a11eb33a9d",
                     "feeRecipient": "0x4200000000000000000000000000000000000011",
-                    "stateRoot": "0x5abd9d568f0ca628ccc13af26c7afae77d396c1771cf81b9905a01724f64c0f2",
+                    "stateRoot": "0xe58aae953dc899e93b6b603734cdfd323788b2bcba30e05055947d58eb2d8aea",
                     "receiptsRoot": "0x605d409566eb40aa5d4867f37d1496c3c97da30fc786a9499b901eccc58471c6",
                     "logsBloom": "0x00000000000010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002000000000000000000008000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000400",
                     "prevRandao": "0xbde07f5d381bb84700433fe6c0ae077aa40eaad3a5de7abd298f0e3e27e6e4c9",

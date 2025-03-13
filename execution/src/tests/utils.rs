@@ -1,4 +1,6 @@
-use {super::*, moved_genesis::config::CHAIN_ID};
+use {
+    super::*, moved_evm_ext::state::InMemoryStorageTrieRepository, moved_genesis::config::CHAIN_ID,
+};
 
 /// Represents the base token state for a test transaction
 #[derive(Debug)]
@@ -70,6 +72,7 @@ impl TestTransaction {
 pub struct TestContext {
     /// The in-memory state for testing
     pub state: InMemoryState,
+    pub evm_storage: InMemoryStorageTrieRepository,
     /// Genesis configuration
     pub genesis_config: GenesisConfig,
     /// Transaction signer
@@ -83,11 +86,20 @@ impl TestContext {
     pub fn new() -> Self {
         let genesis_config = GenesisConfig::default();
         let mut state = InMemoryState::new();
-        let (changes, tables) = moved_genesis_image::load();
-        moved_genesis::apply(changes, tables, &genesis_config, &mut state);
+        let mut evm_storage = InMemoryStorageTrieRepository::new();
+        let (changes, tables, evm_storage_changes) = moved_genesis_image::load();
+        moved_genesis::apply(
+            changes,
+            tables,
+            evm_storage_changes,
+            &genesis_config,
+            &mut state,
+            &mut evm_storage,
+        );
 
         Self {
             state,
+            evm_storage,
             genesis_config,
             signer: Signer::new(&PRIVATE_KEY),
             move_address: EVM_ADDRESS.to_move_address(),
@@ -106,7 +118,8 @@ impl TestContext {
         let (tx_hash, tx) = create_transaction(&mut self.signer, TxKind::Create, module_bytes);
         let transaction = TestTransaction::new(tx, tx_hash);
         let outcome = self.execute_tx(&transaction).unwrap();
-        self.state.apply(outcome.changes).unwrap();
+        self.state.apply(outcome.changes.r#move).unwrap();
+        self.evm_storage.apply(outcome.changes.evm).unwrap();
 
         let module_id = ModuleId::new(self.move_address, Identifier::new(module_name).unwrap());
         assert!(
@@ -136,7 +149,8 @@ impl TestContext {
         let (tx_hash, tx) = create_transaction(&mut self.signer, TxKind::Create, script_bytes);
         let transaction = TestTransaction::new(tx, tx_hash);
         let outcome = self.execute_tx(&transaction).unwrap();
-        self.state.apply(outcome.changes).unwrap();
+        self.state.apply(outcome.changes.r#move).unwrap();
+        self.evm_storage.apply(outcome.changes.evm).unwrap();
         // Script transaction should succeed
         outcome.vm_outcome.unwrap();
         outcome.logs
@@ -173,7 +187,8 @@ impl TestContext {
         let mut transaction = TestTransaction::new(tx, tx_hash);
         transaction.with_cost_and_token(l1_cost, base_token, l2_gas_limit, l2_gas_price);
         let outcome = self.execute_tx(&transaction)?;
-        self.state.apply(outcome.changes.clone())?;
+        self.state.apply(outcome.changes.r#move.clone())?;
+        self.evm_storage.apply(outcome.changes.evm.clone()).unwrap();
         let l2_gas_fee = CreateMovedL2GasFee.with_default_gas_fee_multiplier();
         let used_gas_input = L2GasFeeInput::new(outcome.gas_used, outcome.l2_price);
         let l2_cost = l2_gas_fee.l2_fee(used_gas_input);
@@ -210,7 +225,8 @@ impl TestContext {
         let outcome = self.execute_tx(&transaction).unwrap();
         // Entry function transaction should succeed
         outcome.vm_outcome.unwrap();
-        self.state.apply(outcome.changes).unwrap();
+        self.state.apply(outcome.changes.r#move).unwrap();
+        self.evm_storage.apply(outcome.changes.evm).unwrap();
     }
 
     /// Executes a Move entry function expecting it to fail
@@ -262,6 +278,7 @@ impl TestContext {
                     tx,
                     tx_hash: &tx_hash,
                     state: self.state.resolver(),
+                    storage_trie: &self.evm_storage,
                     genesis_config: &self.genesis_config,
                     l1_cost: 0,
                     l2_fee,
@@ -274,6 +291,7 @@ impl TestContext {
                     tx,
                     tx_hash: &tx_hash,
                     state: self.state.resolver(),
+                    storage_trie: &self.evm_storage,
                     genesis_config: &self.genesis_config,
                     block_header: Default::default(),
                 }
@@ -284,6 +302,7 @@ impl TestContext {
                     tx,
                     tx_hash: &tx_hash,
                     state: self.state.resolver(),
+                    storage_trie: &self.evm_storage,
                     genesis_config: &self.genesis_config,
                     l1_cost,
                     l2_fee,
@@ -296,6 +315,7 @@ impl TestContext {
                     tx,
                     tx_hash: &tx_hash,
                     state: self.state.resolver(),
+                    storage_trie: &self.evm_storage,
                     genesis_config: &self.genesis_config,
                     block_header: Default::default(),
                 }
@@ -330,7 +350,8 @@ impl TestContext {
         let transaction = TestTransaction::new(tx.try_into().unwrap(), tx_hash);
         let outcome = self.execute_tx(&transaction).unwrap();
         outcome.vm_outcome.unwrap();
-        self.state.apply(outcome.changes).unwrap();
+        self.state.apply(outcome.changes.r#move).unwrap();
+        self.evm_storage.apply(outcome.changes.evm).unwrap();
 
         let balance_after = self.get_balance(to);
         assert_eq!(balance_after, balance_before + amount);
@@ -376,7 +397,11 @@ impl TestContext {
     /// # Returns
     /// The balance as a u64
     pub fn get_balance(&self, address: Address) -> U256 {
-        quick_get_eth_balance(&address.to_move_address(), self.state.resolver())
+        quick_get_eth_balance(
+            &address.to_move_address(),
+            self.state.resolver(),
+            &self.evm_storage,
+        )
     }
 
     /// Compiles a Move module

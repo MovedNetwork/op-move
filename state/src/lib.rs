@@ -8,10 +8,7 @@ use {
     move_core_types::{effects::ChangeSet, language_storage::StructTag, resolver::MoveResolver},
     move_table_extension::{TableChangeSet, TableResolver},
     move_vm_test_utils::InMemoryStorage,
-    moved_evm_ext::{
-        type_utils::{ACCOUNT_INFO_PREFIX, ACCOUNT_STORAGE_PREFIX},
-        EVM_NATIVE_ADDRESS, EVM_NATIVE_MODULE,
-    },
+    moved_evm_ext::{type_utils::ACCOUNT_INFO_PREFIX, EVM_NATIVE_ADDRESS, EVM_NATIVE_MODULE},
     moved_shared::primitives::{Address, KeyHashable, B256},
     nodes::{TreeKey, TreeValue},
     std::{collections::HashMap, fmt::Debug, sync::Arc},
@@ -259,8 +256,7 @@ pub fn evm_key_address(k: &StructTag) -> Option<Address> {
 pub fn is_evm_storage_or_account_key(k: &StructTag) -> bool {
     k.address == EVM_NATIVE_ADDRESS
         && k.module.as_ident_str() == EVM_NATIVE_MODULE
-        && (k.name.as_str().starts_with(ACCOUNT_INFO_PREFIX)
-            || k.name.as_str().starts_with(ACCOUNT_STORAGE_PREFIX))
+        && k.name.as_str().starts_with(ACCOUNT_INFO_PREFIX)
 }
 
 #[cfg(test)]

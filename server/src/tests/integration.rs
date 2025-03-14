@@ -18,7 +18,7 @@ use {
     move_core_types::{ident_str, language_storage::ModuleId, value::MoveValue},
     moved_execution::transaction::{ScriptOrModule, TransactionData},
     moved_shared::primitives::ToMoveAddress,
-    openssl::rand::rand_bytes,
+    openssl::rand::{self, rand_bytes},
     serde_json::Value,
     std::{
         env::{set_var, var},
@@ -27,6 +27,7 @@ use {
         process::{Child, Command, Output},
         str::FromStr,
         time::{Duration, Instant},
+        u64,
     },
     tokio::{fs, runtime::Runtime},
 };
@@ -40,6 +41,41 @@ const TXN_RECEIPT_WAIT_IN_MILLIS: u64 = 100;
 
 mod heartbeat;
 mod withdrawal;
+
+alloy::sol!(
+    #[sol(rpc)]
+    ERC20,
+    "src/tests/res/erc20/gold_sol_Gold.abi"
+);
+
+alloy::sol!(
+    #[sol(rpc)]
+    L1StandardBridge,
+    "src/tests/res/erc20/L1StandardBridge.json"
+);
+
+alloy::sol!(
+    #[sol(rpc)]
+    OptimismMintable,
+    "src/tests/res/erc20/OptimismMintableERC20Factory.json"
+);
+
+const OPTIMISM_MINTABLE_ERC20_CREATED: B256 = B256::new(alloy::hex!(
+    "52fe89dd5930f343d25650b62fd367bae47088bcddffd2a88350a6ecdd620cdb"
+));
+
+const ERC20_BRIDGE_FINALIZED: B256 = B256::new(alloy::hex!(
+    "d59c65b35445225835c83f50b6ede06a7be047d22e357073e250d9af537518cd"
+));
+
+// DepositFinalized(address indexed l1Token, address indexed l2Token, address indexed from, address to, uint256 amount, bytes extraData)
+const DEPOSIT_FINALIZED: B256 = B256::new(alloy::hex!(
+    "b0444523268717a02698be47d0803aa7468c00acbed2f8bd93a0459cde61dd89"
+));
+
+const WITHDRAWAL_INITIATED: B256 = B256::new(alloy::hex!(
+    "73d170910aba9e6d50b102db522b1dbcd796a99fa5b526256c5b4d271cd54f68"
+));
 
 #[tokio::test]
 async fn test_on_ethereum() -> Result<()> {
@@ -86,7 +122,10 @@ async fn test_on_ethereum() -> Result<()> {
     use_optimism_bridge().await?;
 
     // 11. Test out a simple Move contract
-    deploy_move_counter().await?;
+    // deploy_move_counter().await?;
+
+    deploy_erc20().await?;
+    pause(Some(Duration::from_secs(OP_BRIDGE_POLL_IN_SECS)));
 
     // 12. Cleanup generated files and folders
     hb.shutdown();
@@ -250,6 +289,7 @@ fn generate_jwt() -> Result<()> {
 }
 
 async fn start_geth() -> Result<Child> {
+    let geth_logs = File::create("geth.log").unwrap();
     let geth_process = Command::new("geth")
         .current_dir("src/tests/optimism/")
         .args([
@@ -269,6 +309,7 @@ async fn start_geth() -> Result<Child> {
             "--http.api",
             "web3,debug,eth,txpool,net,engine",
         ])
+        .stderr(geth_logs)
         .spawn()?;
     // Give a second to settle geth
     pause(Some(Duration::from_secs(GETH_START_IN_SECS)));
@@ -436,7 +477,8 @@ async fn use_optimism_bridge() -> Result<()> {
     pause(Some(Duration::from_secs(OP_START_IN_SECS)));
 
     deposit_to_l2().await?;
-    withdrawal::withdraw_to_l1().await?;
+    // withdrawal::withdraw_to_l1().await?;
+    eprintln!("Bridge used successfully");
 
     Ok(())
 }
@@ -460,6 +502,7 @@ async fn deposit_to_l2() -> Result<()> {
         }
         tokio::time::sleep(Duration::from_secs(OP_BRIDGE_POLL_IN_SECS)).await;
     }
+    eprintln!("deposited to l2");
     Ok(())
 }
 
@@ -496,6 +539,268 @@ async fn deploy_move_counter() -> Result<()> {
         .unwrap();
     let receipt = pending_tx.get_receipt().await.unwrap();
     assert!(receipt.status(), "Transaction should succeed");
+
+    Ok(())
+}
+
+async fn deploy_erc20() -> Result<()> {
+    // pause(Some(Duration::from_secs(OP_START_IN_SECS)));
+    let l1_from_wallet = get_prefunded_wallet().await?;
+    let l2_from_wallet = l1_from_wallet.clone();
+    let l1_provider = ProviderBuilder::new()
+        .with_recommended_fillers()
+        .wallet(EthereumWallet::from(l1_from_wallet.clone()))
+        .on_http(Url::parse(
+            &var("L1_RPC_URL").expect("Missing Ethereum L1 RPC URL"),
+        )?);
+    let l2_provider = ProviderBuilder::new()
+        .with_recommended_fillers()
+        .wallet(EthereumWallet::from(l2_from_wallet.clone()))
+        .on_http(Url::parse(L2_RPC_URL)?);
+
+    let bytecode_hex = std::fs::read_to_string("src/tests/res/erc20/gold_sol_Gold.bin").unwrap();
+    let bytecode = hex::decode(bytecode_hex.trim()).unwrap();
+    let erc20_call = CallBuilder::new_raw_deploy(&l1_provider, bytecode.into());
+
+    let l1_token_address = erc20_call.deploy().await.unwrap();
+    let bridge_address = Address::from_str(&get_deployed_address("L1StandardBridgeProxy")?)?;
+    dbg!(&l1_token_address);
+    dbg!(&bridge_address);
+
+    // Allowances
+    let erc20_contract = ERC20::new(l1_token_address, &l1_provider);
+
+    let balance = erc20_contract
+        .balanceOf(l1_from_wallet.address())
+        .call()
+        .await?
+        ._0;
+    eprintln!("balance of from wallet: {:?}", balance);
+
+    let send_amount = parse_ether("10")?;
+    let before_allowance = erc20_contract
+        .allowance(l1_from_wallet.address(), bridge_address)
+        .call()
+        .await?
+        ._0;
+    eprintln!("allowance before increase: {:?}", before_allowance);
+    let approve_tx = erc20_contract
+        .approve(bridge_address, send_amount)
+        .send()
+        .await?;
+    approve_tx.watch().await?;
+    let after_allowance = erc20_contract
+        .allowance(l1_from_wallet.address(), bridge_address)
+        .call()
+        .await?
+        ._0;
+    eprintln!("allowance after increase: {:?}", after_allowance);
+
+    // ERC20OptimismMintableFactory
+    let factory_address = Address::new(alloy::hex!("4200000000000000000000000000000000000012"));
+    dbg!(&factory_address);
+
+    let name = "Gold".to_string();
+    let symbol = "AU".to_string();
+
+    // Encode the function call
+    let call = OptimismMintable::createOptimismMintableERC20Call {
+        _remoteToken: l1_token_address,
+        _name: name,
+        _symbol: symbol,
+    };
+
+    let tx = TransactionRequest::default()
+        // EIP1559
+        .transaction_type(2)
+        .with_call(&call)
+        // .max_fee_per_gas(2_000_000_000u128) // 2 gwei
+        // .max_priority_fee_per_gas(1_000_000_000u128) // 1 gwei
+        .with_to(factory_address);
+    dbg!(&tx);
+    // Estimate gas first
+    let gas_estimate = l2_provider.estimate_gas(&tx).await?;
+    dbg!(&gas_estimate);
+    let gas_limit = gas_estimate * 150 / 100;
+    let tx = tx.with_gas_limit(gas_limit);
+
+    let tx_hash = l2_provider.send_transaction(tx).await?.watch().await?;
+    dbg!(&tx_hash);
+    let receipt = l2_provider
+        .get_transaction_receipt(tx_hash)
+        .await?
+        .expect("No receipt found");
+
+    dbg!(receipt.inner.logs());
+    let logs = receipt.inner.logs();
+
+    let mut l2_token_addr = None;
+    for log in logs {
+        if log.topic0() == Some(&OPTIMISM_MINTABLE_ERC20_CREATED) {
+            eprintln!(
+                "FOUNDDDD! loc: {:?}, rem: {:?}",
+                log.topics()[1],
+                log.topics()[2],
+            );
+            l2_token_addr = Some(Address::from_word(log.topics()[1]));
+            break;
+        }
+    }
+    let l2_token_addr = l2_token_addr.expect("l2 creation event not found");
+    // Extract L2 token address from logs
+    eprintln!("L2 Gold created at: {:?}", l2_token_addr);
+
+    // Bridging
+    let bridge_contract = L1StandardBridge::new(bridge_address, &l1_provider);
+    eprintln!(
+        "deployed code: {:?}",
+        &l1_provider.get_code_at(l1_token_address).await.unwrap()
+    );
+    let bridge_tx = bridge_contract
+        .depositERC20(
+            l1_token_address,
+            l2_token_addr,
+            send_amount,
+            30_000,
+            "".into(),
+        )
+        .send()
+        .await?;
+    eprintln!("return of deposit: {:?}", bridge_tx);
+    let bridge_tx_hash = bridge_tx.watch().await?;
+    dbg!(bridge_tx_hash);
+    let balance = erc20_contract
+        .balanceOf(l1_from_wallet.address())
+        .call()
+        .await?
+        ._0;
+    eprintln!("balance of from wallet after: {:?}", balance);
+    let receipt = l1_provider
+        .get_transaction_receipt(bridge_tx_hash)
+        .await?
+        .unwrap();
+    eprintln!("success: {:?}", receipt.inner.is_success());
+    eprintln!("logs: {:?}", receipt.inner.logs());
+
+    // Define the L2StandardBridge address
+    // let l2_bridge_address = Address::new(alloy::hex!("4200000000000000000000000000000000000010"));
+
+    // eprintln!("Waiting for the deposit to be finalized on L2...");
+
+    // We need to wait a bit for the message to propagate to L2
+    // In a real scenario, we would use the CrossDomainMessenger or MessageRelayer to track this
+    // pause(Some(Duration::from_secs(OP_BRIDGE_POLL_IN_SECS)));
+
+    // Get the latest block number
+    // let latest_block = l2_provider.get_block_number().await?;
+    // eprintln!("Current L2 block number: {}", latest_block);
+
+    // // Create a filter to look for all L2StandardBridge events without filtering by event type
+    // // We'll look back about 100 blocks to be safe
+    // let from_block = latest_block.saturating_sub(100);
+    // let filter = alloy::rpc::types::Filter::new()
+    //     .address(l2_bridge_address)
+    //     .from_block(from_block)
+    //     .event_signature(ERC20_BRIDGE_FINALIZED)
+    //     .to_block(alloy::eips::BlockNumberOrTag::Latest);
+
+    // // Query for logs
+    // eprintln!(
+    //     "Searching for L2StandardBridge events on L2 from block {} to latest",
+    //     from_block
+    // );
+    // let logs = l2_provider.get_logs(&filter).await?;
+
+    // if logs.is_empty() {
+    //     eprintln!(
+    //         "No L2StandardBridge events found on L2 yet. The message may still be in transit."
+    //     );
+    // } else {
+    //     eprintln!("Found {} L2StandardBridge events:", logs.len());
+
+    //     for (i, log) in logs.iter().enumerate() {
+    //         eprintln!("Log {}: {:?}", i + 1, log);
+
+    //         // Extract the event type from topic0
+    //         if let Some(topic0) = log.topic0() {
+    //             // First identify the event type
+    //             let event_type = if topic0 == &ERC20_BRIDGE_FINALIZED {
+    //                 "ERC20BridgeFinalized"
+    //             } else if topic0 == &DEPOSIT_FINALIZED {
+    //                 "DepositFinalized"
+    //             } else if topic0 == &WITHDRAWAL_INITIATED {
+    //                 "WithdrawalInitiated"
+    //             } else {
+    //                 "Unknown"
+    //             };
+
+    //             eprintln!("  Event Type: {}", event_type);
+
+    //             // Make sure we have at least 3 topics (topic0 plus 2 indexed params)
+    //             if log.topics().len() >= 3 {
+    //                 // Topic[1] is typically the token address (either localToken or l1Token)
+    //                 // Topic[2] is typically the other token address (either remoteToken or l2Token)
+    //                 let token1 = Address::from_word(log.topics()[1]);
+    //                 let token2 = Address::from_word(log.topics()[2]);
+    //                 eprintln!("  Token1: {:?}", token1);
+    //                 eprintln!("  Token2: {:?}", token2);
+
+    //                 // Check if this involves our token
+    //                 let related_to_our_token = token1 == l2_token_addr
+    //                     || token2 == l2_token_addr
+    //                     || token1 == l1_token_address
+    //                     || token2 == l1_token_address;
+
+    //                 if related_to_our_token {
+    //                     eprintln!("  ✓ This event involves our tokens!");
+
+    //                     // For events with a 'from' address (topic[3])
+    //                     if log.topics().len() >= 4 {
+    //                         let from = Address::from_word(log.topics()[3]);
+    //                         eprintln!("  From: {:?}", from);
+    //                     }
+
+    //                     // Try to decode the data portion
+    //                     let data = log.data().data.clone();
+    //                     eprintln!("  Data length: {} bytes", data.len());
+
+    //                     // Most bridge events have at least 'to' address and 'amount' in the data
+    //                     if data.len() >= 64 {
+    //                         // First 32 bytes typically contain the 'to' address (padded)
+    //                         if data.len() >= 32 {
+    //                             let to_bytes = &data[12..32]; // Skip the padding
+    //                             let to = Address::from_slice(to_bytes);
+    //                             eprintln!("  To: {:?}", to);
+    //                         }
+
+    //                         // Next 32 bytes typically contain the amount
+    //                         if data.len() >= 64 {
+    //                             let amount_bytes = &data[32..64];
+    //                             let amount = U256::from_be_slice(amount_bytes);
+    //                             eprintln!("  Amount: {}", amount);
+    //                         }
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
+
+    // Check the balance of the L2 token in the L2 wallet
+    // let l2_erc20_contract = ERC20::new(l2_token_addr, &l2_provider);
+    // dbg!(&l2_erc20_contract);
+    // match l2_erc20_contract
+    //     .balanceOf(l2_from_wallet.address())
+    //     .call()
+    //     .await
+    // {
+    //     Ok(balance) => {
+    //         eprintln!("L2 token balance after bridge: {:?}", balance._0);
+    //     }
+    //     Err(e) => {
+    //         eprintln!("Failed to get L2 token balance: {:?}", e);
+    //     }
+    // }
 
     Ok(())
 }
@@ -600,6 +905,7 @@ async fn send_ethers(
     let receipt = provider.send_transaction(tx).await?;
     pause(Some(Duration::from_millis(TXN_RECEIPT_WAIT_IN_MILLIS)));
     let tx_hash = receipt.watch().await?;
+    dbg!(&tx_hash);
 
     if check_balance {
         let new_balance = provider.get_balance(to).await?;

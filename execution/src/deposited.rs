@@ -36,11 +36,22 @@ const ETH_BRIDGE_FINALIZED: B256 = B256::new(hex!(
     "31b2166ff604fc5672ea5df08a78081d2bc6d746cadce880747f3643d819e83d"
 ));
 
+// Topic identifying the event
+// ERC20BridgeFinalized(address indexed localToken, address indexed remoteToken, address indexed from, address to, uint256 amount, bytes extraData)
+const ERC20_BRIDGE_FINALIZED: B256 = B256::new(hex!(
+    "d59c65b35445225835c83f50b6ede06a7be047d22e357073e250d9af537518cd"
+));
+
+const ERC20_BRIDGE_INITIATED: B256 = B256::new(hex!(
+    "2849b43074093a05396b6f2a937dee8565b15a48a7b3d4bffb732a5017380af5"
+));
+
 pub(super) fn execute_deposited_transaction<S: MoveResolver<PartialVMError> + TableResolver>(
     input: DepositExecutionInput<S>,
 ) -> moved_shared::error::Result<TransactionExecutionOutcome> {
     #[cfg(any(feature = "test-doubles", test))]
     if input.tx.data.is_empty() {
+        eprintln!("in deposited: tx data empty");
         return direct_mint(
             input.tx,
             input.tx_hash,
@@ -50,6 +61,7 @@ pub(super) fn execute_deposited_transaction<S: MoveResolver<PartialVMError> + Ta
         );
     }
 
+    eprintln!("in deposited: tx data yes");
     let move_vm = create_move_vm()?;
     let session_id = SessionId::new_from_deposited(
         input.tx,
@@ -81,6 +93,7 @@ pub(super) fn execute_deposited_transaction<S: MoveResolver<PartialVMError> + Ta
             .simple_serialize(&CODE_LAYOUT)
             .unwrap(),
     ];
+    dbg!(&input.tx.data);
     let outcome = session
         .execute_function_bypass_visibility(
             &module,
@@ -91,18 +104,21 @@ pub(super) fn execute_deposited_transaction<S: MoveResolver<PartialVMError> + Ta
             &mut traversal_context,
         )
         .map_err(Into::into);
-
-    let mint_params = outcome.and_then(|values| {
+    dbg!(&outcome);
+    let mint_params_with_logs = outcome.and_then(|values| {
         let evm_outcome = extract_evm_result(values);
+        dbg!(&evm_outcome);
         if !evm_outcome.is_success {
             return Err(UserError::DepositFailure(evm_outcome.output));
         }
         let mint_params = get_mint_params(&evm_outcome);
+        dbg!(&mint_params);
         Ok((mint_params, evm_outcome.logs))
     });
 
-    let (logs, vm_outcome) = match mint_params {
+    let (logs, vm_outcome) = match mint_params_with_logs {
         Ok((Some(mint_params), logs)) => {
+            eprintln!("found mint params: {:?}", &mint_params);
             eth_token::mint_eth(
                 &mint_params.destination,
                 mint_params.amount,
@@ -112,7 +128,10 @@ pub(super) fn execute_deposited_transaction<S: MoveResolver<PartialVMError> + Ta
             )?;
             (logs, Ok(()))
         }
-        Ok((None, logs)) => (logs, Ok(())),
+        Ok((None, logs)) => {
+            eprintln!("found empty mint params. logs: {:?}", logs);
+            (logs, Ok(()))
+        }
         Err(e) => (Vec::new(), Err(e)),
     };
 
@@ -140,10 +159,17 @@ pub(super) fn execute_deposited_transaction<S: MoveResolver<PartialVMError> + Ta
 // than the bridge.
 fn get_mint_params(outcome: &EvmNativeOutcome) -> Option<MintParams> {
     // TODO: Should consider ERC-20 deposits here too?
+    eprintln!("in mint params func");
     let bridge_log = outcome
         .logs
         .iter()
         .find(|l| l.topics()[0] == ETH_BRIDGE_FINALIZED)?;
+    dbg!(&bridge_log);
+    let erc20_log = outcome
+        .logs
+        .iter()
+        .find(|l| l.topics()[0] == ERC20_BRIDGE_FINALIZED)?;
+    dbg!(erc20_log);
     // For the ETHBridgeFinalized log the topics are:
     // topics[0]: 0x31b2166ff604fc5672ea5df08a78081d2bc6d746cadce880747f3643d819e83d (fixed identifier)
     // topics[1]: from address (sender)
@@ -159,6 +185,7 @@ fn get_mint_params(outcome: &EvmNativeOutcome) -> Option<MintParams> {
     })
 }
 
+#[derive(Debug)]
 struct MintParams {
     destination: AccountAddress,
     amount: U256,

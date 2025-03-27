@@ -343,7 +343,7 @@ impl TestContext {
             value: U256::from(amount),
             source_hash: FixedBytes::default(),
             from: to,
-            mint: U256::ZERO,
+            mint: U256::from(amount),
             gas: U64::from(u64::MAX),
             is_system_tx: false,
             data: Vec::new().into(),
@@ -439,6 +439,7 @@ impl TestContext {
             self.state.resolver(),
             session_id,
             &self.evm_storage,
+            &(),
         );
         let traversal_storage = TraversalStorage::new();
         let mut traversal_context = TraversalContext::new(&traversal_storage);
@@ -480,6 +481,7 @@ impl TestContext {
             self.state.resolver(),
             session_id,
             &self.evm_storage,
+            &(),
         );
         let traversal_storage = TraversalStorage::new();
         let mut traversal_context = TraversalContext::new(&traversal_storage);

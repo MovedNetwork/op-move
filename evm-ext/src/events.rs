@@ -1,14 +1,67 @@
 use {
     super::{EVM_NATIVE_ADDRESS, EVM_NATIVE_MODULE},
-    alloy::primitives::{Log, LogData, B256},
+    alloy::primitives::{Log, LogData, B256, U256},
     move_core_types::{
+        account_address::AccountAddress,
         ident_str,
         language_storage::StructTag,
         value::{MoveStructLayout, MoveTypeLayout, MoveValue},
     },
     moved_shared::primitives::ToEthAddress,
-    std::sync::LazyLock,
+    std::{cell::RefCell, sync::LazyLock},
 };
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EthTransfer {
+    pub from: AccountAddress,
+    pub to: AccountAddress,
+    pub amount: U256,
+}
+
+pub trait EthTransferLog {
+    fn append_transfers(&self, transfers: Vec<EthTransfer>);
+    fn take_transfers(&self) -> Vec<EthTransfer>;
+    fn add_tx_origin(&self, address: AccountAddress, amount: U256);
+    fn take_origins(&self) -> Vec<(AccountAddress, U256)>;
+}
+
+#[derive(Debug, Default)]
+pub struct EthTransfersLogger {
+    transfers: RefCell<Vec<EthTransfer>>,
+    origins: RefCell<Vec<(AccountAddress, U256)>>,
+}
+
+impl EthTransferLog for EthTransfersLogger {
+    fn append_transfers(&self, mut transfers: Vec<EthTransfer>) {
+        self.transfers.borrow_mut().append(&mut transfers);
+    }
+
+    fn take_transfers(&self) -> Vec<EthTransfer> {
+        self.transfers.take()
+    }
+
+    fn add_tx_origin(&self, address: AccountAddress, amount: U256) {
+        self.origins.borrow_mut().push((address, amount));
+    }
+
+    fn take_origins(&self) -> Vec<(AccountAddress, U256)> {
+        self.origins.take()
+    }
+}
+
+impl EthTransferLog for () {
+    fn append_transfers(&self, _transfers: Vec<EthTransfer>) {}
+
+    fn take_transfers(&self) -> Vec<EthTransfer> {
+        Vec::new()
+    }
+
+    fn add_tx_origin(&self, _address: AccountAddress, _amount: U256) {}
+
+    fn take_origins(&self) -> Vec<(AccountAddress, U256)> {
+        Vec::new()
+    }
+}
 
 /// Marker struct defined in our framework for marking data as FixedBytes in the Solidity ABI.
 pub static EVM_LOGS_EVENT_TAG: LazyLock<StructTag> = LazyLock::new(|| StructTag {

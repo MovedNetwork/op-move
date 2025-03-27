@@ -956,6 +956,7 @@ mod tests {
             state.resolver(),
             SessionId::default(),
             evm_storage,
+            &(),
         );
         let traversal_storage = TraversalStorage::new();
         let mut traversal_context = TraversalContext::new(&traversal_storage);

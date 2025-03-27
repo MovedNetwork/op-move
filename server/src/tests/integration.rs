@@ -436,7 +436,16 @@ fn run_op() -> Result<(Child, Child, Child)> {
 async fn use_optimism_bridge() -> Result<()> {
     pause(Some(Duration::from_secs(OP_START_IN_SECS)));
 
-    deposit_eth_to_l2().await?;
+    // Deposit via standard bridge
+    deposit_eth_to_l2(Address::from_str(&get_deployed_address(
+        "L1StandardBridgeProxy",
+    )?)?)
+    .await?;
+    // Deposit via Optimism Portal
+    deposit_eth_to_l2(Address::from_str(&get_deployed_address(
+        "OptimismPortalProxy",
+    )?)?)
+    .await?;
 
     let erc20_deposit_amount = U256::from(1234);
     let erc20::Erc20AddressPair {
@@ -460,10 +469,8 @@ async fn use_optimism_bridge() -> Result<()> {
     Ok(())
 }
 
-async fn deposit_eth_to_l2() -> Result<()> {
+async fn deposit_eth_to_l2(bridge_address: Address) -> Result<()> {
     let amount = "100";
-
-    let bridge_address = Address::from_str(&get_deployed_address("L1StandardBridgeProxy")?)?;
     let prefunded_wallet = get_prefunded_wallet().await?;
 
     let pre_deposit_balance = get_op_balance(prefunded_wallet.address()).await?;

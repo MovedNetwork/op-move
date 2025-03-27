@@ -15,7 +15,7 @@ use {
         gas::{GasMeter, UnmeteredGasMeter},
         values::Value,
     },
-    moved_evm_ext::state::StorageTrieRepository,
+    moved_evm_ext::{events::EthTransferLog, state::StorageTrieRepository, EVM_NATIVE_ADDRESS},
     moved_genesis::FRAMEWORK_ADDRESS,
     moved_shared::{
         error::EthToken,
@@ -231,6 +231,48 @@ pub fn transfer_eth<G: GasMeter>(
     Ok(())
 }
 
+pub fn replicate_transfers<G: GasMeter, L: EthTransferLog>(
+    eth_transfer_logger: &L,
+    session: &mut Session,
+    traversal_context: &mut TraversalContext,
+    gas_meter: &mut G,
+) -> Result<(), moved_shared::error::Error> {
+    // Transfer the transaction value from EVM native account to `origin`.
+    // This step is needed because all EVM transactions start with the caller
+    // transferring tokens to the EVM native account as part of `evm_call`.
+    // We transfer them back to then follow the sequence of transfers that
+    // happened in the EVM.
+    for (origin, value) in eth_transfer_logger.take_origins() {
+        if !value.is_zero() {
+            transfer_eth(
+                TransferArgs {
+                    from: &EVM_NATIVE_ADDRESS,
+                    to: &origin,
+                    amount: value,
+                },
+                session,
+                traversal_context,
+                gas_meter,
+            )?;
+        }
+    }
+
+    for transfer in eth_transfer_logger.take_transfers() {
+        transfer_eth(
+            TransferArgs {
+                from: &transfer.from,
+                to: &transfer.to,
+                amount: transfer.amount,
+            },
+            session,
+            traversal_context,
+            gas_meter,
+        )?;
+    }
+
+    Ok(())
+}
+
 pub fn get_eth_balance<G: GasMeter>(
     account: &AccountAddress,
     session: &mut Session,
@@ -287,7 +329,8 @@ pub fn quick_get_eth_balance(
     storage_trie: &impl StorageTrieRepository,
 ) -> U256 {
     let move_vm = super::create_move_vm().unwrap();
-    let mut session = super::create_vm_session(&move_vm, state, SessionId::default(), storage_trie);
+    let mut session =
+        super::create_vm_session(&move_vm, state, SessionId::default(), storage_trie, &());
     let traversal_storage = TraversalStorage::new();
     let mut traversal_context = TraversalContext::new(&traversal_storage);
     let mut gas_meter = UnmeteredGasMeter;

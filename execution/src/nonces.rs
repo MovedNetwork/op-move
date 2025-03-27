@@ -33,7 +33,8 @@ pub fn quick_get_nonce(
     storage_trie: &impl StorageTrieRepository,
 ) -> u64 {
     let move_vm = super::create_move_vm().expect("Must create MoveVM");
-    let mut session = super::create_vm_session(&move_vm, state, SessionId::default(), storage_trie);
+    let mut session =
+        super::create_vm_session(&move_vm, state, SessionId::default(), storage_trie, &());
     let traversal_storage = TraversalStorage::new();
     let mut traversal_context = TraversalContext::new(&traversal_storage);
     let mut gas_meter = UnmeteredGasMeter;

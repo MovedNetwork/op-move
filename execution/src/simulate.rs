@@ -80,7 +80,7 @@ pub fn call_transaction(
 
     let move_vm = create_move_vm()?;
     let session_id = SessionId::default();
-    let mut session = create_vm_session(&move_vm, state, session_id, storage_trie);
+    let mut session = create_vm_session(&move_vm, state, session_id, storage_trie, &());
     let traversal_storage = TraversalStorage::new();
     let mut traversal_context = TraversalContext::new(&traversal_storage);
     let mut gas_meter = new_gas_meter(genesis_config, tx.gas_limit());

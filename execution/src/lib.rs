@@ -27,7 +27,9 @@ use {
         move_vm::MoveVM, native_extensions::NativeContextExtensions, session::Session,
     },
     moved_evm_ext::{
-        events::{evm_logs_event_to_log, EVM_LOGS_EVENT_LAYOUT, EVM_LOGS_EVENT_TAG},
+        events::{
+            evm_logs_event_to_log, EthTransferLog, EVM_LOGS_EVENT_LAYOUT, EVM_LOGS_EVENT_TAG,
+        },
         state::StorageTrieRepository,
         HeaderForExecution,
     },
@@ -60,14 +62,16 @@ pub fn create_move_vm() -> moved_shared::error::Result<MoveVM> {
     Ok(MovedVm.create_move_vm()?)
 }
 
-pub fn create_vm_session<'l, 'r, S>(
+pub fn create_vm_session<'l, 'r, S, L>(
     vm: &'l MoveVM,
     state: &'r S,
     session_id: SessionId,
     storage_trie: &'r impl StorageTrieRepository,
+    eth_transfers_log: &'r L,
 ) -> Session<'r, 'l>
 where
     S: MoveResolver<PartialVMError> + TableResolver,
+    L: EthTransferLog,
 {
     let txn_hash = session_id.txn_hash;
     let mut native_extensions = NativeContextExtensions::default();
@@ -96,6 +100,7 @@ where
     native_extensions.add(moved_evm_ext::NativeEVMContext::new(
         state,
         storage_trie,
+        eth_transfers_log,
         session_id.block_header,
     ));
 

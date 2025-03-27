@@ -3,39 +3,25 @@ use {
         create_move_vm, create_vm_session, eth_token,
         gas::{new_gas_meter, total_gas_used},
         session_id::SessionId,
-        transaction::TransactionExecutionOutcome,
-        DepositExecutionInput, ADDRESS_LAYOUT, U256_LAYOUT,
+        transaction::{Changes, TransactionExecutionOutcome},
+        DepositExecutionInput, Logs, ADDRESS_LAYOUT, U256_LAYOUT,
     },
-    alloy::{hex, primitives::U256},
+    alloy::primitives::U256,
     aptos_table_natives::TableResolver,
     move_binary_format::errors::PartialVMError,
-    move_core_types::{
-        account_address::AccountAddress, language_storage::ModuleId, resolver::MoveResolver,
-    },
+    move_core_types::{language_storage::ModuleId, resolver::MoveResolver},
     move_vm_runtime::module_traversal::{TraversalContext, TraversalStorage},
     move_vm_types::values::Value,
     moved_evm_ext::{
-        self, extract_evm_changes, extract_evm_result, EvmNativeOutcome, CODE_LAYOUT,
-        EVM_CALL_FN_NAME, EVM_NATIVE_ADDRESS, EVM_NATIVE_MODULE,
+        self, events::EthTransfersLogger, extract_evm_changes, extract_evm_result,
+        state::StorageTrieRepository, CODE_LAYOUT, EVM_CALL_FN_NAME, EVM_NATIVE_ADDRESS,
+        EVM_NATIVE_MODULE,
     },
     moved_shared::{
-        error::UserError,
-        primitives::{ToMoveAddress, ToMoveU256, B256},
+        error::{Error, UserError},
+        primitives::{ToMoveAddress, ToMoveU256},
     },
 };
-
-use {crate::transaction::Changes, moved_evm_ext::state::StorageTrieRepository};
-#[cfg(any(feature = "test-doubles", test))]
-use {
-    crate::transaction::DepositedTx, moved_evm_ext::HeaderForExecution,
-    moved_genesis::config::GenesisConfig,
-};
-
-// Topic identifying the event
-// ETHBridgeFinalized(address indexed from, address indexed to, uint256 amount, bytes extraData)
-const ETH_BRIDGE_FINALIZED: B256 = B256::new(hex!(
-    "31b2166ff604fc5672ea5df08a78081d2bc6d746cadce880747f3643d819e83d"
-));
 
 pub(super) fn execute_deposited_transaction<
     S: MoveResolver<PartialVMError> + TableResolver,
@@ -43,18 +29,6 @@ pub(super) fn execute_deposited_transaction<
 >(
     input: DepositExecutionInput<S, ST>,
 ) -> moved_shared::error::Result<TransactionExecutionOutcome> {
-    #[cfg(any(feature = "test-doubles", test))]
-    if input.tx.data.is_empty() {
-        return direct_mint(
-            input.tx,
-            input.tx_hash,
-            input.state,
-            input.storage_trie,
-            input.genesis_config,
-            input.block_header,
-        );
-    }
-
     let move_vm = create_move_vm()?;
     let session_id = SessionId::new_from_deposited(
         input.tx,
@@ -62,7 +36,14 @@ pub(super) fn execute_deposited_transaction<
         input.genesis_config,
         input.block_header,
     );
-    let mut session = create_vm_session(&move_vm, input.state, session_id, input.storage_trie);
+    let eth_transfers_log = EthTransfersLogger::default();
+    let mut session = create_vm_session(
+        &move_vm,
+        input.state,
+        session_id,
+        input.storage_trie,
+        &eth_transfers_log,
+    );
     let traversal_storage = TraversalStorage::new();
     let mut traversal_context = TraversalContext::new(&traversal_storage);
     // The type of `tx.gas` is essentially `[u64; 1]` so taking the 0th element
@@ -95,33 +76,48 @@ pub(super) fn execute_deposited_transaction<
             &mut gas_meter,
             &mut traversal_context,
         )
-        .map_err(Into::into);
+        .map_err(Error::from)
+        .and_then(|values| {
+            let evm_outcome = extract_evm_result(values);
+            if !evm_outcome.is_success {
+                return Err(UserError::DepositFailure(evm_outcome.output).into());
+            }
 
-    let mint_params = outcome.and_then(|values| {
-        let evm_outcome = extract_evm_result(values);
-        if !evm_outcome.is_success {
-            return Err(UserError::DepositFailure(evm_outcome.output));
-        }
-        let mint_params = get_mint_params(&evm_outcome);
-        Ok((mint_params, evm_outcome.logs))
-    });
-
-    let (logs, vm_outcome) = match mint_params {
-        Ok((Some(mint_params), logs)) => {
-            eth_token::mint_eth(
-                &mint_params.destination,
-                mint_params.amount,
+            // If there is a non-zero mint amount then we start by
+            // giving those tokens to the EVM native address.
+            // The tokens will then be distributed to the correct
+            // accounts according to the transferred that happened
+            // during EVM execution.
+            if !input.tx.mint.is_zero() {
+                eth_token::mint_eth(
+                    &EVM_NATIVE_ADDRESS,
+                    input.tx.mint,
+                    &mut session,
+                    &mut traversal_context,
+                    &mut gas_meter,
+                )?;
+            }
+            eth_token::replicate_transfers(
+                &eth_transfers_log,
                 &mut session,
                 &mut traversal_context,
                 &mut gas_meter,
             )?;
-            (logs, Ok(()))
+
+            Ok(evm_outcome.logs)
+        });
+
+    let (evm_logs, vm_outcome) = match outcome {
+        Ok(logs) => (logs, Ok(())),
+        Err(Error::User(e)) => (Vec::new(), Err(e)),
+        Err(e) => {
+            return Err(e);
         }
-        Ok((None, logs)) => (logs, Ok(())),
-        Err(e) => (Vec::new(), Err(e)),
     };
 
-    let (mut changes, extensions) = session.finish_with_extensions()?;
+    let (mut changes, mut extensions) = session.finish_with_extensions()?;
+    let mut logs = extensions.logs();
+    logs.extend(evm_logs);
     let gas_used = total_gas_used(&gas_meter, input.genesis_config);
     let evm_changes = extract_evm_changes(&extensions);
     changes
@@ -132,90 +128,6 @@ pub(super) fn execute_deposited_transaction<
     Ok(TransactionExecutionOutcome::new(
         vm_outcome,
         changes,
-        gas_used,
-        // No L2 gas for deposited txs
-        U256::ZERO,
-        logs,
-        None,
-    ))
-}
-
-// Note: Not all deposit-type transactions are actual deposits; hence
-// why the return value of this function is an `Option`. Deposit-type
-// transactions are produced by the sequencer to call L2 contracts other
-// than the bridge.
-fn get_mint_params(outcome: &EvmNativeOutcome) -> Option<MintParams> {
-    // TODO: Should consider ERC-20 deposits here too?
-    let bridge_log = outcome
-        .logs
-        .iter()
-        .find(|l| l.topics()[0] == ETH_BRIDGE_FINALIZED)?;
-    // For the ETHBridgeFinalized log the topics are:
-    // topics[0]: 0x31b2166ff604fc5672ea5df08a78081d2bc6d746cadce880747f3643d819e83d (fixed identifier)
-    // topics[1]: from address (sender)
-    // topics[2]: to address (destination)
-    let destination = AccountAddress::new(bridge_log.topics()[2].0);
-    // For the ETHBridgeFinalized log the data is Solidity ABI encoded a tuple consisting of
-    // 1. amount deposited (32 bytes since it is U256)
-    // 2. extra data (optional; ignored by us)
-    let amount = U256::from_be_slice(&bridge_log.data.data[..32]);
-    Some(MintParams {
-        destination,
-        amount,
-    })
-}
-
-struct MintParams {
-    destination: AccountAddress,
-    amount: U256,
-}
-
-/// This function is only used in tests.
-/// It allows us to mint ETH directly without going through the EVM.
-#[cfg(any(feature = "test-doubles", test))]
-fn direct_mint(
-    tx: &DepositedTx,
-    tx_hash: &B256,
-    state: &(impl MoveResolver<PartialVMError> + TableResolver),
-    storage_trie: &impl StorageTrieRepository,
-    genesis_config: &GenesisConfig,
-    block_header: HeaderForExecution,
-) -> moved_shared::error::Result<TransactionExecutionOutcome> {
-    use crate::Logs;
-
-    let amount = tx.mint.saturating_add(tx.value);
-    let to = tx.to.to_move_address();
-
-    let move_vm = create_move_vm()?;
-    let session_id = SessionId::new_from_deposited(tx, tx_hash, genesis_config, block_header);
-    let mut session = create_vm_session(&move_vm, state, session_id, storage_trie);
-    let traversal_storage = TraversalStorage::new();
-    let mut traversal_context = TraversalContext::new(&traversal_storage);
-    // The type of `tx.gas` is essentially `[u64; 1]` so taking the 0th element
-    // is a 1:1 mapping to `u64`.
-    let mut gas_meter = new_gas_meter(genesis_config, tx.gas.as_limbs()[0]);
-
-    eth_token::mint_eth(
-        &to,
-        amount,
-        &mut session,
-        &mut traversal_context,
-        &mut gas_meter,
-    )?;
-
-    debug_assert!(
-        eth_token::get_eth_balance(&to, &mut session, &mut traversal_context, &mut gas_meter)?
-            >= amount,
-        "tokens were minted"
-    );
-
-    let (changes, mut extensions) = session.finish_with_extensions()?;
-    let gas_used = total_gas_used(&gas_meter, genesis_config);
-    let logs = extensions.logs();
-
-    Ok(TransactionExecutionOutcome::new(
-        Ok(()),
-        changes.into(),
         gas_used,
         // No L2 gas for deposited txs
         U256::ZERO,

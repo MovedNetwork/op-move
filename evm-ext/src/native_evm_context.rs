@@ -3,7 +3,10 @@ use {
         type_utils::{account_info_struct_tag, code_hash_struct_tag},
         CODE_LAYOUT, EVM_NATIVE_ADDRESS,
     },
-    crate::{state, state::StorageTrieRepository},
+    crate::{
+        events::EthTransferLog,
+        state::{self, StorageTrieRepository},
+    },
     alloy::primitives::map::HashMap,
     aptos_types::vm_status::StatusCode,
     better_any::{Tid, TidAble},
@@ -33,6 +36,7 @@ pub struct HeaderForExecution {
 pub struct NativeEVMContext<'a> {
     pub resolver: &'a dyn MoveResolver<PartialVMError>,
     pub storage_trie: &'a dyn StorageTrieRepository,
+    pub transfers_log: &'a dyn EthTransferLog,
     pub state_changes: Vec<HashMap<Address, Account>>,
     pub block_header: HeaderForExecution,
 }
@@ -41,11 +45,13 @@ impl<'a> NativeEVMContext<'a> {
     pub fn new(
         state: &'a impl MoveResolver<PartialVMError>,
         storage_trie: &'a impl StorageTrieRepository,
+        transfers_log: &'a dyn EthTransferLog,
         block_header: HeaderForExecution,
     ) -> Self {
         Self {
             resolver: state,
             storage_trie,
+            transfers_log,
             state_changes: Vec::new(),
             block_header,
         }

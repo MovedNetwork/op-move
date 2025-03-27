@@ -118,12 +118,13 @@ pub mod tests {
 
     pub async fn deposit_eth(to: &str, channel: &Sender<StateMessage>) {
         let to = Address::from_hex(to).unwrap();
+        let amount = parse_ether("1").unwrap();
         let tx = ExtendedTxEnvelope::DepositedTx(DepositedTx {
             to,
-            value: parse_ether("1").unwrap(),
+            value: amount,
             source_hash: FixedBytes::default(),
             from: to,
-            mint: U256::ZERO,
+            mint: amount,
             gas: U64::from(u64::MAX),
             is_system_tx: false,
             data: Vec::new().into(),

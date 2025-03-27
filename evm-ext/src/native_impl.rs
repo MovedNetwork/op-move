@@ -1,5 +1,6 @@
 use {
     super::{
+        events::EthTransfer,
         native_evm_context::NativeEVMContext,
         solidity_abi::{abi_decode_params, abi_encode_params},
         type_utils::evm_result_to_move_value,
@@ -15,14 +16,14 @@ use {
     move_core_types::{account_address::AccountAddress, ident_str, identifier::IdentStr},
     move_vm_runtime::native_functions::NativeFunctionTable,
     move_vm_types::{loaded_data::runtime_types::Type, values::Value},
-    moved_shared::primitives::{ToEthAddress, ToU256},
+    moved_shared::primitives::{ToEthAddress, ToMoveAddress, ToU256},
     revm::{
         db::CacheDB,
         primitives::{Address, BlobExcessGasAndPrice, BlockEnv, EVMError, TxEnv, TxKind, U256},
         Evm,
     },
     smallvec::SmallVec,
-    std::collections::VecDeque,
+    std::{cell::RefCell, collections::VecDeque, sync::Arc},
 };
 
 pub const EVM_CALL_FN_NAME: &IdentStr = ident_str!("system_evm_call");
@@ -97,6 +98,11 @@ fn evm_create(
     )
 }
 
+// Clippy is warning us that using `Arc` is not necessary when the inner type
+// is not `Send`, but we don't have a choice because the library chose to use `Arc`.
+// We are choosing to make the inner type `!Send` because this function is only
+// executed on a single thread anyway.
+#[allow(clippy::arc_with_non_send_sync)]
 fn evm_transact_inner(
     context: &mut SafeNativeContext,
     caller: Address,
@@ -107,7 +113,19 @@ fn evm_transact_inner(
     // TODO: does it make sense for EVM gas to be 1:1 with MoveVM gas?
     let gas_limit: u64 = context.gas_balance().into();
 
+    // Struct external to the EVM to capture transfer events.
+    // This is used for bookkeeping token balances between Move and EVM.
+    //
+    // It needs to use a `RefCell` for interior mutability because the
+    // EVM handler hooks require the closures to be immutable.
+    // The usage of interior mutability is safe because execution of the single
+    // EVM instance is single threaded.
+    let transfers_log: RefCell<Vec<EthTransfer>> = RefCell::new(Vec::new());
+
     let evm_native_ctx = context.extensions_mut().get_mut::<NativeEVMContext>();
+    evm_native_ctx
+        .transfers_log
+        .add_tx_origin(caller.to_move_address(), value);
     let mut db = CacheDB::new(ResolverBackedDB::new(
         evm_native_ctx.storage_trie,
         evm_native_ctx.resolver,
@@ -157,6 +175,32 @@ fn evm_transact_inner(
         })
         .build();
 
+    // Modify the post-execution handler to extract transfer events.
+    evm.handler.post_execution.output = Arc::new(|evm_ctx, result| {
+        let transfers = evm_ctx
+            .evm
+            .journaled_state
+            .journal
+            .iter()
+            .flat_map(|entries| {
+                entries.iter().filter_map(|entry| {
+                    if let revm::JournalEntry::BalanceTransfer { from, to, balance } = entry {
+                        Some(EthTransfer {
+                            from: from.to_move_address(),
+                            to: to.to_move_address(),
+                            amount: *balance,
+                        })
+                    } else {
+                        None
+                    }
+                })
+            });
+        for t in transfers {
+            transfers_log.borrow_mut().push(t);
+        }
+        revm::handler::mainnet::output(evm_ctx, result)
+    });
+
     let outcome = evm.transact().map_err(|e| match e {
         EVMError::Database(e) => SafeNativeError::InvariantViolation(e),
         other => SafeNativeError::InvariantViolation(
@@ -168,6 +212,9 @@ fn evm_transact_inner(
     // Capture changes in native context so that they can be
     // converted into Move changes when the session is finalized
     evm_native_ctx.state_changes.push(outcome.state.clone());
+    evm_native_ctx
+        .transfers_log
+        .append_transfers(transfers_log.into_inner());
 
     let gas_used = EvmGasUsed::new(outcome.result.gas_used());
     context.charge(gas_used)?;

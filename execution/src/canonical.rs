@@ -2,7 +2,7 @@ use {
     super::{L2GasFee, L2GasFeeInput},
     crate::{
         create_move_vm, create_vm_session,
-        eth_token::{BaseTokenAccounts, TransferArgs},
+        eth_token::{self, BaseTokenAccounts, TransferArgs},
         execute::{deploy_module, execute_entry_function, execute_l2_contract, execute_script},
         gas::{new_gas_meter, total_gas_used},
         nonces::check_nonce,
@@ -21,7 +21,7 @@ use {
         module_traversal::{TraversalContext, TraversalStorage},
         session::Session,
     },
-    moved_evm_ext::state::StorageTrieRepository,
+    moved_evm_ext::{events::EthTransfersLogger, state::StorageTrieRepository},
     moved_genesis::config::GenesisConfig,
     moved_shared::{
         error::{
@@ -121,7 +121,14 @@ pub(super) fn execute_canonical_transaction<
         input.block_header,
         tx_data.script_hash(),
     );
-    let mut session = create_vm_session(&move_vm, input.state, session_id, input.storage_trie);
+    let eth_transfers_logger = EthTransfersLogger::default();
+    let mut session = create_vm_session(
+        &move_vm,
+        input.state,
+        session_id,
+        input.storage_trie,
+        &eth_transfers_logger,
+    );
     let traversal_storage = TraversalStorage::new();
     let mut traversal_context = TraversalContext::new(&traversal_storage);
 
@@ -200,6 +207,16 @@ pub(super) fn execute_canonical_transaction<
             Ok(())
         }
     };
+
+    let vm_outcome = vm_outcome.and_then(|_| {
+        // Ensure any base token balance changes in EVM are reflected in Move too
+        eth_token::replicate_transfers(
+            &eth_transfers_logger,
+            verify_input.session,
+            verify_input.traversal_context,
+            verify_input.gas_meter,
+        )
+    });
 
     let gas_used = total_gas_used(verify_input.gas_meter, input.genesis_config);
     let used_l2_input = L2GasFeeInput::new(gas_used, input.l2_input.effective_gas_price);

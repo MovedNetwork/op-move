@@ -161,8 +161,9 @@ pub fn initialize_state_actor(
     app.block_repository
         .add(&mut app.storage, genesis_block)
         .expect("Database should be ready");
+    app.update_head(head);
 
-    StateActor::new(rx, head, 0, genesis_config, app)
+    StateActor::new(rx, app)
 }
 
 fn create_genesis_block(

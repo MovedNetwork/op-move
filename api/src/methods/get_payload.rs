@@ -116,10 +116,11 @@ mod tests {
 
         let state: StateActor<TestDependencies<_, _, _, _>> = StateActor::new(
             rx,
-            head_hash,
-            0,
-            genesis_config,
             Application {
+                mem_pool: Default::default(),
+                genesis_config,
+                head: head_hash,
+                height: 0,
                 state,
                 block_hash: head_hash,
                 block_repository: repository,

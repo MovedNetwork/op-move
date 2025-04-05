@@ -89,10 +89,11 @@ pub mod tests {
 
         let state: StateActor<TestDependencies> = StateActor::new(
             rx,
-            head_hash,
-            0,
-            genesis_config,
             Application {
+                mem_pool: Default::default(),
+                head: head_hash,
+                genesis_config,
+                height: 0,
                 gas_fee: Eip1559GasFee::default(),
                 base_token: MovedBaseTokenAccounts::new(AccountAddress::ONE),
                 l1_fee: U256::ZERO,
@@ -188,12 +189,13 @@ pub mod tests {
         let state: StateActor<TestDependencies<_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _>> =
             StateActor::new(
                 rx,
-                B256::new(hex!(
-                    "e56ec7ba741931e8c55b7f654a6e56ed61cf8b8279bf5e3ef6ac86a11eb33a9d"
-                )),
-                height,
-                GenesisConfig::default(),
                 Application {
+                    genesis_config: GenesisConfig::default(),
+                    height,
+                    head: B256::new(hex!(
+                        "e56ec7ba741931e8c55b7f654a6e56ed61cf8b8279bf5e3ef6ac86a11eb33a9d"
+                    )),
+                    mem_pool: Default::default(),
                     gas_fee: Eip1559GasFee::default(),
                     base_token: MovedBaseTokenAccounts::new(AccountAddress::ONE),
                     l1_fee: U256::ZERO,

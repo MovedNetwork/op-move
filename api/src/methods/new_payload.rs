@@ -291,10 +291,11 @@ mod tests {
 
         let state: StateActor<TestDependencies<_, _, _, _>> = StateActor::new(
             rx,
-            head_hash,
-            0,
-            genesis_config,
             Application {
+                mem_pool: Default::default(),
+                head: head_hash,
+                height: 0,
+                genesis_config,
                 gas_fee: Eip1559GasFee::default(),
                 base_token: (),
                 l1_fee: U256::ZERO,

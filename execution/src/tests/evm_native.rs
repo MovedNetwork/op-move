@@ -11,7 +11,7 @@ use {
     },
     aptos_types::transaction::EntryFunction,
     move_core_types::{ident_str, language_storage::ModuleId, value::MoveValue},
-    move_vm_types::values::Value,
+    move_vm_types::{value_serde::ValueSerDeContext, values::Value},
     moved_evm_ext::{
         CODE_LAYOUT, EVM_NATIVE_ADDRESS, EVM_NATIVE_MODULE, state::InMemoryStorageTrieRepository,
     },
@@ -72,7 +72,10 @@ fn test_evm() {
         vec![
             bcs::to_bytes(&signer_arg).unwrap(),
             bcs::to_bytes(&to_arg).unwrap(),
-            data_input_arg.simple_serialize(&CODE_LAYOUT).unwrap(),
+            ValueSerDeContext::new()
+                .serialize(&data_input_arg, &CODE_LAYOUT)
+                .unwrap()
+                .unwrap(),
         ],
     );
     let (tx_hash, tx) = create_transaction(

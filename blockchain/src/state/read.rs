@@ -11,11 +11,11 @@ use {
         account_address::AccountAddress,
         language_storage::{ModuleId, StructTag},
         metadata::Metadata,
-        resolver::{ModuleResolver, MoveResolver, ResourceResolver},
         value::MoveTypeLayout,
         vm_status::StatusCode,
     },
     move_table_extension::{TableHandle, TableResolver},
+    move_vm_types::resolver::{ModuleResolver, MoveResolver, ResourceResolver},
     moved_evm_ext::{
         ResolverBackedDB,
         state::{self, StorageTrieRepository},
@@ -112,7 +112,7 @@ impl StateMemory {
         &'a self,
         db: Arc<impl DB + 'a>,
         height: BlockHeight,
-    ) -> Option<impl MoveResolver<PartialVMError> + TableResolver + 'a> {
+    ) -> Option<impl MoveResolver + TableResolver + 'a> {
         Some(EthTrieResolver::new(
             EthTrie::from(db, self.root_by_height(height)?).expect("State root should be valid"),
         ))
@@ -146,7 +146,7 @@ pub fn proof_from_trie_and_resolver(
     address: Address,
     storage_slots: &[U256],
     tree: &mut EthTrie<impl DB>,
-    resolver: &impl MoveResolver<PartialVMError>,
+    resolver: &impl MoveResolver,
     storage_trie: &impl StorageTrieRepository,
 ) -> Option<ProofResponse> {
     let evm_db = ResolverBackedDB::new(storage_trie, resolver);
@@ -261,13 +261,11 @@ impl<D: DB> EthTrieResolver<D> {
 }
 
 impl<D: DB> ModuleResolver for EthTrieResolver<D> {
-    type Error = PartialVMError;
-
     fn get_module_metadata(&self, _module_id: &ModuleId) -> Vec<Metadata> {
         Vec::new()
     }
 
-    fn get_module(&self, id: &ModuleId) -> Result<Option<Bytes>, Self::Error> {
+    fn get_module(&self, id: &ModuleId) -> Result<Option<Bytes>, PartialVMError> {
         let state_key = StateKey::module(id.address(), id.name());
         let key_hash = TreeKey::StateKey(state_key).key_hash();
         let value = self.tree.get(key_hash.0.as_slice()).map_err(trie_err)?;
@@ -277,15 +275,13 @@ impl<D: DB> ModuleResolver for EthTrieResolver<D> {
 }
 
 impl<D: DB> ResourceResolver for EthTrieResolver<D> {
-    type Error = PartialVMError;
-
     fn get_resource_bytes_with_metadata_and_layout(
         &self,
         address: &AccountAddress,
         struct_tag: &StructTag,
         _metadata: &[Metadata],
         _layout: Option<&MoveTypeLayout>,
-    ) -> Result<(Option<Bytes>, usize), Self::Error> {
+    ) -> Result<(Option<Bytes>, usize), PartialVMError> {
         let tree_key = if let Some(address) = evm_key_address(struct_tag) {
             TreeKey::Evm(address)
         } else {
@@ -389,15 +385,16 @@ mod tests {
         alloy::hex,
         move_core_types::effects::ChangeSet,
         move_table_extension::TableChangeSet,
-        move_vm_runtime::module_traversal::{TraversalContext, TraversalStorage},
+        move_vm_runtime::{
+            AsUnsyncCodeStorage,
+            module_traversal::{TraversalContext, TraversalStorage},
+        },
         move_vm_types::gas::UnmeteredGasMeter,
         moved_evm_ext::state::InMemoryStorageTrieRepository,
-        moved_execution::{
-            check_nonce, create_move_vm, create_vm_session, mint_eth, session_id::SessionId,
-        },
-        moved_genesis::config::GenesisConfig,
+        moved_execution::{check_nonce, create_vm_session, mint_eth, session_id::SessionId},
+        moved_genesis::{CreateMoveVm, MovedVm, config::GenesisConfig},
         moved_shared::primitives::B256,
-        moved_state::{InMemoryState, State},
+        moved_state::{InMemoryState, ResolverBasedModuleBytesStorage, State},
     };
 
     struct StateSpy(InMemoryState, ChangeSet);
@@ -423,7 +420,7 @@ mod tests {
             self.0.db()
         }
 
-        fn resolver(&self) -> &(impl MoveResolver<Self::Err> + TableResolver) {
+        fn resolver(&self) -> &(impl MoveResolver + TableResolver) {
             self.0.resolver()
         }
 
@@ -434,9 +431,12 @@ mod tests {
 
     fn mint_one_eth(state: &mut impl State, addr: AccountAddress) -> ChangeSet {
         let evm_storage = InMemoryStorageTrieRepository::new();
-        let move_vm = create_move_vm().unwrap();
+        let moved_vm = MovedVm::default();
+        let module_bytes_storage = ResolverBasedModuleBytesStorage::new(state.resolver());
+        let code_storage = module_bytes_storage.as_unsync_code_storage(&moved_vm);
+        let vm = moved_vm.create_move_vm().unwrap();
         let mut session = create_vm_session(
-            &move_vm,
+            &vm,
             state.resolver(),
             SessionId::default(),
             &evm_storage,
@@ -452,10 +452,11 @@ mod tests {
             &mut session,
             &mut traversal_context,
             &mut gas_meter,
+            &code_storage,
         )
         .unwrap();
 
-        let changes = session.finish().unwrap();
+        let changes = session.finish(&code_storage).unwrap();
 
         state.apply(changes.clone()).unwrap();
 
@@ -619,9 +620,12 @@ mod tests {
 
     fn inc_one_nonce(old_nonce: u64, state: &mut impl State, addr: AccountAddress) -> ChangeSet {
         let evm_storage = InMemoryStorageTrieRepository::new();
-        let move_vm = create_move_vm().unwrap();
+        let moved_vm = MovedVm::default();
+        let module_bytes_storage = ResolverBasedModuleBytesStorage::new(state.resolver());
+        let code_storage = module_bytes_storage.as_unsync_code_storage(&moved_vm);
+        let vm = moved_vm.create_move_vm().unwrap();
         let mut session = create_vm_session(
-            &move_vm,
+            &vm,
             state.resolver(),
             SessionId::default(),
             &evm_storage,
@@ -637,10 +641,11 @@ mod tests {
             &mut session,
             &mut traversal_context,
             &mut gas_meter,
+            &code_storage,
         )
         .unwrap();
 
-        let changes = session.finish().unwrap();
+        let changes = session.finish(&code_storage).unwrap();
 
         state.apply(changes.clone()).unwrap();
 

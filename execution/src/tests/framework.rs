@@ -35,7 +35,7 @@ fn test_execute_object_playground_contract() {
     // The object address is deterministic based on the transaction. If the object address
     // changes, the new one shows up is in the `create_and_transfer` execution outcome
     let object_address = AccountAddress::new(hex!(
-        "48043a7459c6464fa889f5e686e74636a73dfdc395b80bfbab15de1513f9a37e"
+        "281ca5390924c2d57a8372f59fdf5d13383ec282e3200605fcd0c797ce646f21"
     ));
 
     // Calls with correct object address work

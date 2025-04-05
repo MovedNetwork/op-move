@@ -27,7 +27,7 @@ pub const SUI_STDLIB_PACKAGE_ID: ObjectID = small_object_id(0x21);
 pub const SUI_FRAMEWORK_PACKAGE_ID: ObjectID = small_object_id(0x22);
 
 const APTOS_REPO: &str = "https://github.com/aptos-labs/aptos-core";
-const APTOS_REPO_TAG: &str = "aptos-node-v1.14.0";
+const APTOS_REPO_TAG: &str = "aptos-node-v1.27.2";
 const ORIGINAL_SUI_STDLIB_PACKAGE_ID: ObjectID = small_object_id(0x1);
 const ORIGINAL_SUI_FRAMEWORK_PACKAGE_ID: ObjectID = small_object_id(0x2);
 const SUI_REPO: &str = "https://github.com/MystenLabs/sui";

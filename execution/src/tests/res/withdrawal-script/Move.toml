@@ -7,4 +7,4 @@ version = "0.0.0"
 [dependencies]
 AptosFramework = { local = "../../../../../target/aptos-core/aptos-move/framework/aptos-framework/" }
 EthToken = { local = "../../../../../genesis-builder/framework/eth-token/" }
-L2CrossDomainMessenger = { local = "../../../../../genesis-builder/framework/l2/" }
+L2 = { local = "../../../../../genesis-builder/framework/l2/" }

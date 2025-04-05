@@ -1,7 +1,7 @@
 use super::*;
 
 /// How much L1 gas cost charging depletes the gas meter
-const L1_GAS_COST: u64 = 10;
+const L1_GAS_COST: u64 = 9;
 
 #[test]
 fn test_treasury_charges_l1_and_l2_cost_to_sender_account_on_success() {
@@ -110,7 +110,7 @@ fn test_very_low_gas_limit_makes_tx_invalid() {
         matches!(
             err,
             moved_shared::error::Error::InvalidTransaction(
-                moved_shared::error::InvalidTransactionCause::FailedToPayL2Fee
+                moved_shared::error::InvalidTransactionCause::InsufficientIntrinsicGas
             )
         ),
         "Unexpected err {err:?}"

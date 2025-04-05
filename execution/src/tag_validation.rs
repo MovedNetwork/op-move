@@ -7,7 +7,7 @@ use {
         language_storage::{StructTag, TypeTag},
         value::{MoveStruct, MoveValue},
     },
-    move_vm_runtime::session::Session,
+    move_vm_runtime::{ModuleStorage, session::Session},
     move_vm_types::loaded_data::runtime_types::Type,
     moved_shared::error::{EntryFunctionValue, Error, InvalidTransactionCause},
 };
@@ -108,6 +108,7 @@ pub fn validate_entry_value(
     value: &MoveValue,
     expected_signer: &AccountAddress,
     session: &mut Session,
+    module_storage: &impl ModuleStorage,
 ) -> moved_shared::error::Result<()> {
     let mut stack = Vec::with_capacity(10);
     stack.push((tag, value));
@@ -142,7 +143,7 @@ pub fn validate_entry_value(
                             .ok_or(Error::entry_fn_invariant_violation(
                                 EntryFunctionValue::ObjectStructHasTypeParameter,
                             ))?;
-                    validate_object(struct_value, inner_type, session)?;
+                    validate_object(struct_value, inner_type, session, module_storage)?;
                     // We don't need to push the inner type on the stack for validation
                     // because a value of it is not actually constructed.
                     continue;
@@ -178,12 +179,9 @@ pub fn validate_entry_value(
 
 /// String must be utf-8 encoded bytes.
 fn validate_string(value: &MoveStruct) -> moved_shared::error::Result<()> {
-    let inner = value
-        .fields()
-        .first()
-        .ok_or(Error::entry_fn_invariant_violation(
-            EntryFunctionValue::StringStructHasField,
-        ))?;
+    let inner = value.optional_variant_and_fields().1.first().ok_or(
+        Error::entry_fn_invariant_violation(EntryFunctionValue::StringStructHasField),
+    )?;
 
     match inner {
         MoveValue::Vector(array) => {
@@ -216,12 +214,9 @@ fn validate_string(value: &MoveStruct) -> moved_shared::error::Result<()> {
 
 /// Option must be a vector with 0 or 1 values
 fn validate_option(value: &MoveStruct) -> moved_shared::error::Result<Option<&MoveValue>> {
-    let inner = value
-        .fields()
-        .first()
-        .ok_or(Error::entry_fn_invariant_violation(
-            EntryFunctionValue::OptionStructHasField,
-        ))?;
+    let inner = value.optional_variant_and_fields().1.first().ok_or(
+        Error::entry_fn_invariant_violation(EntryFunctionValue::OptionStructHasField),
+    )?;
 
     match inner {
         MoveValue::Vector(array) => {
@@ -246,25 +241,23 @@ fn validate_object(
     value: &MoveStruct,
     inner_type: &TypeTag,
     session: &mut Session,
+    module_storage: &impl ModuleStorage,
 ) -> moved_shared::error::Result<()> {
-    let inner = value
-        .fields()
-        .first()
-        .ok_or(Error::entry_fn_invariant_violation(
-            EntryFunctionValue::ObjectStructHasField,
-        ))?;
+    let inner = value.optional_variant_and_fields().1.first().ok_or(
+        Error::entry_fn_invariant_violation(EntryFunctionValue::ObjectStructHasField),
+    )?;
 
     match inner {
         MoveValue::Address(addr) => {
-            let object_core = get_object_core_type(session)?;
-            if !resource_exists(session, *addr, &object_core) {
+            let object_core = get_object_core_type(session, module_storage)?;
+            if !resource_exists(session, *addr, &object_core, module_storage) {
                 return Err(InvalidTransactionCause::InvalidObject.into());
             }
 
-            let inner_type = session.load_type(inner_type).map_err(|_| {
+            let inner_type = session.load_type(inner_type, module_storage).map_err(|_| {
                 Error::entry_fn_invariant_violation(EntryFunctionValue::ObjectInnerTypeExists)
             })?;
-            if !resource_exists(session, *addr, &inner_type) {
+            if !resource_exists(session, *addr, &inner_type, module_storage) {
                 return Err(InvalidTransactionCause::InvalidObject.into());
             }
 
@@ -277,15 +270,23 @@ fn validate_object(
 }
 
 #[inline]
-fn resource_exists(session: &mut Session, addr: AccountAddress, ty: &Type) -> bool {
+fn resource_exists(
+    session: &mut Session,
+    addr: AccountAddress,
+    ty: &Type,
+    module_storage: &impl ModuleStorage,
+) -> bool {
     session
-        .load_resource(addr, ty)
+        .load_resource(module_storage, addr, ty)
         .and_then(|(value, _)| value.exists())
         .unwrap_or(false)
 }
 
 #[inline]
-fn get_object_core_type(session: &mut Session) -> moved_shared::error::Result<Type> {
+fn get_object_core_type(
+    session: &mut Session,
+    module_storage: &impl ModuleStorage,
+) -> moved_shared::error::Result<Type> {
     let type_tag = TypeTag::Struct(Box::new(StructTag {
         address: ALLOWED_STRUCTS[1].address,
         module: ALLOWED_STRUCTS[1].module.into(),
@@ -293,7 +294,7 @@ fn get_object_core_type(session: &mut Session) -> moved_shared::error::Result<Ty
         type_args: Vec::new(),
     }));
     session
-        .load_type(&type_tag)
+        .load_type(&type_tag, module_storage)
         .map_err(|_| Error::entry_fn_invariant_violation(EntryFunctionValue::ObjectCoreTypeExists))
 }
 
@@ -318,12 +319,14 @@ impl<'a> MoveStructInfo<'a> {
 mod tests {
     use {
         super::*,
-        crate::{create_move_vm, create_vm_session, session_id::SessionId, tests::EVM_ADDRESS},
+        crate::{create_vm_session, session_id::SessionId, tests::EVM_ADDRESS},
         alloy::primitives::address,
         move_core_types::value::MoveStruct,
+        move_vm_runtime::AsUnsyncCodeStorage,
         moved_evm_ext::state::InMemoryStorageTrieRepository,
+        moved_genesis::{CreateMoveVm, MovedVm},
         moved_shared::primitives::ToMoveAddress,
-        moved_state::{InMemoryState, State},
+        moved_state::{InMemoryState, ResolverBasedModuleBytesStorage, State},
     };
 
     #[test]
@@ -520,20 +523,28 @@ mod tests {
             ),
         ];
 
-        let move_vm = create_move_vm().unwrap();
+        let moved_vm = MovedVm::default();
+        let vm = moved_vm.create_move_vm().unwrap();
         let state = InMemoryState::new();
+        let module_bytes_storage = ResolverBasedModuleBytesStorage::new(state.resolver());
+        let code_storage = module_bytes_storage.as_unsync_code_storage(&moved_vm);
         let evm_storage = InMemoryStorageTrieRepository::new();
         let mut session = create_vm_session(
-            &move_vm,
+            &vm,
             state.resolver(),
             SessionId::default(),
             &evm_storage,
             &(),
         );
         for (type_tag, test_case, expected_outcome) in test_cases {
-            let actual_outcome =
-                validate_entry_value(type_tag, test_case, &correct_signer, &mut session)
-                    .map_err(|_| ());
+            let actual_outcome = validate_entry_value(
+                type_tag,
+                test_case,
+                &correct_signer,
+                &mut session,
+                &code_storage,
+            )
+            .map_err(|_| ());
             assert_eq!(
                 &actual_outcome, expected_outcome,
                 "check_signer test case {test_case:?} failed. Expected={expected_outcome:?} Actual={actual_outcome:?}"
@@ -599,20 +610,28 @@ mod tests {
             ),
         ];
 
-        let move_vm = create_move_vm().unwrap();
+        let moved_vm = MovedVm::default();
+        let vm = moved_vm.create_move_vm().unwrap();
         let state = InMemoryState::new();
+        let module_bytes_storage = ResolverBasedModuleBytesStorage::new(state.resolver());
+        let code_storage = module_bytes_storage.as_unsync_code_storage(&moved_vm);
         let evm_storage = InMemoryStorageTrieRepository::new();
         let mut session = create_vm_session(
-            &move_vm,
+            &vm,
             state.resolver(),
             SessionId::default(),
             &evm_storage,
             &(),
         );
         for (type_tag, test_case, expected_outcome) in test_cases {
-            let actual_outcome =
-                validate_entry_value(type_tag, test_case, &AccountAddress::ZERO, &mut session)
-                    .map_err(|_| ());
+            let actual_outcome = validate_entry_value(
+                type_tag,
+                test_case,
+                &AccountAddress::ZERO,
+                &mut session,
+                &code_storage,
+            )
+            .map_err(|_| ());
             assert_eq!(
                 &actual_outcome, expected_outcome,
                 "validate_option test case {test_case:?} failed. Expected={expected_outcome:?} Actual={actual_outcome:?}"

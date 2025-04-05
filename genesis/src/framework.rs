@@ -1,4 +1,5 @@
 use {
+    crate::MovedVm,
     alloy::primitives::address,
     aptos_framework::ReleaseBundle,
     aptos_table_natives::{NativeTableContext, TableChange, TableChangeSet},
@@ -11,13 +12,14 @@ use {
         value::MoveValue,
     },
     move_vm_runtime::{
+        AsFunctionValueExtension, AsUnsyncCodeStorage, ModuleStorage,
         module_traversal::{TraversalContext, TraversalStorage},
         move_vm::MoveVM,
         native_extensions::NativeContextExtensions,
         session::Session,
     },
     move_vm_types::gas::UnmeteredGasMeter,
-    moved_state::State,
+    moved_state::{ResolverBasedModuleBytesStorage, State},
     once_cell::sync::Lazy,
     std::{collections::BTreeMap, fs, path::PathBuf},
     sui_framework::SystemPackage,
@@ -88,7 +90,7 @@ pub fn load_sui_framework_snapshot() -> &'static BTreeMap<ObjectID, SystemPackag
 
 /// Initializes the blockchain state with Aptos and Sui frameworks.
 pub fn init_state(
-    vm: &impl CreateMoveVm,
+    vm: &MovedVm,
     state: &impl State,
 ) -> (ChangeSet, move_table_extension::TableChangeSet) {
     let (change_set, table_change_set) =
@@ -130,24 +132,27 @@ pub trait CreateMoveVm {
 }
 
 fn deploy_framework(
-    vm: &impl CreateMoveVm,
+    moved_vm: &MovedVm,
     state: &impl State,
 ) -> Result<(ChangeSet, TableChangeSet), VMError> {
-    let vm = vm.create_move_vm()?;
+    let resolver = state.resolver();
+    let module_bytes_storage = ResolverBasedModuleBytesStorage::new(resolver);
+    let code_storage = module_bytes_storage.as_unsync_code_storage(moved_vm);
+    let vm = moved_vm.create_move_vm()?;
     let mut extensions = NativeContextExtensions::default();
-    extensions.add(NativeTableContext::new([0u8; 32], state.resolver()));
+    extensions.add(NativeTableContext::new([0u8; 32], resolver));
     let mut session = vm.new_session_with_extensions(state.resolver(), extensions);
     let traversal_storage = TraversalStorage::new();
     let mut traversal_context = TraversalContext::new(&traversal_storage);
 
     deploy_aptos_framework(&mut session)?;
     deploy_sui_framework(&mut session)?;
-    initialize_eth_token(&mut session, &mut traversal_context)?;
+    initialize_eth_token(&mut session, &mut traversal_context, &code_storage)?;
 
-    let (change_set, mut extensions) = session.finish_with_extensions()?;
+    let (change_set, mut extensions) = session.finish_with_extensions(&code_storage)?;
     let table_change_set = extensions
         .remove::<NativeTableContext>()
-        .into_change_set()
+        .into_change_set(&code_storage.as_function_value_extension())
         .map_err(|e| e.finish(Location::Undefined))?;
 
     Ok((change_set, table_change_set))
@@ -156,6 +161,7 @@ fn deploy_framework(
 fn initialize_eth_token(
     session: &mut Session,
     traversal_context: &mut TraversalContext,
+    module_storage: &impl ModuleStorage,
 ) -> Result<(), VMError> {
     let module = ModuleId::new(FRAMEWORK_ADDRESS, ident_str!("eth_token").into());
     let function_name = ident_str!("init_module");
@@ -168,6 +174,7 @@ fn initialize_eth_token(
         vec![args],
         &mut UnmeteredGasMeter,
         traversal_context,
+        module_storage,
     )?;
     Ok(())
 }
@@ -233,8 +240,8 @@ fn deploy_sui_framework(session: &mut Session) -> Result<(), VMError> {
 mod tests {
     use {super::*, crate::vm::MovedVm, moved_state::InMemoryState};
 
-    // Aptos framework has 134 modules and Sui has 69. They are kept mutually exclusive.
-    const APTOS_MODULES_LEN: usize = 134;
+    // Aptos framework has 145 modules and Sui has 69. They are kept mutually exclusive.
+    const APTOS_MODULES_LEN: usize = 145;
     const SUI_MODULES_LEN: usize = 69;
     const TOTAL_MODULES_LEN: usize = APTOS_MODULES_LEN + SUI_MODULES_LEN;
 
@@ -251,7 +258,8 @@ mod tests {
         assert_eq!(sui_framework_len, SUI_MODULES_LEN);
 
         let state = InMemoryState::new();
-        let (change_set, _) = deploy_framework(&MovedVm, &state).unwrap();
+        let vm = MovedVm::default();
+        let (change_set, _) = deploy_framework(&vm, &state).unwrap();
         assert_eq!(change_set.modules().count(), TOTAL_MODULES_LEN);
     }
 }

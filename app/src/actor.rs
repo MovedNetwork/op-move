@@ -647,6 +647,8 @@ fn test_build_block_hash() {
 #[cfg(test)]
 #[allow(clippy::type_complexity)]
 mod tests {
+    use move_vm_runtime::AsUnsyncCodeStorage;
+
     use {
         super::*,
         alloy::{
@@ -666,12 +668,13 @@ mod tests {
             state::MockStateQueries,
             transaction::{InMemoryTransactionQueries, InMemoryTransactionRepository},
         },
-        moved_execution::{
-            MovedBaseTokenAccounts, create_move_vm, create_vm_session, session_id::SessionId,
+        moved_execution::{MovedBaseTokenAccounts, create_vm_session, session_id::SessionId},
+        moved_genesis::{
+            CreateMoveVm, MovedVm,
+            config::{CHAIN_ID, GenesisConfig},
         },
-        moved_genesis::config::{CHAIN_ID, GenesisConfig},
         moved_shared::primitives::Address,
-        moved_state::InMemoryState,
+        moved_state::{InMemoryState, ResolverBasedModuleBytesStorage},
         std::convert::Infallible,
         test_case::test_case,
         tokio::sync::{
@@ -781,9 +784,12 @@ mod tests {
         addr: AccountAddress,
         amount: U256,
     ) -> ChangeSet {
-        let move_vm = create_move_vm().unwrap();
+        let moved_vm = MovedVm::default();
+        let module_bytes_storage = ResolverBasedModuleBytesStorage::new(state.resolver());
+        let code_storage = module_bytes_storage.as_unsync_code_storage(&moved_vm);
+        let vm = moved_vm.create_move_vm().unwrap();
         let mut session = create_vm_session(
-            &move_vm,
+            &vm,
             state.resolver(),
             SessionId::default(),
             evm_storage,
@@ -799,10 +805,11 @@ mod tests {
             &mut session,
             &mut traversal_context,
             &mut gas_meter,
+            &code_storage,
         )
         .unwrap();
 
-        session.finish().unwrap()
+        session.finish(&code_storage).unwrap()
     }
 
     fn create_state_actor_with_fake_queries(

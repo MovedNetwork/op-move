@@ -1,23 +1,24 @@
 use {
     crate::session_id::SessionId,
     aptos_table_natives::TableResolver,
-    move_binary_format::errors::PartialVMError,
     move_core_types::{
         account_address::AccountAddress, ident_str, identifier::IdentStr,
-        language_storage::ModuleId, resolver::MoveResolver, value::MoveValue,
-        vm_status::StatusCode,
+        language_storage::ModuleId, value::MoveValue, vm_status::StatusCode,
     },
     move_vm_runtime::{
+        AsUnsyncCodeStorage, ModuleStorage,
         module_traversal::{TraversalContext, TraversalStorage},
         session::Session,
     },
     move_vm_types::{
         gas::{GasMeter, UnmeteredGasMeter},
-        values::Value,
+        resolver::MoveResolver,
+        value_serde::ValueSerDeContext,
     },
     moved_evm_ext::state::StorageTrieRepository,
-    moved_genesis::FRAMEWORK_ADDRESS,
+    moved_genesis::{CreateMoveVm, FRAMEWORK_ADDRESS, MovedVm},
     moved_shared::error::{Error, InvalidTransactionCause, NonceChecking},
+    moved_state::ResolverBasedModuleBytesStorage,
 };
 
 const ACCOUNT_MODULE_NAME: &IdentStr = ident_str!("account");
@@ -29,12 +30,14 @@ const INCREMENT_NONCE_FUNCTION_NAME: &IdentStr = ident_str!("increment_sequence_
 /// since this method creates a new session and does not charge gas.
 pub fn quick_get_nonce(
     address: &AccountAddress,
-    state: &(impl MoveResolver<PartialVMError> + TableResolver),
+    state: &(impl MoveResolver + TableResolver),
     storage_trie: &impl StorageTrieRepository,
 ) -> u64 {
-    let move_vm = super::create_move_vm().expect("Must create MoveVM");
-    let mut session =
-        super::create_vm_session(&move_vm, state, SessionId::default(), storage_trie, &());
+    let moved_vm = MovedVm::default();
+    let module_storage_bytes = ResolverBasedModuleBytesStorage::new(state);
+    let code_storage = module_storage_bytes.as_unsync_code_storage(&moved_vm);
+    let vm = moved_vm.create_move_vm().expect("Must create MoveVM");
+    let mut session = super::create_vm_session(&vm, state, SessionId::default(), storage_trie, &());
     let traversal_storage = TraversalStorage::new();
     let mut traversal_context = TraversalContext::new(&traversal_storage);
     let mut gas_meter = UnmeteredGasMeter;
@@ -46,16 +49,18 @@ pub fn quick_get_nonce(
         &mut session,
         &mut traversal_context,
         &mut gas_meter,
+        &code_storage,
     )
     .unwrap_or_default()
 }
 
-pub fn check_nonce<G: GasMeter>(
+pub fn check_nonce<G: GasMeter, MS: ModuleStorage>(
     tx_nonce: u64,
     signer: &AccountAddress,
     session: &mut Session,
     traversal_context: &mut TraversalContext,
     gas_meter: &mut G,
+    module_storage: &MS,
 ) -> Result<(), Error> {
     let account_module_id = ModuleId::new(FRAMEWORK_ADDRESS, ACCOUNT_MODULE_NAME.into());
     let addr_arg = bcs::to_bytes(signer).expect("address can serialize");
@@ -68,6 +73,7 @@ pub fn check_nonce<G: GasMeter>(
             vec![addr_arg.as_slice()],
             gas_meter,
             traversal_context,
+            module_storage,
         )
         .map_err(|e| {
             if e.major_status() == StatusCode::OUT_OF_GAS {
@@ -83,6 +89,7 @@ pub fn check_nonce<G: GasMeter>(
         session,
         traversal_context,
         gas_meter,
+        module_storage,
     )?;
 
     if tx_nonce != account_nonce {
@@ -103,6 +110,7 @@ pub fn check_nonce<G: GasMeter>(
             vec![addr_arg.as_slice()],
             gas_meter,
             traversal_context,
+            module_storage,
         )
         .map_err(|e| {
             if e.major_status() == StatusCode::OUT_OF_GAS {
@@ -115,12 +123,13 @@ pub fn check_nonce<G: GasMeter>(
     Ok(())
 }
 
-fn get_account_nonce<G: GasMeter>(
+fn get_account_nonce<G: GasMeter, MS: ModuleStorage>(
     account_module_id: &ModuleId,
     addr_arg: &[u8],
     session: &mut Session,
     traversal_context: &mut TraversalContext,
     gas_meter: &mut G,
+    module_storage: &MS,
 ) -> Result<u64, Error> {
     let return_values = session
         .execute_function_bypass_visibility(
@@ -130,6 +139,7 @@ fn get_account_nonce<G: GasMeter>(
             vec![addr_arg],
             gas_meter,
             traversal_context,
+            module_storage,
         )
         .map_err(|_| Error::nonce_invariant_violation(NonceChecking::GetNonceAlwaysSucceeds))?
         .return_values;
@@ -138,7 +148,8 @@ fn get_account_nonce<G: GasMeter>(
         .ok_or(Error::nonce_invariant_violation(
             NonceChecking::GetNonceReturnsAValue,
         ))?;
-    let value = Value::simple_deserialize(raw_output, layout)
+    let value = ValueSerDeContext::new()
+        .deserialize(raw_output, layout)
         .ok_or(Error::nonce_invariant_violation(
             NonceChecking::GetNoneReturnDeserializes,
         ))?

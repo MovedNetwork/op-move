@@ -17,6 +17,7 @@ eth_trie.workspace = true
 move-binary-format.workspace = true
 move-core-types.workspace = true
 move-table-extension.workspace = true
+move-vm-types.workspace = true
 move-vm-test-utils.workspace = true
 moved-evm-ext.workspace = true
 moved-shared.workspace = true

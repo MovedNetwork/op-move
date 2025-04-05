@@ -157,8 +157,17 @@ fn test_deeply_nested_type() {
         result.push(x);
         result.push(module_bytes[32] + y);
 
-        // Copy next 16 bytes
-        for b in &module_bytes[33..49] {
+        // Copy next 2 bytes
+        result.push(module_bytes[33]);
+        result.push(module_bytes[34]);
+
+        // Update next 2 bytes
+        let (x, y) = update_byte(module_bytes[35]);
+        result.push(x);
+        result.push(module_bytes[36] + y);
+
+        // Copy next 17 bytes
+        for b in &module_bytes[37..54] {
             result.push(*b);
         }
 
@@ -168,7 +177,7 @@ fn test_deeply_nested_type() {
         result.push(0);
 
         // Copy remaining bytes
-        for b in &module_bytes[49..] {
+        for b in &module_bytes[54..] {
             result.push(*b);
         }
 
@@ -177,7 +186,7 @@ fn test_deeply_nested_type() {
 
     // Run the `wrap_with_option` procedure many times to make a deep nesting
     // of `Option<Option<Option<...>>>`.
-    for _ in 0..41 {
+    for _ in 0..51 {
         wrap_with_option(&mut compiled_module, &mut module_bytes);
     }
 
@@ -186,9 +195,9 @@ fn test_deeply_nested_type() {
     // Continue wrapping up to the recursion limit.
     // Also now also act on a separate copy of the module bytes directly
     // and validate the changes are identical. We couldn't use the byte-level
-    // procedure on iterations 0 to 40 because the byte sequence is a little
+    // procedure on iterations 0 to 50 because the byte sequence is a little
     // different for some reason.
-    for _ in 41..254 {
+    for _ in 51..254 {
         wrap_with_option(&mut compiled_module, &mut module_bytes);
 
         computed_module_bytes = byte_level_wrap_with_option(&computed_module_bytes);

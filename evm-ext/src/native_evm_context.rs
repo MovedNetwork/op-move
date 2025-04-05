@@ -11,8 +11,8 @@ use {
     aptos_types::vm_status::StatusCode,
     better_any::{Tid, TidAble},
     move_binary_format::errors::PartialVMError,
-    move_core_types::{account_address::AccountAddress, resolver::MoveResolver},
-    move_vm_types::values::{VMValueCast, Value},
+    move_core_types::account_address::AccountAddress,
+    move_vm_types::{resolver::MoveResolver, value_serde::ValueSerDeContext, values::VMValueCast},
     revm::{
         DatabaseRef,
         primitives::{Address, B256, KECCAK_EMPTY, U256},
@@ -34,7 +34,7 @@ pub struct HeaderForExecution {
 
 #[derive(Tid)]
 pub struct NativeEVMContext<'a> {
-    pub resolver: &'a dyn MoveResolver<PartialVMError>,
+    pub resolver: &'a dyn MoveResolver,
     pub storage_trie: &'a dyn StorageTrieRepository,
     pub transfer_logs: &'a dyn EthTransferLog,
     pub state_changes: Vec<HashMap<Address, Account>>,
@@ -43,7 +43,7 @@ pub struct NativeEVMContext<'a> {
 
 impl<'a> NativeEVMContext<'a> {
     pub fn new(
-        state: &'a impl MoveResolver<PartialVMError>,
+        state: &'a impl MoveResolver,
         storage_trie: &'a impl StorageTrieRepository,
         transfer_logs: &'a dyn EthTransferLog,
         block_header: HeaderForExecution,
@@ -60,13 +60,13 @@ impl<'a> NativeEVMContext<'a> {
 
 pub struct ResolverBackedDB<'a> {
     storage_trie: &'a dyn StorageTrieRepository,
-    resolver: &'a dyn MoveResolver<PartialVMError>,
+    resolver: &'a dyn MoveResolver,
 }
 
 impl<'a> ResolverBackedDB<'a> {
     pub fn new(
         storage_trie: &'a dyn StorageTrieRepository,
-        resolver: &'a dyn MoveResolver<PartialVMError>,
+        resolver: &'a dyn MoveResolver,
     ) -> Self {
         Self {
             storage_trie,
@@ -76,9 +76,16 @@ impl<'a> ResolverBackedDB<'a> {
 
     pub fn get_account(&self, address: &Address) -> Result<Option<state::Account>, PartialVMError> {
         let struct_tag = account_info_struct_tag(address);
+        let meta_data = self.resolver.get_module_metadata(&struct_tag.module_id());
         let resource = self
             .resolver
-            .get_resource(&EVM_NATIVE_ADDRESS, &struct_tag)?;
+            .get_resource_bytes_with_metadata_and_layout(
+                &EVM_NATIVE_ADDRESS,
+                &struct_tag,
+                &meta_data,
+                None,
+            )?
+            .0;
         let value = resource.map(|bytes| {
             state::Account::try_deserialize(&bytes)
                 .expect("EVM account info must deserialize correctly.")
@@ -130,16 +137,24 @@ impl DatabaseRef for ResolverBackedDB<'_> {
         }
 
         let struct_tag = code_hash_struct_tag(&code_hash);
+        let meta_data = self.resolver.get_module_metadata(&struct_tag.module_id());
         let resource = self
             .resolver
-            .get_resource(&EVM_NATIVE_ADDRESS, &struct_tag)?
+            .get_resource_bytes_with_metadata_and_layout(
+                &EVM_NATIVE_ADDRESS,
+                &struct_tag,
+                &meta_data,
+                None,
+            )?
+            .0
             .ok_or_else(|| {
                 PartialVMError::new(StatusCode::MISSING_DATA).with_message(format!(
                     "Missing EVM code corresponding to code hash {}",
                     struct_tag.name
                 ))
             })?;
-        let value = Value::simple_deserialize(&resource, &CODE_LAYOUT)
+        let value = ValueSerDeContext::new()
+            .deserialize(&resource, &CODE_LAYOUT)
             .expect("EVM account info must deserialize correctly.");
         let bytes: Vec<u8> = value.cast()?;
         Ok(Bytecode::new_legacy(bytes.into()))

@@ -216,7 +216,7 @@ pub async fn l2_erc20_balance_of(token: Address, account: Address, rpc_url: &str
 
     let args = vec![
         // The caller here does not matter because it is a view call.
-        MoveValue::Address(EVM_NATIVE_ADDRESS)
+        MoveValue::Signer(EVM_NATIVE_ADDRESS)
             .simple_serialize()
             .unwrap(),
         MoveValue::Address(token.to_move_address())
@@ -258,7 +258,7 @@ pub async fn l2_erc20_allowance(
 
     let args = vec![
         // The caller here does not matter because it is a view call.
-        MoveValue::Address(EVM_NATIVE_ADDRESS)
+        MoveValue::Signer(EVM_NATIVE_ADDRESS)
             .simple_serialize()
             .unwrap(),
         MoveValue::Address(token.to_move_address())
@@ -306,7 +306,7 @@ pub async fn l2_erc20_approve(
         .on_http(Url::parse(rpc_url)?);
 
     let args = vec![
-        MoveValue::Address(from_address.to_move_address())
+        MoveValue::Signer(from_address.to_move_address())
             .simple_serialize()
             .unwrap(),
         MoveValue::Address(token.to_move_address())

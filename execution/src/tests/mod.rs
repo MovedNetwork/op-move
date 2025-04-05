@@ -24,33 +24,23 @@ use {
     move_binary_format::{
         CompiledModule,
         file_format::{
-            AbilitySet, FieldDefinition, IdentifierIndex, ModuleHandleIndex, SignatureToken,
-            StructDefinition, StructFieldInformation, StructHandle, StructHandleIndex,
-            TypeSignature,
+            FieldDefinition, IdentifierIndex, ModuleHandleIndex, SignatureToken, StructDefinition,
+            StructFieldInformation, StructHandle, StructHandleIndex, TypeSignature,
         },
     },
-    move_compiler::{
-        Compiler, Flags,
-        shared::{NumberFormat, NumericalAddress},
-    },
     move_core_types::{
+        ability::AbilitySet,
         account_address::AccountAddress,
         identifier::Identifier,
         language_storage::{ModuleId, StructTag},
-        resolver::ModuleResolver,
         value::{MoveStruct, MoveValue},
     },
     move_vm_runtime::module_traversal::{TraversalContext, TraversalStorage},
-    move_vm_types::gas::UnmeteredGasMeter,
+    move_vm_types::{gas::UnmeteredGasMeter, resolver::ModuleResolver},
     moved_shared::primitives::{B256, ToMoveAddress, ToMoveU256, U64, U256},
     moved_state::{InMemoryState, State},
-    regex::Regex,
     serde::de::DeserializeOwned,
-    std::{
-        collections::{BTreeMap, BTreeSet},
-        fs::read_to_string,
-        path::Path,
-    },
+    std::path::Path,
 };
 
 mod counter;

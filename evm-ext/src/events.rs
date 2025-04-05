@@ -94,7 +94,7 @@ pub fn evm_logs_event_to_log(value: MoveValue, dest: &mut Vec<Log<LogData>>) -> 
         return None;
     };
 
-    let mut fields = object.into_fields();
+    let mut fields = object.into_optional_variant_and_fields().1;
     // EvmLogsEvent has one field
     if fields.len() != 1 {
         return None;
@@ -109,7 +109,7 @@ pub fn evm_logs_event_to_log(value: MoveValue, dest: &mut Vec<Log<LogData>>) -> 
         let MoveValue::Struct(object) = value else {
             return None;
         };
-        let mut fields = object.into_fields();
+        let mut fields = object.into_optional_variant_and_fields().1;
         // EvmLog has 3 fields
         if fields.len() != 3 {
             return None;

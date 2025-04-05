@@ -5,11 +5,9 @@ use {
         trie::FromOptRoot,
     },
     eth_trie::{DB, EthTrie, TrieError},
-    move_binary_format::errors::PartialVMError,
-    move_core_types::{
-        account_address::AccountAddress, effects::ChangeSet, resolver::MoveResolver,
-    },
+    move_core_types::{account_address::AccountAddress, effects::ChangeSet},
     move_table_extension::{TableChangeSet, TableResolver},
+    move_vm_types::resolver::MoveResolver,
     moved_blockchain::state::{
         Balance, BlockHeight, EthTrieResolver, Nonce, ProofResponse, StateQueries,
         proof_from_trie_and_resolver,
@@ -84,7 +82,7 @@ impl State for RocksDbState<'_> {
         self.db.clone()
     }
 
-    fn resolver(&self) -> &(impl MoveResolver<PartialVMError> + TableResolver) {
+    fn resolver(&self) -> &(impl MoveResolver + TableResolver) {
         &self.resolver
     }
 
@@ -145,7 +143,7 @@ impl<'db> RocksDbStateQueries<'db> {
         &self,
         db: Arc<impl DB + 'a>,
         height: BlockHeight,
-    ) -> Result<impl MoveResolver<PartialVMError> + TableResolver + 'a, rocksdb::Error> {
+    ) -> Result<impl MoveResolver + TableResolver + 'a, rocksdb::Error> {
         Ok(EthTrieResolver::new(self.tree(db, height)?))
     }
 

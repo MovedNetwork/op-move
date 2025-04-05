@@ -10,6 +10,7 @@ heed.workspace = true
 move-binary-format.workspace = true
 move-core-types.workspace = true
 move-table-extension.workspace = true
+move-vm-types.workspace = true
 moved-blockchain.workspace = true
 moved-evm-ext.workspace = true
 moved-execution.workspace = true

@@ -5,7 +5,10 @@ use {
         account_address::AccountAddress, identifier::Identifier, language_storage::StructTag,
     },
     move_vm_runtime::session::SerializedReturnValues,
-    move_vm_types::values::{Struct, Value, Vector},
+    move_vm_types::{
+        value_serde::ValueSerDeContext,
+        values::{Struct, Value, Vector},
+    },
     moved_shared::primitives::{ToEthAddress, ToMoveAddress, ToMoveU256},
     revm::{
         context::result::ExecutionResult,
@@ -75,10 +78,11 @@ pub fn evm_result_to_move_value(result: ExecutionResult) -> Value {
 // Safety: This function has a TON of unwraps in it. It should only be called on
 // results that actually came from calling the EVM native.
 pub fn extract_evm_result(outcome: SerializedReturnValues) -> EvmNativeOutcome {
-    let mut return_values = outcome
-        .return_values
-        .into_iter()
-        .map(|(bytes, layout)| Value::simple_deserialize(&bytes, &layout).unwrap());
+    let mut return_values = outcome.return_values.into_iter().map(|(bytes, layout)| {
+        ValueSerDeContext::new()
+            .deserialize(&bytes, &layout)
+            .unwrap()
+    });
 
     let mut evm_result_fields = return_values
         .next()

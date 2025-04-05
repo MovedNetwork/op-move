@@ -1,35 +1,41 @@
 use {
     crate::{
-        ADDRESS_LAYOUT, DepositExecutionInput, Logs, U256_LAYOUT, create_move_vm,
-        create_vm_session, eth_token,
+        ADDRESS_LAYOUT, DepositExecutionInput, Logs, U256_LAYOUT, create_vm_session, eth_token,
         gas::{new_gas_meter, total_gas_used},
         session_id::SessionId,
         transaction::{Changes, TransactionExecutionOutcome},
     },
     alloy::primitives::U256,
     aptos_table_natives::TableResolver,
-    move_binary_format::errors::PartialVMError,
-    move_core_types::{language_storage::ModuleId, resolver::MoveResolver},
-    move_vm_runtime::module_traversal::{TraversalContext, TraversalStorage},
-    move_vm_types::values::Value,
+    move_core_types::language_storage::ModuleId,
+    move_vm_runtime::{
+        AsUnsyncCodeStorage,
+        module_traversal::{TraversalContext, TraversalStorage},
+    },
+    move_vm_types::{resolver::MoveResolver, value_serde::ValueSerDeContext, values::Value},
     moved_evm_ext::{
         self, CODE_LAYOUT, EVM_CALL_FN_NAME, EVM_NATIVE_ADDRESS, EVM_NATIVE_MODULE,
         events::EthTransfersLogger, extract_evm_changes, extract_evm_result,
         state::StorageTrieRepository,
     },
+    moved_genesis::{CreateMoveVm, MovedVm},
     moved_shared::{
         error::{Error, UserError},
         primitives::{ToMoveAddress, ToMoveU256},
     },
+    moved_state::ResolverBasedModuleBytesStorage,
 };
 
 pub(super) fn execute_deposited_transaction<
-    S: MoveResolver<PartialVMError> + TableResolver,
+    S: MoveResolver + TableResolver,
     ST: StorageTrieRepository,
 >(
     input: DepositExecutionInput<S, ST>,
 ) -> moved_shared::error::Result<TransactionExecutionOutcome> {
-    let move_vm = create_move_vm()?;
+    let moved_vm = MovedVm::default();
+    let module_bytes_storage = ResolverBasedModuleBytesStorage::new(input.state);
+    let code_storage = module_bytes_storage.as_unsync_code_storage(&moved_vm);
+    let vm = moved_vm.create_move_vm()?;
     let session_id = SessionId::new_from_deposited(
         input.tx,
         input.tx_hash,
@@ -38,7 +44,7 @@ pub(super) fn execute_deposited_transaction<
     );
     let eth_transfers_log = EthTransfersLogger::default();
     let mut session = create_vm_session(
-        &move_vm,
+        &vm,
         input.state,
         session_id,
         input.storage_trie,
@@ -53,20 +59,29 @@ pub(super) fn execute_deposited_transaction<
     let module = ModuleId::new(EVM_NATIVE_ADDRESS, EVM_NATIVE_MODULE.into());
     let function_name = EVM_CALL_FN_NAME;
     // Unwraps in serialization are safe because the layouts match the types.
-    let args = vec![
-        Value::address(input.tx.from.to_move_address())
-            .simple_serialize(&ADDRESS_LAYOUT)
-            .unwrap(),
-        Value::address(input.tx.to.to_move_address())
-            .simple_serialize(&ADDRESS_LAYOUT)
-            .unwrap(),
-        Value::u256(input.tx.value.to_move_u256())
-            .simple_serialize(&U256_LAYOUT)
-            .unwrap(),
-        Value::vector_u8(input.tx.data.iter().copied())
-            .simple_serialize(&CODE_LAYOUT)
-            .unwrap(),
-    ];
+    let args: Vec<Vec<u8>> = [
+        (
+            Value::address(input.tx.from.to_move_address()),
+            &ADDRESS_LAYOUT,
+        ),
+        (
+            Value::address(input.tx.to.to_move_address()),
+            &ADDRESS_LAYOUT,
+        ),
+        (Value::u256(input.tx.value.to_move_u256()), &U256_LAYOUT),
+        (
+            Value::vector_u8(input.tx.data.iter().copied()),
+            &CODE_LAYOUT,
+        ),
+    ]
+    .into_iter()
+    .map(|(value, layout)| {
+        ValueSerDeContext::new()
+            .serialize(&value, layout)
+            .unwrap()
+            .unwrap()
+    })
+    .collect();
     let outcome = session
         .execute_function_bypass_visibility(
             &module,
@@ -75,6 +90,7 @@ pub(super) fn execute_deposited_transaction<
             args,
             &mut gas_meter,
             &mut traversal_context,
+            &code_storage,
         )
         .map_err(Error::from)
         .and_then(|values| {
@@ -95,6 +111,7 @@ pub(super) fn execute_deposited_transaction<
                     &mut session,
                     &mut traversal_context,
                     &mut gas_meter,
+                    &code_storage,
                 )?;
             }
             eth_token::replicate_transfers(
@@ -102,6 +119,7 @@ pub(super) fn execute_deposited_transaction<
                 &mut session,
                 &mut traversal_context,
                 &mut gas_meter,
+                &code_storage,
             )?;
 
             Ok(evm_outcome.logs)
@@ -115,7 +133,7 @@ pub(super) fn execute_deposited_transaction<
         }
     };
 
-    let (mut changes, mut extensions) = session.finish_with_extensions()?;
+    let (mut changes, mut extensions) = session.finish_with_extensions(&code_storage)?;
     let mut logs = extensions.logs();
     logs.extend(evm_logs);
     let gas_used = total_gas_used(&gas_meter, input.genesis_config);

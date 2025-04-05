@@ -3,8 +3,7 @@ use {
     move_table_extension::TableChangeSet,
     moved_evm_ext::state::{InMemoryStorageTrieRepository, StorageTrieRepository},
     moved_genesis::{
-        CreateMoveVm, MovedVm, SerdeAllChanges, SerdeChanges, SerdeTableChangeSet, build,
-        config::GenesisConfig,
+        MovedVm, SerdeAllChanges, SerdeChanges, SerdeTableChangeSet, build, config::GenesisConfig,
     },
     moved_state::{InMemoryState, State},
     std::io::Write,
@@ -17,13 +16,13 @@ fn main() {
     let state = InMemoryState::default();
     let storage_trie = InMemoryStorageTrieRepository::new();
     let genesis_config = GenesisConfig::default();
-    let vm = MovedVm;
+    let vm = MovedVm::default();
 
     save(&vm, &genesis_config, &state, &storage_trie);
 }
 
 pub fn save(
-    vm: &impl CreateMoveVm,
+    vm: &MovedVm,
     config: &GenesisConfig,
     state: &impl State,
     storage_trie: &impl StorageTrieRepository,

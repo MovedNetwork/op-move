@@ -5,14 +5,12 @@ use {
         type_utils::{account_info_struct_tag, code_hash_struct_tag, get_account_code_hash},
     },
     crate::state::{self, StorageTrieChanges, StorageTrieRepository, StorageTriesChanges},
-    move_binary_format::errors::PartialVMError,
     move_core_types::{
         effects::{AccountChangeSet, ChangeSet, Op},
         language_storage::StructTag,
-        resolver::MoveResolver,
     },
     move_vm_runtime::native_extensions::NativeContextExtensions,
-    move_vm_types::values::Value,
+    move_vm_types::{resolver::MoveResolver, value_serde::ValueSerDeContext, values::Value},
     revm::{
         bytecode::Bytecode,
         primitives::{Address, KECCAK_EMPTY, U256},
@@ -34,7 +32,7 @@ impl Changes {
 
 pub fn genesis_state_changes(
     genesis: alloy::genesis::Genesis,
-    resolver: &impl MoveResolver<PartialVMError>,
+    resolver: &impl MoveResolver,
     storage_trie: &impl StorageTrieRepository,
 ) -> Changes {
     let mut result = ChangeSet::new();
@@ -129,7 +127,7 @@ pub fn extract_evm_changes(extensions: &NativeContextExtensions) -> Changes {
 fn add_account_changes(
     address: &Address,
     account: &Account,
-    resolver: &dyn MoveResolver<PartialVMError>,
+    resolver: &dyn MoveResolver,
     prior_changes: &AccountChangeSet,
     result: &mut AccountChangeSet,
     storage_trie: &dyn StorageTrieRepository,
@@ -152,9 +150,15 @@ fn add_account_changes(
             return exists_in_prior_changes;
         }
         // If not in the prior changes then check the resolver
+        let meta_data = resolver.get_module_metadata(&struct_tag.module_id());
         resolver
-            .get_resource(&EVM_NATIVE_ADDRESS, struct_tag)
-            .map(|x| x.is_some())
+            .get_resource_bytes_with_metadata_and_layout(
+                &EVM_NATIVE_ADDRESS,
+                struct_tag,
+                &meta_data,
+                None,
+            )
+            .map(|x| x.0.is_some())
             .unwrap_or(false)
     };
 
@@ -191,8 +195,11 @@ fn add_account_changes(
         if let Some(code) = &account.info.code {
             if !code.is_empty() {
                 let struct_tag = code_hash_struct_tag(&code_hash);
-                let code = Value::vector_u8(code.original_bytes())
-                    .simple_serialize(&CODE_LAYOUT)
+                let code_value = Value::vector_u8(code.original_bytes());
+                let code = ValueSerDeContext::new()
+                    .serialize(&code_value, &CODE_LAYOUT)
+                    .ok()
+                    .flatten()
                     .expect("EVM code must serialize");
                 let op = Op::New(code.into());
                 // If the same contract is deployed more than once then the same resource

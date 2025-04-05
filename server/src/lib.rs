@@ -140,7 +140,7 @@ pub fn initialize_state_actor(
         #[cfg(not(test))]
         {
             moved_genesis::build(
-                &moved_genesis::MovedVm,
+                &moved_genesis::MovedVm::default(),
                 &genesis_config,
                 &app.state,
                 &app.evm_storage,

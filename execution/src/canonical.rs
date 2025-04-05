@@ -1,7 +1,7 @@
 use {
     super::{L2GasFee, L2GasFeeInput},
     crate::{
-        CanonicalExecutionInput, Logs, create_move_vm, create_vm_session,
+        CanonicalExecutionInput, Logs, create_vm_session,
         eth_token::{self, BaseTokenAccounts, TransferArgs},
         execute::{deploy_module, execute_entry_function, execute_l2_contract, execute_script},
         gas::{new_gas_meter, total_gas_used},
@@ -14,14 +14,14 @@ use {
     },
     aptos_gas_meter::{AptosGasMeter, StandardGasAlgebra, StandardGasMeter},
     aptos_table_natives::TableResolver,
-    move_binary_format::errors::PartialVMError,
-    move_core_types::resolver::MoveResolver,
     move_vm_runtime::{
+        AsUnsyncCodeStorage, ModuleStorage,
         module_traversal::{TraversalContext, TraversalStorage},
         session::Session,
     },
+    move_vm_types::resolver::MoveResolver,
     moved_evm_ext::{events::EthTransfersLogger, state::StorageTrieRepository},
-    moved_genesis::config::GenesisConfig,
+    moved_genesis::{CreateMoveVm, MovedVm, config::GenesisConfig},
     moved_shared::{
         error::{
             Error::{InvalidTransaction, User},
@@ -29,9 +29,10 @@ use {
         },
         primitives::{ToMoveAddress, ToSaturatedU64},
     },
+    moved_state::ResolverBasedModuleBytesStorage,
 };
 
-pub struct CanonicalVerificationInput<'input, 'r, 'l, B> {
+pub struct CanonicalVerificationInput<'input, 'r, 'l, B, MS> {
     pub tx: &'input NormalizedEthTransaction,
     pub session: &'input mut Session<'r, 'l>,
     pub traversal_context: &'input mut TraversalContext<'input>,
@@ -40,10 +41,11 @@ pub struct CanonicalVerificationInput<'input, 'r, 'l, B> {
     pub l1_cost: u64,
     pub l2_cost: u64,
     pub base_token: &'input B,
+    pub module_storage: &'input MS,
 }
 
-pub(super) fn verify_transaction<B: BaseTokenAccounts>(
-    input: &mut CanonicalVerificationInput<B>,
+pub(super) fn verify_transaction<B: BaseTokenAccounts, MS: ModuleStorage>(
+    input: &mut CanonicalVerificationInput<B, MS>,
 ) -> moved_shared::error::Result<()> {
     if let Some(chain_id) = input.tx.chain_id {
         if chain_id != input.genesis_config.chain_id {
@@ -74,6 +76,7 @@ pub(super) fn verify_transaction<B: BaseTokenAccounts>(
             input.session,
             input.traversal_context,
             input.gas_meter,
+            input.module_storage,
         )
         .map_err(|_| InvalidTransaction(InvalidTransactionCause::FailedToPayL1Fee))?;
 
@@ -85,6 +88,7 @@ pub(super) fn verify_transaction<B: BaseTokenAccounts>(
             input.session,
             input.traversal_context,
             input.gas_meter,
+            input.module_storage,
         )
         .map_err(|_| InvalidTransaction(InvalidTransactionCause::FailedToPayL2Fee))?;
 
@@ -94,13 +98,14 @@ pub(super) fn verify_transaction<B: BaseTokenAccounts>(
         input.session,
         input.traversal_context,
         input.gas_meter,
+        input.module_storage,
     )?;
 
     Ok(())
 }
 
 pub(super) fn execute_canonical_transaction<
-    S: MoveResolver<PartialVMError> + TableResolver,
+    S: MoveResolver + TableResolver,
     ST: StorageTrieRepository,
     F: L2GasFee,
     B: BaseTokenAccounts,
@@ -111,7 +116,10 @@ pub(super) fn execute_canonical_transaction<
 
     let tx_data = TransactionData::parse_from(input.tx)?;
 
-    let move_vm = create_move_vm()?;
+    let moved_vm = MovedVm::default();
+    let module_bytes_storage = ResolverBasedModuleBytesStorage::new(input.state);
+    let code_storage = module_bytes_storage.as_unsync_code_storage(&moved_vm);
+    let vm = moved_vm.create_move_vm()?;
     let session_id = SessionId::new_from_canonical(
         input.tx,
         tx_data.maybe_entry_fn(),
@@ -122,7 +130,7 @@ pub(super) fn execute_canonical_transaction<
     );
     let eth_transfers_logger = EthTransfersLogger::default();
     let mut session = create_vm_session(
-        &move_vm,
+        &vm,
         input.state,
         session_id,
         input.storage_trie,
@@ -148,6 +156,7 @@ pub(super) fn execute_canonical_transaction<
         l1_cost: input.l1_cost,
         l2_cost,
         base_token: input.base_token,
+        module_storage: &code_storage,
     };
     verify_transaction(&mut verify_input)?;
 
@@ -158,6 +167,7 @@ pub(super) fn execute_canonical_transaction<
             verify_input.session,
             verify_input.traversal_context,
             verify_input.gas_meter,
+            &code_storage,
         ),
         TransactionData::ScriptOrModule(ScriptOrModule::Script(script)) => execute_script(
             script,
@@ -165,6 +175,7 @@ pub(super) fn execute_canonical_transaction<
             verify_input.session,
             verify_input.traversal_context,
             verify_input.gas_meter,
+            &code_storage,
         ),
         TransactionData::ScriptOrModule(ScriptOrModule::Module(module)) => {
             let module_id = deploy_module(
@@ -191,6 +202,7 @@ pub(super) fn execute_canonical_transaction<
                 verify_input.session,
                 verify_input.traversal_context,
                 verify_input.gas_meter,
+                &code_storage,
             )
         }
         TransactionData::L2Contract(contract) => {
@@ -202,6 +214,7 @@ pub(super) fn execute_canonical_transaction<
                 verify_input.session,
                 verify_input.traversal_context,
                 verify_input.gas_meter,
+                &code_storage,
             )?;
             Ok(())
         }
@@ -214,6 +227,7 @@ pub(super) fn execute_canonical_transaction<
             verify_input.session,
             verify_input.traversal_context,
             verify_input.gas_meter,
+            &code_storage,
         )
     });
 
@@ -229,6 +243,7 @@ pub(super) fn execute_canonical_transaction<
             l2_cost.saturating_sub(used_l2_cost),
             verify_input.session,
             verify_input.traversal_context,
+            &code_storage,
         )
         .map_err(|_| {
             moved_shared::error::Error::InvariantViolation(InvariantViolation::EthToken(
@@ -236,7 +251,7 @@ pub(super) fn execute_canonical_transaction<
             ))
         })?;
 
-    let (mut changes, mut extensions) = session.finish_with_extensions()?;
+    let (mut changes, mut extensions) = session.finish_with_extensions(&code_storage)?;
     let mut logs = extensions.logs();
     logs.extend(evm_logs);
     let evm_changes = moved_evm_ext::extract_evm_changes(&extensions);

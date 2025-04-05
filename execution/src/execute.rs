@@ -9,32 +9,41 @@ use {
         language_storage::{ModuleId, TypeTag},
         value::MoveValue,
     },
-    move_vm_runtime::{module_traversal::TraversalContext, session::Session},
-    move_vm_types::{gas::GasMeter, loaded_data::runtime_types::Type, values::Value},
+    move_vm_runtime::{
+        CodeStorage, ModuleStorage, module_traversal::TraversalContext, session::Session,
+    },
+    move_vm_types::{
+        gas::GasMeter, loaded_data::runtime_types::Type, value_serde::ValueSerDeContext,
+        values::Value,
+    },
     moved_evm_ext::{
         CODE_LAYOUT, EVM_CALL_FN_NAME, EVM_NATIVE_ADDRESS, EVM_NATIVE_MODULE, extract_evm_result,
     },
     moved_shared::{
-        error::{Error, Error::User, InvalidTransactionCause, ScriptTransaction, UserError},
+        error::{
+            Error::{self, User},
+            InvalidTransactionCause, ScriptTransaction, UserError,
+        },
         primitives::{ToMoveU256, U256},
     },
 };
 
-pub(super) fn execute_entry_function<G: GasMeter>(
+pub(super) fn execute_entry_function<G: GasMeter, MS: ModuleStorage>(
     entry_fn: EntryFunction,
     signer: &AccountAddress,
     session: &mut Session,
     traversal_context: &mut TraversalContext,
     gas_meter: &mut G,
+    module_storage: &MS,
 ) -> moved_shared::error::Result<()> {
     let (module_id, function_name, ty_args, args) = entry_fn.into_inner();
 
     // Validate signer params match the actual signer
-    let function = session.load_function(&module_id, &function_name, &ty_args)?;
-    if function.param_tys.len() != args.len() {
+    let function = session.load_function(module_storage, &module_id, &function_name, &ty_args)?;
+    if function.param_tys().len() != args.len() {
         Err(InvalidTransactionCause::MismatchedArgumentCount)?;
     }
-    for (ty, bytes) in function.param_tys.iter().zip(&args) {
+    for (ty, bytes) in function.param_tys().iter().zip(&args) {
         // References are ignored in entry function signatures because the
         // values are actualized in the serialized arguments.
         let ty = strip_reference(ty)?;
@@ -43,51 +52,45 @@ pub(super) fn execute_entry_function<G: GasMeter>(
         // the time a module is deployed. If a module has been successfully deployed
         // then we know the recursion is bounded to a reasonable degree (less than depth 255).
         // See `test_deeply_nested_type`.
-        let tag = session.get_type_tag(ty)?;
+        let tag = session.get_type_tag(ty, module_storage)?;
         validate_entry_type_tag(&tag)?;
-        let layout = session.get_type_layout(&tag)?;
+        let layout = session.get_type_layout_from_ty(ty, module_storage)?;
         // Check layout for value-based invariants and only deserialize if necessary.
         if has_value_invariants(&layout) {
-            let arg = Value::simple_deserialize(bytes, &layout)
+            let arg = ValueSerDeContext::new()
+                .deserialize(bytes, &layout)
                 .ok_or(InvalidTransactionCause::FailedArgumentDeserialization)?
                 .as_move_value(&layout);
             // Note: no recursion limit is needed in this function because we have already
             // constructed the recursive types `Type`, `TypeTag`, `MoveTypeLayout` and `MoveValue` so
             // the values must have respected whatever recursion limit is present in MoveVM.
-            validate_entry_value(&tag, &arg, signer, session)?;
+            validate_entry_value(&tag, &arg, signer, session, module_storage)?;
         }
     }
 
-    // TODO: is this the right way to be using the VM?
-    // Maybe there is some higher level entry point we should be using instead?
-    session.execute_entry_function(
-        &module_id,
-        &function_name,
-        ty_args,
-        args,
-        gas_meter,
-        traversal_context,
-    )?;
+    let function = session.load_function(module_storage, &module_id, &function_name, &ty_args)?;
+    session.execute_entry_function(function, args, gas_meter, traversal_context, module_storage)?;
     Ok(())
 }
 
-pub(super) fn execute_script<G: GasMeter>(
+pub(super) fn execute_script<G: GasMeter, CS: CodeStorage>(
     script: Script,
     signer: &AccountAddress,
     session: &mut Session,
     traversal_context: &mut TraversalContext,
     gas_meter: &mut G,
+    code_storage: &CS,
 ) -> moved_shared::error::Result<()> {
-    let function = session.load_script(script.code(), script.ty_args().to_vec())?;
+    let function = session.load_script(code_storage, script.code(), script.ty_args())?;
     let serialized_signer = MoveValue::Signer(*signer).simple_serialize().ok_or(
         Error::script_tx_invariant_violation(ScriptTransaction::ArgsMustSerialize),
     )?;
     let args = {
-        let mut result = Vec::with_capacity(function.param_tys.len());
+        let mut result = Vec::with_capacity(function.param_tys().len());
         let mut given_args = script.args().iter();
-        for ty in &function.param_tys {
+        for ty in function.param_tys() {
             let ty = strip_reference(ty)?;
-            let tag = session.get_type_tag(ty)?;
+            let tag = session.get_type_tag(ty, code_storage)?;
 
             // Script arguments cannot encode signers so we implicitly
             // insert the known signer to all script parameters that take
@@ -119,11 +122,15 @@ pub(super) fn execute_script<G: GasMeter>(
         args,
         gas_meter,
         traversal_context,
+        code_storage,
     )?;
     Ok(())
 }
 
-pub(super) fn execute_l2_contract<G: GasMeter>(
+// TODO(#329): group MoveVM elements (session, traversal_context,
+// gas_meter, module_storage) together.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn execute_l2_contract<G: GasMeter, MS: ModuleStorage>(
     signer: &AccountAddress,
     contract: &AccountAddress,
     value: U256,
@@ -131,24 +138,25 @@ pub(super) fn execute_l2_contract<G: GasMeter>(
     session: &mut Session,
     traversal_context: &mut TraversalContext,
     gas_meter: &mut G,
+    module_storage: &MS,
 ) -> moved_shared::error::Result<Vec<Log<LogData>>> {
     let module = ModuleId::new(EVM_NATIVE_ADDRESS, EVM_NATIVE_MODULE.into());
     let function_name = EVM_CALL_FN_NAME;
     // Unwraps in serialization are safe because the layouts match the types.
-    let args = vec![
-        Value::address(*signer)
-            .simple_serialize(&ADDRESS_LAYOUT)
-            .unwrap(),
-        Value::address(*contract)
-            .simple_serialize(&ADDRESS_LAYOUT)
-            .unwrap(),
-        Value::u256(value.to_move_u256())
-            .simple_serialize(&U256_LAYOUT)
-            .unwrap(),
-        Value::vector_u8(data)
-            .simple_serialize(&CODE_LAYOUT)
-            .unwrap(),
-    ];
+    let args: Vec<Vec<u8>> = [
+        (Value::address(*signer), &ADDRESS_LAYOUT),
+        (Value::address(*contract), &ADDRESS_LAYOUT),
+        (Value::u256(value.to_move_u256()), &U256_LAYOUT),
+        (Value::vector_u8(data), &CODE_LAYOUT),
+    ]
+    .into_iter()
+    .map(|(value, layout)| {
+        ValueSerDeContext::new()
+            .serialize(&value, layout)
+            .unwrap()
+            .unwrap()
+    })
+    .collect();
     let outcome = session
         .execute_function_bypass_visibility(
             &module,
@@ -157,6 +165,7 @@ pub(super) fn execute_l2_contract<G: GasMeter>(
             args,
             gas_meter,
             traversal_context,
+            module_storage,
         )
         .map_err(|e| User(UserError::Vm(e)))?;
 
@@ -166,7 +175,14 @@ pub(super) fn execute_l2_contract<G: GasMeter>(
         // TODO: ETH is burned until the value from EVM is reflected on MoveVM
         // Ethereum takes out the ETH value at the beginning of the transaction,
         // however, move fungible token is taken out only if the EVM succeeds.
-        burn_eth(signer, value, session, traversal_context, gas_meter)?;
+        burn_eth(
+            signer,
+            value,
+            session,
+            traversal_context,
+            gas_meter,
+            module_storage,
+        )?;
     } else {
         return Err(User(UserError::L2ContractCallFailure));
     }
@@ -191,6 +207,8 @@ fn strip_reference(t: &Type) -> moved_shared::error::Result<&Type> {
     }
 }
 
+// TODO(#328): V2 loader
+#[allow(deprecated)]
 pub(super) fn deploy_module<G: GasMeter>(
     code: Module,
     address: AccountAddress,

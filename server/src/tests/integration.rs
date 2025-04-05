@@ -536,7 +536,7 @@ async fn deploy_move_counter() -> Result<()> {
         ident_str!("publish").into(),
         Vec::new(),
         vec![
-            bcs::to_bytes(&MoveValue::Address(from_wallet.address().to_move_address())).unwrap(),
+            bcs::to_bytes(&MoveValue::Signer(from_wallet.address().to_move_address())).unwrap(),
             bcs::to_bytes(&MoveValue::U64(7)).unwrap(),
         ],
     ));

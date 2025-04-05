@@ -17,15 +17,14 @@ use {
     aptos_types::contract_event::ContractEvent,
     canonical::execute_canonical_transaction,
     deposited::execute_deposited_transaction,
-    move_binary_format::errors::PartialVMError,
     move_core_types::{
         language_storage::TypeTag,
-        resolver::MoveResolver,
         value::{MoveTypeLayout, MoveValue},
     },
     move_vm_runtime::{
         move_vm::MoveVM, native_extensions::NativeContextExtensions, session::Session,
     },
+    move_vm_types::resolver::MoveResolver,
     moved_evm_ext::{
         HeaderForExecution,
         events::{
@@ -33,7 +32,7 @@ use {
         },
         state::StorageTrieRepository,
     },
-    moved_genesis::{CreateMoveVm, MovedVm, config::GenesisConfig},
+    moved_genesis::config::GenesisConfig,
     moved_shared::primitives::{B256, ToEthAddress},
     session_id::SessionId,
     std::ops::Deref,
@@ -58,10 +57,6 @@ mod tests;
 const ADDRESS_LAYOUT: MoveTypeLayout = MoveTypeLayout::Address;
 const U256_LAYOUT: MoveTypeLayout = MoveTypeLayout::U256;
 
-pub fn create_move_vm() -> moved_shared::error::Result<MoveVM> {
-    Ok(MovedVm.create_move_vm()?)
-}
-
 pub fn create_vm_session<'l, 'r, S, L>(
     vm: &'l MoveVM,
     state: &'r S,
@@ -70,7 +65,7 @@ pub fn create_vm_session<'l, 'r, S, L>(
     eth_transfers_log: &'r L,
 ) -> Session<'r, 'l>
 where
-    S: MoveResolver<PartialVMError> + TableResolver,
+    S: MoveResolver + TableResolver,
     L: EthTransferLog,
 {
     let txn_hash = session_id.txn_hash;
@@ -154,7 +149,7 @@ impl<'input, S, ST, F, B> From<CanonicalExecutionInput<'input, S, ST, F, B>>
 }
 
 pub fn execute_transaction<
-    S: MoveResolver<PartialVMError> + TableResolver,
+    S: MoveResolver + TableResolver,
     ST: StorageTrieRepository,
     F: L2GasFee,
     B: BaseTokenAccounts,

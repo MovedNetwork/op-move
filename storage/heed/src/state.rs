@@ -6,11 +6,9 @@ use {
     },
     eth_trie::{DB, EthTrie, TrieError},
     heed::RoTxn,
-    move_binary_format::errors::PartialVMError,
-    move_core_types::{
-        account_address::AccountAddress, effects::ChangeSet, resolver::MoveResolver,
-    },
+    move_core_types::{account_address::AccountAddress, effects::ChangeSet},
     move_table_extension::{TableChangeSet, TableResolver},
+    move_vm_types::resolver::MoveResolver,
     moved_blockchain::state::{
         Balance, BlockHeight, EthTrieResolver, Nonce, ProofResponse, StateQueries,
         proof_from_trie_and_resolver,
@@ -91,7 +89,7 @@ impl State for HeedState<'_> {
         self.db.clone()
     }
 
-    fn resolver(&self) -> &(impl MoveResolver<PartialVMError> + TableResolver) {
+    fn resolver(&self) -> &(impl MoveResolver + TableResolver) {
         &self.resolver
     }
 
@@ -166,7 +164,7 @@ impl<'db> HeedStateQueries<'db> {
         &self,
         db: Arc<impl DB + 'a>,
         height: BlockHeight,
-    ) -> Result<impl MoveResolver<PartialVMError> + TableResolver + 'a, heed::Error> {
+    ) -> Result<impl MoveResolver + TableResolver + 'a, heed::Error> {
         Ok(EthTrieResolver::new(self.tree(db, height)?))
     }
 }

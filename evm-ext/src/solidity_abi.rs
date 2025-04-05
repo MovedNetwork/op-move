@@ -163,7 +163,7 @@ fn move_value_to_sol_value(mv: MoveValue, annotated_layout: &MoveTypeLayout) -> 
                     "Must have type because layout is constructed with `type_to_fully_annotated_layout`"
                 ),
             };
-            let mut fields = inner.into_fields();
+            let mut fields = inner.into_optional_variant_and_fields().1;
 
             // Special case data marked as being fixed bytes
             if FIXED_BYTES_TAG.eq(struct_tag) {

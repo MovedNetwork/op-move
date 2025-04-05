@@ -1,12 +1,25 @@
 use {
     super::*,
     move_binary_format::errors::VMError,
+    move_compiler::{
+        compiled_unit::AnnotatedCompiledUnit,
+        shared::{NumberFormat, NumericalAddress},
+    },
     move_core_types::effects::ChangeSet,
+    move_model::metadata::LanguageVersion,
+    move_vm_runtime::AsUnsyncCodeStorage,
+    move_vm_types::resolver::ResourceResolver,
     moved_evm_ext::{
         EVM_NATIVE_ADDRESS, EvmNativeOutcome, extract_evm_changes, extract_evm_result,
         state::InMemoryStorageTrieRepository,
     },
-    moved_genesis::config::CHAIN_ID,
+    moved_genesis::{CreateMoveVm, MovedVm, config::CHAIN_ID},
+    moved_state::ResolverBasedModuleBytesStorage,
+    regex::Regex,
+    std::{
+        collections::{BTreeMap, BTreeSet},
+        fs::read_to_string,
+    },
 };
 
 /// Represents the base token state for a test transaction
@@ -387,11 +400,15 @@ impl TestContext {
             name: Identifier::new(struct_name).unwrap(),
             type_args: Vec::new(),
         };
+
+        let module_id = ModuleId::new(self.move_address, struct_tag.name.clone());
+        let metadata = self.state.resolver().get_module_metadata(&module_id);
         let data = self
             .state
             .resolver()
-            .get_resource(&address, &struct_tag)
+            .get_resource_bytes_with_metadata_and_layout(&address, &struct_tag, &metadata, None)
             .unwrap()
+            .0
             .unwrap();
         bcs::from_bytes(data.as_ref()).unwrap()
     }
@@ -432,10 +449,13 @@ impl TestContext {
         module_name: &str,
         fn_name: &str,
     ) -> (EvmNativeOutcome, ChangeSet, NativeContextExtensions<'a>) {
-        let move_vm = create_move_vm().unwrap();
+        let moved_vm = MovedVm::default();
+        let module_bytes_storage = ResolverBasedModuleBytesStorage::new(self.state.resolver());
+        let code_storage = module_bytes_storage.as_unsync_code_storage(&moved_vm);
+        let vm = moved_vm.create_move_vm().unwrap();
         let session_id = SessionId::default();
         let mut session = create_vm_session(
-            &move_vm,
+            &vm,
             self.state.resolver(),
             session_id,
             &self.evm_storage,
@@ -446,7 +466,7 @@ impl TestContext {
         let mut gas_meter = UnmeteredGasMeter;
         let args = args
             .into_iter()
-            .map(|arg| bcs::to_bytes(&arg).unwrap())
+            .map(|arg| arg.simple_serialize().unwrap())
             .collect();
         let module_name = Identifier::new(module_name).unwrap();
         let fn_name = Identifier::new(fn_name).unwrap();
@@ -460,11 +480,12 @@ impl TestContext {
                 args,
                 &mut gas_meter,
                 &mut traversal_context,
+                &code_storage,
             )
             .unwrap();
 
         let outcome = extract_evm_result(outcome);
-        let (changes, extensions) = session.finish_with_extensions().unwrap();
+        let (changes, extensions) = session.finish_with_extensions(&code_storage).unwrap();
         (outcome, changes, extensions)
     }
 
@@ -474,10 +495,13 @@ impl TestContext {
         module_name: &str,
         fn_name: &str,
     ) -> VMError {
-        let move_vm = create_move_vm().unwrap();
+        let moved_vm = MovedVm::default();
+        let module_bytes_storage = ResolverBasedModuleBytesStorage::new(self.state.resolver());
+        let code_storage = module_bytes_storage.as_unsync_code_storage(&moved_vm);
+        let vm = moved_vm.create_move_vm().unwrap();
         let session_id = SessionId::default();
         let mut session = create_vm_session(
-            &move_vm,
+            &vm,
             self.state.resolver(),
             session_id,
             &self.evm_storage,
@@ -502,6 +526,7 @@ impl TestContext {
                 args,
                 &mut gas_meter,
                 &mut traversal_context,
+                &code_storage,
             )
             .unwrap_err()
     }
@@ -539,7 +564,7 @@ impl TestContext {
         ]));
         let args = vec![
             // From
-            MoveValue::Address(EVM_NATIVE_ADDRESS),
+            MoveValue::Signer(EVM_NATIVE_ADDRESS),
             // Value
             // serialize_fungible_asset_value(0),
             fa_zero,
@@ -569,7 +594,7 @@ impl TestContext {
         ]));
         let args = vec![
             // From
-            MoveValue::Address(from),
+            MoveValue::Signer(from),
             // To
             MoveValue::Address(to),
             // Value
@@ -714,7 +739,7 @@ pub fn create_transaction_with_value(
 }
 
 /// Trait for compilation jobs with common functionality
-pub trait CompileJob {
+pub trait CompileJob: Send + Sync {
     /// Gets the target files to compile
     fn targets(&self) -> Vec<String>;
 
@@ -729,6 +754,8 @@ pub trait CompileJob {
         BTreeSet::new()
     }
 
+    fn extract_byes(&self, result: Vec<AnnotatedCompiledUnit>) -> Vec<u8>;
+
     /// Compiles the Move code
     ///
     /// # Returns
@@ -736,21 +763,36 @@ pub trait CompileJob {
     fn compile(&self) -> anyhow::Result<Vec<u8>> {
         let targets = self.targets();
         let error_context = format!("Failed to compile {targets:?}");
-        let compiler = Compiler::from_files(
-            targets,
-            self.deps(),
-            self.named_addresses(),
-            Flags::empty(),
-            &self.known_attributes(),
-        );
-        let (_, result) = compiler.build().context(error_context)?;
-        let compiled_unit = result.unwrap().0.pop().unwrap().into_compiled_unit();
-        let bytes = compiled_unit.serialize(None);
-        Ok(bytes)
+        // We need to compile on a separate thread with a large stack because
+        // the Move V2 compile needs it I guess.
+        let result = std::thread::scope(|s| {
+            let compile_job = std::thread::Builder::new()
+                .stack_size(134_217_728)
+                .spawn_scoped(s, || {
+                    let options = move_compiler_v2::Options {
+                        language_version: Some(LanguageVersion::latest_stable()),
+                        sources_deps: self.deps(),
+                        sources: targets,
+                        known_attributes: self.known_attributes(),
+                        named_address_mapping: self
+                            .named_addresses()
+                            .into_iter()
+                            .map(|(k, v)| format!("{k}={v}"))
+                            .collect(),
+                        ..Default::default()
+                    };
+                    move_compiler_v2::run_move_compiler_to_stderr(options).map(|(_, result)| result)
+                })
+                .context("Failed to spawn compiler thread")?;
+            compile_job.join().expect("Compiler should complete")
+        })
+        .context(error_context)?;
+        Ok(self.extract_byes(result))
     }
 }
 
 pub struct ModuleCompileJob {
+    package_name: String,
     targets_inner: Vec<String>,
     named_addresses_inner: BTreeMap<String, NumericalAddress>,
 }
@@ -769,6 +811,7 @@ impl ModuleCompileJob {
         let targets = vec![format!("{base_dir}/sources/{package_name}.move")];
 
         Self {
+            package_name: package_name.into(),
             targets_inner: targets,
             named_addresses_inner: named_address_mapping,
         }
@@ -795,6 +838,21 @@ impl CompileJob for ModuleCompileJob {
 
     fn named_addresses(&self) -> BTreeMap<String, NumericalAddress> {
         self.named_addresses_inner.clone()
+    }
+
+    fn extract_byes(&self, result: Vec<AnnotatedCompiledUnit>) -> Vec<u8> {
+        let unit = result
+            .into_iter()
+            .find_map(|unit| {
+                let unit = unit.into_compiled_unit();
+                if unit.name().as_str() == self.package_name {
+                    Some(unit)
+                } else {
+                    None
+                }
+            })
+            .expect("Should find module");
+        unit.serialize(None)
     }
 }
 
@@ -850,6 +908,20 @@ impl CompileJob for ScriptCompileJob {
             result.insert(name, address);
         }
         result
+    }
+
+    fn extract_byes(&self, result: Vec<AnnotatedCompiledUnit>) -> Vec<u8> {
+        let unit = result
+            .into_iter()
+            .find_map(|unit| {
+                if matches!(unit, AnnotatedCompiledUnit::Script(_)) {
+                    Some(unit.into_compiled_unit())
+                } else {
+                    None
+                }
+            })
+            .expect("Should find script");
+        unit.serialize(None)
     }
 }
 

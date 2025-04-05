@@ -3,7 +3,7 @@ use {
     crate::{
         BaseTokenAccounts, CanonicalExecutionInput,
         canonical::{CanonicalVerificationInput, verify_transaction},
-        create_move_vm, create_vm_session, execute_transaction,
+        create_vm_session, execute_transaction,
         gas::new_gas_meter,
         quick_get_nonce,
         session_id::SessionId,
@@ -12,22 +12,25 @@ use {
         },
     },
     alloy::rpc::types::TransactionRequest,
-    move_binary_format::errors::PartialVMError,
-    move_core_types::resolver::MoveResolver,
     move_table_extension::TableResolver,
-    move_vm_runtime::module_traversal::{TraversalContext, TraversalStorage},
+    move_vm_runtime::{
+        AsUnsyncCodeStorage,
+        module_traversal::{TraversalContext, TraversalStorage},
+    },
+    move_vm_types::resolver::MoveResolver,
     moved_evm_ext::{HeaderForExecution, state::StorageTrieRepository},
-    moved_genesis::config::GenesisConfig,
+    moved_genesis::{CreateMoveVm, MovedVm, config::GenesisConfig},
     moved_shared::{
         error::{Error::InvalidTransaction, InvalidTransactionCause},
         primitives::{B256, ToMoveAddress, U256},
     },
+    moved_state::ResolverBasedModuleBytesStorage,
     std::time::{SystemTime, UNIX_EPOCH},
 };
 
 pub fn simulate_transaction(
     request: TransactionRequest,
-    state: &(impl MoveResolver<PartialVMError> + TableResolver),
+    state: &(impl MoveResolver + TableResolver),
     storage_trie: &impl StorageTrieRepository,
     genesis_config: &GenesisConfig,
     base_token: &impl BaseTokenAccounts,
@@ -67,7 +70,7 @@ pub fn simulate_transaction(
 
 pub fn call_transaction(
     request: TransactionRequest,
-    state: &(impl MoveResolver<PartialVMError> + TableResolver),
+    state: &(impl MoveResolver + TableResolver),
     storage_trie: &impl StorageTrieRepository,
     genesis_config: &GenesisConfig,
     base_token: &impl BaseTokenAccounts,
@@ -78,9 +81,12 @@ pub fn call_transaction(
     }
     let tx_data = TransactionData::parse_from(&tx)?;
 
-    let move_vm = create_move_vm()?;
+    let moved_vm = MovedVm::default();
+    let vm = moved_vm.create_move_vm()?;
+    let module_storage_bytes = ResolverBasedModuleBytesStorage::new(state);
+    let code_storage = module_storage_bytes.as_unsync_code_storage(&moved_vm);
     let session_id = SessionId::default();
-    let mut session = create_vm_session(&move_vm, state, session_id, storage_trie, &());
+    let mut session = create_vm_session(&vm, state, session_id, storage_trie, &());
     let traversal_storage = TraversalStorage::new();
     let mut traversal_context = TraversalContext::new(&traversal_storage);
     let mut gas_meter = new_gas_meter(genesis_config, tx.gas_limit());
@@ -94,6 +100,7 @@ pub fn call_transaction(
         l1_cost: 0,
         l2_cost: 0,
         base_token,
+        module_storage: &code_storage,
     };
     verify_transaction(&mut verify_input)?;
 
@@ -106,6 +113,7 @@ pub fn call_transaction(
                 entry_fn.args().to_vec(),
                 verify_input.gas_meter,
                 verify_input.traversal_context,
+                &code_storage,
             )?;
             Ok(bcs::to_bytes(&outcome.return_values)?)
         }
@@ -116,6 +124,7 @@ pub fn call_transaction(
                 verify_input.session,
                 verify_input.traversal_context,
                 verify_input.gas_meter,
+                &code_storage,
             )?;
             Ok(vec![])
         }

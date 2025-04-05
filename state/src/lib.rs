@@ -3,11 +3,18 @@ pub mod nodes;
 use {
     alloy::hex::FromHex,
     aptos_types::state_store::{state_key::StateKey, state_value::StateValue},
+    bytes::Bytes,
     eth_trie::{DB, EthTrie, MemoryDB, Trie, TrieError},
-    move_binary_format::errors::PartialVMError,
-    move_core_types::{effects::ChangeSet, language_storage::StructTag, resolver::MoveResolver},
+    move_binary_format::errors::{Location, PartialVMError, VMResult},
+    move_core_types::{
+        account_address::AccountAddress,
+        effects::ChangeSet,
+        identifier::IdentStr,
+        language_storage::{ModuleId, StructTag},
+    },
     move_table_extension::{TableChangeSet, TableResolver},
     move_vm_test_utils::InMemoryStorage,
+    move_vm_types::{code::ModuleBytesStorage, resolver::MoveResolver},
     moved_evm_ext::{EVM_NATIVE_ADDRESS, EVM_NATIVE_MODULE, type_utils::ACCOUNT_INFO_PREFIX},
     moved_shared::primitives::{Address, B256, KeyHashable},
     nodes::{TreeKey, TreeValue},
@@ -51,7 +58,7 @@ pub trait State {
 
     /// Returns a reference to a [`MoveResolver`] that can resolve both resources and modules on
     /// the current blockchain state.
-    fn resolver(&self) -> &(impl MoveResolver<PartialVMError> + TableResolver);
+    fn resolver(&self) -> &(impl MoveResolver + TableResolver);
 
     /// Retrieves the value of the root node of the merkle trie that holds the blockchain state.
     fn state_root(&self) -> B256;
@@ -122,7 +129,7 @@ impl State for InMemoryState {
         self.db.clone()
     }
 
-    fn resolver(&self) -> &(impl MoveResolver<Self::Err> + TableResolver) {
+    fn resolver(&self) -> &(impl MoveResolver + TableResolver) {
         &self.resolver
     }
 
@@ -257,6 +264,31 @@ pub fn is_evm_storage_or_account_key(k: &StructTag) -> bool {
     k.address == EVM_NATIVE_ADDRESS
         && k.module.as_ident_str() == EVM_NATIVE_MODULE
         && k.name.as_str().starts_with(ACCOUNT_INFO_PREFIX)
+}
+
+// TODO(#328): Figure out what is going on with code cache and loader V2.
+// https://github.com/aptos-labs/aptos-core/pull/14184 might be a good place to start.
+pub struct ResolverBasedModuleBytesStorage<'a, R> {
+    resolver: &'a R,
+}
+
+impl<'a, R: MoveResolver> ResolverBasedModuleBytesStorage<'a, R> {
+    pub fn new(resolver: &'a R) -> Self {
+        Self { resolver }
+    }
+}
+
+impl<R: MoveResolver> ModuleBytesStorage for ResolverBasedModuleBytesStorage<'_, R> {
+    fn fetch_module_bytes(
+        &self,
+        address: &AccountAddress,
+        module_name: &IdentStr,
+    ) -> VMResult<Option<Bytes>> {
+        let module_id = ModuleId::new(*address, module_name.to_owned());
+        self.resolver
+            .get_module(&module_id)
+            .map_err(|e| e.finish(Location::Module(module_id)))
+    }
 }
 
 #[cfg(test)]

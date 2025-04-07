@@ -1,52 +1,44 @@
 use {
     crate::{
-        json_utils::{access_state_error, parse_params_2, transaction_error},
+        json_utils::{parse_params_2, transaction_error},
         jsonrpc::JsonRpcError,
     },
-    alloy::{eips::BlockNumberOrTag, rpc::types::TransactionRequest},
-    moved_app::{Query, StateMessage},
-    tokio::sync::{mpsc, oneshot},
+    moved_app::{Application, Dependencies},
+    std::sync::Arc,
+    tokio::sync::RwLock,
 };
 
 pub async fn execute(
     request: serde_json::Value,
-    state_channel: mpsc::Sender<StateMessage>,
+    app: &Arc<RwLock<Application<impl Dependencies>>>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let (transaction, block_number) = parse_params_2(request)?;
-    let response = inner_execute(transaction, block_number, state_channel).await?;
+
+    let response = app
+        .read()
+        .await
+        .call(transaction, block_number)
+        .map_err(transaction_error)?;
 
     Ok(serde_json::to_value(response).expect("Must be able to JSON-serialize response"))
-}
-
-async fn inner_execute(
-    transaction: TransactionRequest,
-    block_number: BlockNumberOrTag,
-    state_channel: mpsc::Sender<StateMessage>,
-) -> Result<Vec<u8>, JsonRpcError> {
-    let (tx, rx) = oneshot::channel();
-    let msg = Query::Call {
-        transaction,
-        block_number,
-        response_channel: tx,
-    }
-    .into();
-    state_channel.send(msg).await.map_err(access_state_error)?;
-    let response = rx.await.map_err(access_state_error)?;
-    response.map_err(transaction_error)
 }
 
 #[cfg(test)]
 mod tests {
     use {
         super::*,
-        crate::methods::tests::{create_state_actor, deploy_contract, deposit_eth},
+        crate::methods::tests::{create_app, deploy_contract, deposit_eth},
         alloy::{
+            eips::BlockNumberOrTag,
             hex::FromHex,
             primitives::{Address, Bytes},
+            rpc::types::TransactionRequest,
         },
+        moved_app::StateActor,
         moved_shared::primitives::U64,
         std::str::FromStr,
         test_case::test_case,
+        tokio::sync::mpsc,
     };
 
     #[test_case("0x1")]
@@ -88,7 +80,9 @@ mod tests {
     #[test_case("pending")]
     #[tokio::test]
     async fn test_execute_call_entry_fn(block: &str) {
-        let (state_actor, state_channel) = create_state_actor();
+        let app = create_app();
+        let (state_channel, rx) = mpsc::channel(10);
+        let state_actor = StateActor::new(rx, app.clone());
         let state_handle = state_actor.spawn();
 
         // Add funds to the account to deploy the `counter` contract
@@ -110,11 +104,13 @@ mod tests {
             "id": 1
         });
 
-        let expected_response = serde_json::json!([1, 1, 0, 0]);
-        let response = execute(request, state_channel).await.unwrap();
-
-        assert_eq!(response, expected_response);
+        drop(state_channel);
         state_handle.await.unwrap();
+
+        let expected_response = serde_json::json!([1, 1, 0, 0]);
+        let actual_response = execute(request, &app).await.unwrap();
+
+        assert_eq!(actual_response, expected_response);
     }
 
     #[test_case("0x1")]
@@ -122,7 +118,9 @@ mod tests {
     #[test_case("pending")]
     #[tokio::test]
     async fn test_execute_call_script(block: &str) {
-        let (state_actor, state_channel) = create_state_actor();
+        let app = create_app();
+        let (state_channel, rx) = mpsc::channel(10);
+        let state_actor = StateActor::new(rx, app.clone());
         let state_handle = state_actor.spawn();
 
         // Add funds to the account to deploy the `counter` contract
@@ -141,9 +139,11 @@ mod tests {
             ],
             "id": 1
         });
-        // Counter script call should succeed
-        execute(request, state_channel).await.unwrap();
 
+        drop(state_channel);
         state_handle.await.unwrap();
+
+        // Counter script call should succeed
+        execute(request, &app).await.unwrap();
     }
 }

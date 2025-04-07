@@ -1,23 +1,28 @@
 use {
     crate::{
-        json_utils::{self, access_state_error},
+        json_utils::{self},
         jsonrpc::JsonRpcError,
     },
     alloy::{
         eips::{BlockId, BlockNumberOrTag},
         primitives::{Address, U256},
     },
-    moved_app::{Query, StateMessage},
-    moved_blockchain::state::ProofResponse,
-    tokio::sync::{mpsc, oneshot},
+    moved_app::{Application, Dependencies},
+    std::sync::Arc,
+    tokio::sync::RwLock,
 };
 
 pub async fn execute(
     request: serde_json::Value,
-    state_channel: mpsc::Sender<StateMessage>,
+    app: &Arc<RwLock<Application<impl Dependencies>>>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let (address, storage_slots, block_number) = parse_params(request)?;
-    let response = inner_execute(address, storage_slots, block_number, state_channel).await?;
+
+    let response = app
+        .read()
+        .await
+        .proof(address, storage_slots, block_number)
+        .ok_or(JsonRpcError::block_not_found(block_number))?;
 
     // Format the balance as a hex string
     Ok(serde_json::to_value(response).expect("Must be able to JSON-serialize response"))
@@ -54,32 +59,13 @@ fn parse_params(request: serde_json::Value) -> Result<(Address, Vec<U256>, Block
     }
 }
 
-async fn inner_execute(
-    address: Address,
-    storage_slots: Vec<U256>,
-    height: BlockId,
-    state_channel: mpsc::Sender<StateMessage>,
-) -> Result<ProofResponse, JsonRpcError> {
-    let (tx, rx) = oneshot::channel();
-    let msg = Query::GetProof {
-        address,
-        storage_slots,
-        height,
-        response_channel: tx,
-    }
-    .into();
-    state_channel.send(msg).await.map_err(access_state_error)?;
-    let response = rx.await?.ok_or(JsonRpcError::block_not_found(height))?;
-
-    Ok(response)
-}
-
 #[cfg(test)]
 mod tests {
     use {
         super::*,
-        crate::methods::tests::create_state_actor,
+        crate::methods::tests::create_app,
         alloy::{hex, primitives::address},
+        moved_blockchain::state::ProofResponse,
         moved_shared::primitives::U64,
         std::str::FromStr,
         test_case::test_case,
@@ -118,9 +104,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute() {
-        let (state_actor, state_channel) = create_state_actor();
+        let app = create_app();
 
-        let state_handle = state_actor.spawn();
         let request: serde_json::Value = serde_json::json!({
             "jsonrpc": "2.0",
             "method": "eth_getProof",
@@ -133,7 +118,7 @@ mod tests {
         });
 
         let response: ProofResponse =
-            serde_json::from_value(execute(request, state_channel).await.unwrap()).unwrap();
+            serde_json::from_value(execute(request, &app).await.unwrap()).unwrap();
 
         assert_eq!(
             response.address,
@@ -152,7 +137,5 @@ mod tests {
             // Leaf and extension nodes have length 2; branch nodes have length 17
             assert!(list.len() == 2 || list.len() == 17);
         }
-
-        state_handle.await.unwrap();
     }
 }

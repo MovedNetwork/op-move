@@ -1,24 +1,26 @@
 use {
-    crate::initialize_state_actor,
+    crate::initialize_app,
     eth_trie::{EthTrie, MemoryDB, Trie},
     moved_api::schema::{
         ForkchoiceUpdatedResponseV1, GetBlockResponse, GetPayloadResponseV3, PayloadStatusV1,
         Status,
     },
-    moved_app::StateMessage,
+    moved_app::{Application, Dependencies, StateActor, StateMessage},
     moved_blockchain::{payload::StatePayloadId, state::ProofResponse},
     moved_evm_ext::state,
     moved_genesis::config::GenesisConfig,
     serde::de::DeserializeOwned,
     std::sync::Arc,
-    tokio::sync::mpsc,
+    tokio::sync::{mpsc, RwLock},
 };
 
 #[tokio::test]
 async fn test_get_proof() -> anyhow::Result<()> {
     let (state_channel, rx) = mpsc::channel(10);
     let genesis_config = GenesisConfig::default();
-    let state_actor = initialize_state_actor(genesis_config, rx);
+    let app = initialize_app(genesis_config);
+    let app = Arc::new(RwLock::new(app));
+    let state_actor = StateActor::new(rx, app.clone());
 
     let state_task = state_actor.spawn();
 
@@ -31,7 +33,7 @@ async fn test_get_proof() -> anyhow::Result<()> {
             true
         ]
     });
-    let genesis_block: GetBlockResponse = handle_request(request, &state_channel).await?;
+    let genesis_block: GetBlockResponse = handle_request(request, &state_channel, &app).await?;
     let genesis_hash = genesis_block.0.header.hash;
 
     let request = serde_json::json!({
@@ -47,7 +49,8 @@ async fn test_get_proof() -> anyhow::Result<()> {
             null
         ]
     });
-    let response: ForkchoiceUpdatedResponseV1 = handle_request(request, &state_channel).await?;
+    let response: ForkchoiceUpdatedResponseV1 =
+        handle_request(request, &state_channel, &app).await?;
     assert_eq!(response.payload_status.status, Status::Valid);
 
     let request = serde_json::json!({
@@ -73,8 +76,13 @@ async fn test_get_proof() -> anyhow::Result<()> {
             }
         ]
     });
-    let response: ForkchoiceUpdatedResponseV1 = handle_request(request, &state_channel).await?;
+    let response: ForkchoiceUpdatedResponseV1 =
+        handle_request(request, &state_channel, &app).await?;
     let payload_id = response.payload_id.unwrap();
+
+    state_channel
+        .reserve_many(state_channel.max_capacity())
+        .await?;
 
     let request = serde_json::json!({
         "jsonrpc": "2.0",
@@ -84,7 +92,7 @@ async fn test_get_proof() -> anyhow::Result<()> {
            String::from(payload_id),
         ]
     });
-    let response: GetPayloadResponseV3 = handle_request(request, &state_channel).await?;
+    let response: GetPayloadResponseV3 = handle_request(request, &state_channel, &app).await?;
 
     let request = serde_json::json!({
         "jsonrpc": "2.0",
@@ -96,7 +104,7 @@ async fn test_get_proof() -> anyhow::Result<()> {
            "0x0000000000000000000000000000000000000000000000000000000000000000"
         ]
     });
-    let response: PayloadStatusV1 = handle_request(request, &state_channel).await?;
+    let response: PayloadStatusV1 = handle_request(request, &state_channel, &app).await?;
     assert_eq!(response.status, Status::Valid);
 
     let request = serde_json::json!({
@@ -108,7 +116,7 @@ async fn test_get_proof() -> anyhow::Result<()> {
             true
         ]
     });
-    let block: GetBlockResponse = handle_request(request, &state_channel).await?;
+    let block: GetBlockResponse = handle_request(request, &state_channel, &app).await?;
     let state_root = block.0.header.state_root;
 
     let request = serde_json::json!({
@@ -121,7 +129,7 @@ async fn test_get_proof() -> anyhow::Result<()> {
            format!("{}", response.latest_valid_hash.unwrap())
         ]
     });
-    let response: ProofResponse = handle_request(request, &state_channel).await?;
+    let response: ProofResponse = handle_request(request, &state_channel, &app).await?;
 
     // Proof is verified successfully
     let trie = EthTrie::new(Arc::new(MemoryDB::new(false)));
@@ -155,12 +163,14 @@ async fn test_get_proof() -> anyhow::Result<()> {
 async fn handle_request<T: DeserializeOwned>(
     request: serde_json::Value,
     state_channel: &mpsc::Sender<StateMessage>,
+    app: &Arc<RwLock<Application<impl Dependencies>>>,
 ) -> anyhow::Result<T> {
     let response = moved_api::request::handle(
         request.clone(),
         state_channel.clone(),
         |_| true,
         &StatePayloadId,
+        app,
     )
     .await;
 

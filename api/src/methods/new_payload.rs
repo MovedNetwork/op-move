@@ -179,6 +179,8 @@ mod tests {
         moved_genesis::config::GenesisConfig,
         moved_shared::primitives::{Address, B2048, Bytes, U64, U256},
         moved_state::InMemoryState,
+        std::sync::Arc,
+        tokio::sync::RwLock,
     };
 
     #[test]
@@ -289,37 +291,35 @@ mod tests {
         );
         let initial_state_root = genesis_config.initial_state_root;
 
-        let state: StateActor<TestDependencies<_, _, _, _>> = StateActor::new(
-            rx,
-            Application {
-                mem_pool: Default::default(),
-                head: head_hash,
-                height: 0,
-                genesis_config,
-                gas_fee: Eip1559GasFee::default(),
-                base_token: (),
-                l1_fee: U256::ZERO,
-                l2_fee: U256::ZERO,
-                block_hash: B256::from(hex!(
-                    "c013e1ff1b8bca9f0d074618cc9e661983bc91d7677168b156765781aee775d3"
-                )),
-                block_queries: InMemoryBlockQueries,
-                block_repository: repository,
-                on_payload: StateActor::on_payload_in_memory(),
-                on_tx: StateActor::on_tx_noop(),
-                on_tx_batch: StateActor::on_tx_batch_noop(),
-                payload_queries: InMemoryPayloadQueries::new(),
-                receipt_queries: InMemoryReceiptQueries::new(),
-                receipt_repository: InMemoryReceiptRepository::new(),
-                receipt_memory: ReceiptMemory::new(),
-                storage: memory,
-                state,
-                evm_storage,
-                transaction_queries: InMemoryTransactionQueries::new(),
-                state_queries: InMemoryStateQueries::from_genesis(initial_state_root),
-                transaction_repository: InMemoryTransactionRepository::new(),
-            },
-        );
+        let app = Arc::new(RwLock::new(Application {
+            mem_pool: Default::default(),
+            head: head_hash,
+            height: 0,
+            genesis_config,
+            gas_fee: Eip1559GasFee::default(),
+            base_token: (),
+            l1_fee: U256::ZERO,
+            l2_fee: U256::ZERO,
+            block_hash: B256::from(hex!(
+                "c013e1ff1b8bca9f0d074618cc9e661983bc91d7677168b156765781aee775d3"
+            )),
+            block_queries: InMemoryBlockQueries,
+            block_repository: repository,
+            on_payload: StateActor::on_payload_in_memory(),
+            on_tx: StateActor::on_tx_noop(),
+            on_tx_batch: StateActor::on_tx_batch_noop(),
+            payload_queries: InMemoryPayloadQueries::new(),
+            receipt_queries: InMemoryReceiptQueries::new(),
+            receipt_repository: InMemoryReceiptRepository::new(),
+            receipt_memory: ReceiptMemory::new(),
+            storage: memory,
+            state,
+            evm_storage,
+            transaction_queries: InMemoryTransactionQueries::new(),
+            state_queries: InMemoryStateQueries::from_genesis(initial_state_root),
+            transaction_repository: InMemoryTransactionRepository::new(),
+        }));
+        let state: StateActor<TestDependencies<_, _, _, _>> = StateActor::new(rx, app.clone());
         let state_handle = state.spawn();
 
         let fc_updated_request: serde_json::Value = serde_json::from_str(
@@ -407,7 +407,12 @@ mod tests {
         .await
         .unwrap();
 
-        get_payload::execute_v3(get_payload_request, state_channel.clone())
+        state_channel
+            .reserve_many(state_channel.max_capacity())
+            .await
+            .unwrap();
+
+        get_payload::execute_v3(get_payload_request, &app)
             .await
             .unwrap();
 

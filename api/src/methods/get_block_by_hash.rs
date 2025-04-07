@@ -1,44 +1,28 @@
 use {
-    crate::{
-        json_utils::{access_state_error, parse_params_2},
-        jsonrpc::JsonRpcError,
-        schema::GetBlockResponse,
-    },
-    moved_app::{Query, StateMessage},
-    moved_shared::primitives::B256,
-    tokio::sync::{mpsc, oneshot},
+    crate::{json_utils::parse_params_2, jsonrpc::JsonRpcError, schema::GetBlockResponse},
+    moved_app::{Application, Dependencies},
+    std::sync::Arc,
+    tokio::sync::RwLock,
 };
 
 pub async fn execute(
     request: serde_json::Value,
-    state_channel: mpsc::Sender<StateMessage>,
+    app: &Arc<RwLock<Application<impl Dependencies>>>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let (block_hash, include_transactions) = parse_params_2(request)?;
-    let response = inner_execute(block_hash, include_transactions, state_channel).await?;
+
+    let response = app
+        .read()
+        .await
+        .block_by_hash(block_hash, include_transactions)
+        .map(GetBlockResponse::from);
+
     Ok(serde_json::to_value(response).expect("Must be able to JSON-serialize response"))
-}
-
-async fn inner_execute(
-    hash: B256,
-    include_transactions: bool,
-    state_channel: mpsc::Sender<StateMessage>,
-) -> Result<Option<GetBlockResponse>, JsonRpcError> {
-    let (response_channel, rx) = oneshot::channel();
-    let msg = Query::BlockByHash {
-        hash,
-        include_transactions,
-        response_channel,
-    }
-    .into();
-    state_channel.send(msg).await.map_err(access_state_error)?;
-    let maybe_response = rx.await.map_err(access_state_error)?;
-
-    Ok(maybe_response.map(GetBlockResponse::from))
 }
 
 #[cfg(test)]
 mod tests {
-    use {super::*, crate::methods::tests::create_state_actor};
+    use {super::*, crate::methods::tests::create_app};
 
     pub fn example_request() -> serde_json::Value {
         serde_json::from_str(
@@ -59,8 +43,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_reads_genesis_block_successfully() {
-        let (state, state_channel) = create_state_actor();
-        let state_handle = state.spawn();
+        let app = create_app();
         let request = example_request();
 
         let expected_response: serde_json::Value = serde_json::from_str(r#"
@@ -86,9 +69,8 @@ mod tests {
             "withdrawals": []
         }"#).unwrap();
 
-        let response = execute(request, state_channel).await.unwrap();
+        let response = execute(request, &app).await.unwrap();
 
         assert_eq!(response, expected_response);
-        state_handle.await.unwrap();
     }
 }

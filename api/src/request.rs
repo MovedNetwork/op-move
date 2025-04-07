@@ -4,9 +4,10 @@ use {
         jsonrpc::{JsonRpcError, JsonRpcResponse},
         method_name::MethodName,
     },
-    moved_app::StateMessage,
+    moved_app::{Application, Dependencies, StateMessage},
     moved_blockchain::payload::NewPayloadId,
-    tokio::sync::mpsc,
+    std::sync::Arc,
+    tokio::sync::{RwLock, mpsc},
 };
 
 pub async fn handle(
@@ -14,11 +15,12 @@ pub async fn handle(
     state_channel: mpsc::Sender<StateMessage>,
     is_allowed: impl Fn(&MethodName) -> bool,
     payload_id: &impl NewPayloadId,
+    app: &Arc<RwLock<Application<impl Dependencies>>>,
 ) -> JsonRpcResponse {
     let id = json_utils::get_field(&request, "id");
     let jsonrpc = json_utils::get_field(&request, "jsonrpc");
 
-    match inner_handle_request(request, state_channel, is_allowed, payload_id).await {
+    match inner_handle_request(request, state_channel, is_allowed, payload_id, app).await {
         Ok(r) => JsonRpcResponse {
             id,
             jsonrpc,
@@ -39,6 +41,7 @@ async fn inner_handle_request(
     state_channel: mpsc::Sender<StateMessage>,
     is_allowed: impl Fn(&MethodName) -> bool,
     payload_id: &impl NewPayloadId,
+    app: &Arc<RwLock<Application<impl Dependencies>>>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     use {crate::methods::*, MethodName::*};
 
@@ -55,21 +58,21 @@ async fn inner_handle_request(
         ForkChoiceUpdatedV3 => {
             forkchoice_updated::execute_v3(request, state_channel, payload_id).await
         }
-        GetPayloadV3 => get_payload::execute_v3(request, state_channel).await,
+        GetPayloadV3 => get_payload::execute_v3(request, app).await,
         NewPayloadV3 => new_payload::execute_v3(request, state_channel).await,
         SendRawTransaction => send_raw_transaction::execute(request, state_channel).await,
-        ChainId => chain_id::execute(state_channel).await,
-        GetBalance => get_balance::execute(request, state_channel).await,
-        GetNonce => get_nonce::execute(request, state_channel).await,
-        GetTransactionByHash => get_transaction_by_hash::execute(request, state_channel).await,
-        GetBlockByHash => get_block_by_hash::execute(request, state_channel).await,
-        GetBlockByNumber => get_block_by_number::execute(request, state_channel).await,
-        BlockNumber => block_number::execute(request, state_channel).await,
-        FeeHistory => fee_history::execute(request, state_channel).await,
-        EstimateGas => estimate_gas::execute(request, state_channel).await,
-        Call => call::execute(request, state_channel).await,
-        TransactionReceipt => get_transaction_receipt::execute(request, state_channel).await,
-        GetProof => get_proof::execute(request, state_channel).await,
+        ChainId => chain_id::execute(app).await,
+        GetBalance => get_balance::execute(request, app).await,
+        GetNonce => get_nonce::execute(request, app).await,
+        GetTransactionByHash => get_transaction_by_hash::execute(request, app).await,
+        GetBlockByHash => get_block_by_hash::execute(request, app).await,
+        GetBlockByNumber => get_block_by_number::execute(request, app).await,
+        BlockNumber => block_number::execute(request, app).await,
+        FeeHistory => fee_history::execute(request, app).await,
+        EstimateGas => estimate_gas::execute(request, app).await,
+        Call => call::execute(request, app).await,
+        TransactionReceipt => get_transaction_receipt::execute(request, app).await,
+        GetProof => get_proof::execute(request, app).await,
         GasPrice => gas_price::execute().await,
     }
 }

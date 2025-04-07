@@ -10,8 +10,14 @@ use {
     },
     moved_shared::primitives::B256,
     moved_state::State,
-    std::ops::{Deref, DerefMut},
-    tokio::{sync::mpsc::Receiver, task::JoinHandle},
+    std::{
+        ops::{Deref, DerefMut},
+        sync::Arc,
+    },
+    tokio::{
+        sync::{RwLock, mpsc::Receiver},
+        task::JoinHandle,
+    },
 };
 
 /// A function invoked on a completion of new transaction execution batch.
@@ -25,7 +31,7 @@ pub type OnPayload<S> = dyn Fn(&mut S, PayloadId, B256) + Send + Sync;
 
 pub struct StateActor<D: Dependencies> {
     rx: Receiver<StateMessage>,
-    app: Application<D>,
+    app: Arc<RwLock<Application<D>>>,
 }
 
 impl<D: DependenciesThreadSafe> StateActor<D> {
@@ -33,8 +39,8 @@ impl<D: DependenciesThreadSafe> StateActor<D> {
         tokio::spawn(async move {
             while let Some(msg) = self.rx.recv().await {
                 match msg {
-                    StateMessage::Command(msg) => Self::handle_command(&mut self.app, msg),
-                    StateMessage::Query(msg) => Self::handle_query(&self.app, msg),
+                    StateMessage::Command(msg) => Self::handle_command(self.app.write().await, msg),
+                    StateMessage::Query(msg) => Self::handle_query(self.app.read().await, msg),
                 };
             }
         })
@@ -42,7 +48,7 @@ impl<D: DependenciesThreadSafe> StateActor<D> {
 }
 
 impl<D: Dependencies> StateActor<D> {
-    pub fn new(rx: Receiver<StateMessage>, app: Application<D>) -> Self {
+    pub fn new(rx: Receiver<StateMessage>, app: Arc<RwLock<Application<D>>>) -> Self {
         Self { rx, app }
     }
 
@@ -81,8 +87,13 @@ impl<D: Dependencies> StateActor<D> {
                 response_channel.send(app.block_number()).ok()
             }
             Query::FeeHistory {
-                response_channel, ..
-            } => response_channel.send(app.fee_history()).ok(),
+                response_channel,
+                block_count,
+                block_number,
+                reward_percentiles,
+            } => response_channel
+                .send(app.fee_history(block_count, block_number, reward_percentiles))
+                .ok(),
             Query::EstimateGas {
                 transaction,
                 block_number,
@@ -93,8 +104,10 @@ impl<D: Dependencies> StateActor<D> {
             Query::Call {
                 transaction,
                 response_channel,
-                ..
-            } => response_channel.send(app.call(transaction)).ok(),
+                block_number,
+            } => response_channel
+                .send(app.call(transaction, block_number))
+                .ok(),
             Query::TransactionReceipt {
                 tx_hash,
                 response_channel,

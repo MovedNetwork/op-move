@@ -1,42 +1,33 @@
 use {
     crate::{
-        json_utils::{access_state_error, parse_params_1},
+        json_utils::parse_params_1,
         jsonrpc::JsonRpcError,
         schema::{GetPayloadResponseV3, PayloadId},
     },
-    moved_app::{Query, StateMessage},
-    tokio::sync::{mpsc, oneshot},
+    moved_app::{Application, Dependencies},
+    std::sync::Arc,
+    tokio::sync::RwLock,
 };
 
 pub async fn execute_v3(
     request: serde_json::Value,
-    state_channel: mpsc::Sender<StateMessage>,
+    app: &Arc<RwLock<Application<impl Dependencies>>>,
 ) -> Result<serde_json::Value, JsonRpcError> {
-    let payload_id = parse_params_1(request)?;
-    let response = inner_execute_v3(payload_id, state_channel).await?;
-    Ok(serde_json::to_value(response).expect("Must be able to JSON-serialize response"))
-}
+    let payload_id: PayloadId = parse_params_1(request)?;
 
-async fn inner_execute_v3(
-    payload_id: PayloadId,
-    state_channel: mpsc::Sender<StateMessage>,
-) -> Result<GetPayloadResponseV3, JsonRpcError> {
     // Spec: https://github.com/ethereum/execution-apis/blob/main/src/engine/cancun.md#specification-2
+    let response = app
+        .read()
+        .await
+        .payload(payload_id.clone().into())
+        .map(GetPayloadResponseV3::from)
+        .ok_or_else(|| JsonRpcError {
+            code: -38001,
+            data: serde_json::to_value(payload_id).expect("Must serialize payload id"),
+            message: "Unknown payload".into(),
+        })?;
 
-    let (tx, rx) = oneshot::channel();
-    let msg = Query::GetPayload {
-        id: payload_id.clone().into(),
-        response_channel: tx,
-    }
-    .into();
-    state_channel.send(msg).await.map_err(access_state_error)?;
-    let maybe_response = rx.await.map_err(access_state_error)?.map(Into::into);
-
-    maybe_response.ok_or_else(|| JsonRpcError {
-        code: -38001,
-        data: serde_json::to_value(payload_id).expect("Must serialize payload id"),
-        message: "Unknown payload".into(),
-    })
+    Ok(serde_json::to_value(response).expect("Must be able to JSON-serialize response"))
 }
 
 #[cfg(test)]
@@ -61,6 +52,7 @@ mod tests {
         moved_genesis::config::GenesisConfig,
         moved_shared::primitives::{B256, U256},
         moved_state::InMemoryState,
+        tokio::sync::mpsc,
     };
 
     #[test]
@@ -114,35 +106,33 @@ mod tests {
         );
         let initial_state_root = genesis_config.initial_state_root;
 
-        let state: StateActor<TestDependencies<_, _, _, _>> = StateActor::new(
-            rx,
-            Application {
-                mem_pool: Default::default(),
-                genesis_config,
-                head: head_hash,
-                height: 0,
-                state,
-                block_hash: head_hash,
-                block_repository: repository,
-                gas_fee: Eip1559GasFee::default(),
-                base_token: (),
-                l1_fee: U256::ZERO,
-                l2_fee: U256::ZERO,
-                block_queries: InMemoryBlockQueries,
-                storage: memory,
-                state_queries: InMemoryStateQueries::from_genesis(initial_state_root),
-                transaction_repository: InMemoryTransactionRepository::new(),
-                transaction_queries: InMemoryTransactionQueries::new(),
-                receipt_memory: ReceiptMemory::new(),
-                receipt_repository: InMemoryReceiptRepository::new(),
-                receipt_queries: InMemoryReceiptQueries::new(),
-                payload_queries: InMemoryPayloadQueries::new(),
-                evm_storage,
-                on_tx: StateActor::on_tx_noop(),
-                on_tx_batch: StateActor::on_tx_batch_noop(),
-                on_payload: StateActor::on_payload_in_memory(),
-            },
-        );
+        let app = Arc::new(RwLock::new(Application {
+            mem_pool: Default::default(),
+            genesis_config,
+            head: head_hash,
+            height: 0,
+            state,
+            block_hash: head_hash,
+            block_repository: repository,
+            gas_fee: Eip1559GasFee::default(),
+            base_token: (),
+            l1_fee: U256::ZERO,
+            l2_fee: U256::ZERO,
+            block_queries: InMemoryBlockQueries,
+            storage: memory,
+            state_queries: InMemoryStateQueries::from_genesis(initial_state_root),
+            transaction_repository: InMemoryTransactionRepository::new(),
+            transaction_queries: InMemoryTransactionQueries::new(),
+            receipt_memory: ReceiptMemory::new(),
+            receipt_repository: InMemoryReceiptRepository::new(),
+            receipt_queries: InMemoryReceiptQueries::new(),
+            payload_queries: InMemoryPayloadQueries::new(),
+            evm_storage,
+            on_tx: StateActor::on_tx_noop(),
+            on_tx_batch: StateActor::on_tx_batch_noop(),
+            on_payload: StateActor::on_payload_in_memory(),
+        }));
+        let state: StateActor<TestDependencies<_, _, _, _>> = StateActor::new(rx, app.clone());
         let state_handle = state.spawn();
 
         // Set head block hash
@@ -210,9 +200,10 @@ mod tests {
             }
         "#).unwrap();
 
-        let response = execute_v3(request, state_channel).await.unwrap();
-
-        assert_eq!(response, expected_response);
+        drop(state_channel);
         state_handle.await.unwrap();
+        let actual_response = execute_v3(request, &app).await.unwrap();
+
+        assert_eq!(actual_response, expected_response);
     }
 }

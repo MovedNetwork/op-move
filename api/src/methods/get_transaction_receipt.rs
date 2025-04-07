@@ -1,37 +1,19 @@
 use {
-    crate::{
-        json_utils::{access_state_error, parse_params_1},
-        jsonrpc::JsonRpcError,
-    },
-    moved_app::{Query, StateMessage},
-    moved_blockchain::receipt::TransactionReceipt,
-    moved_shared::primitives::B256,
-    tokio::sync::{mpsc, oneshot},
+    crate::{json_utils::parse_params_1, jsonrpc::JsonRpcError},
+    moved_app::{Application, Dependencies},
+    std::sync::Arc,
+    tokio::sync::RwLock,
 };
 
 pub async fn execute(
     request: serde_json::Value,
-    state_channel: mpsc::Sender<StateMessage>,
+    app: &Arc<RwLock<Application<impl Dependencies>>>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let tx_hash = parse_params_1(request)?;
-    let response = inner_execute(tx_hash, state_channel).await?;
+
+    let response = app.read().await.transaction_receipt(tx_hash);
+
     Ok(serde_json::to_value(response).expect("Must be able to JSON-serialize response"))
-}
-
-async fn inner_execute(
-    tx_hash: B256,
-    state_channel: mpsc::Sender<StateMessage>,
-) -> Result<Option<TransactionReceipt>, JsonRpcError> {
-    let (response_channel, rx) = oneshot::channel();
-    let msg = Query::TransactionReceipt {
-        tx_hash,
-        response_channel,
-    }
-    .into();
-    state_channel.send(msg).await.map_err(access_state_error)?;
-    let maybe_response = rx.await.map_err(access_state_error)?;
-
-    Ok(maybe_response)
 }
 
 #[cfg(test)]
@@ -39,18 +21,21 @@ mod tests {
     use {
         super::*,
         crate::{
-            methods::{
-                forkchoice_updated, get_payload, send_raw_transaction, tests::create_state_actor,
-            },
+            methods::{forkchoice_updated, get_payload, send_raw_transaction, tests::create_app},
             schema::{ForkchoiceUpdatedResponseV1, GetPayloadResponseV3},
         },
+        moved_app::StateActor,
+        moved_blockchain::receipt::TransactionReceipt,
         std::iter,
+        tokio::sync::mpsc,
     };
 
     #[tokio::test]
     async fn test_execute() {
-        let (state, state_channel) = create_state_actor();
-        let state_handle = state.spawn();
+        let (state_channel, rx) = mpsc::channel(10);
+        let app = create_app();
+        let state_actor = StateActor::new(rx, app.clone());
+        let state_handle = state_actor.spawn();
 
         // 1. Send transaction
         let tx_hash = send_raw_transaction::execute(
@@ -71,6 +56,10 @@ mod tests {
             .unwrap(),
         )
         .unwrap();
+
+        drop(state_channel);
+        state_handle.await.unwrap();
+
         let request = serde_json::Value::Object(
             iter::once((
                 "params".to_string(),
@@ -80,12 +69,8 @@ mod tests {
             ))
             .collect(),
         );
-        let payload_response: GetPayloadResponseV3 = serde_json::from_value(
-            get_payload::execute_v3(request, state_channel.clone())
-                .await
-                .unwrap(),
-        )
-        .unwrap();
+        let payload_response: GetPayloadResponseV3 =
+            serde_json::from_value(get_payload::execute_v3(request, &app).await.unwrap()).unwrap();
         let block_hash = payload_response.execution_payload.block_hash;
 
         // 3. Get transaction receipt
@@ -97,14 +82,12 @@ mod tests {
             .collect(),
         );
         let receipt: TransactionReceipt =
-            serde_json::from_value(execute(request, state_channel).await.unwrap()).unwrap();
+            serde_json::from_value(execute(request, &app).await.unwrap()).unwrap();
 
         // Confirm the receipt contains correct information about the transaction
         assert_eq!(receipt.inner.transaction_index, Some(2));
         assert_eq!(receipt.inner.block_hash, Some(block_hash));
         assert!(receipt.inner.inner.status());
         assert_eq!(receipt.inner.inner.logs().len(), 2);
-
-        state_handle.await.unwrap();
     }
 }

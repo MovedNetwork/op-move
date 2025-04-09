@@ -76,12 +76,12 @@ module L2ToL1MessagePasser::l2_to_l1_message_passer {
     }
 
     struct SentMessagesArgs {
-        key: vector<u8>,
+        key: Evm::evm::SolidityFixedBytes<Evm::evm::B32>,
     }
 
     public fun sent_messages(
         caller: &signer,
-        key: vector<u8>,
+        key: Evm::evm::SolidityFixedBytes<Evm::evm::B32>,
     ): EvmResult {
         let _value = zero(get_metadata());
         let arg_struct = SentMessagesArgs {

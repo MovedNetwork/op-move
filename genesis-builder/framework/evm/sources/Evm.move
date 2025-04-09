@@ -5,21 +5,20 @@ module Evm::evm {
     use EthToken::eth_token::get_metadata;
     use std::error;
     use std::signer;
-    use std::vector::length;
 
     /// For now deploying EVM contracts is restricted to an admin account.
     /// This restriction may be lifted in the future.
     const ENOT_OWNER: u64 = 1;
 
     /// Solidity FixedBytes must have length between 1 and 32 (inclusive).
-    const EINVALID_FIXED_BYTES_SIZE: u64 = 1;
+    const EINVALID_FIXED_BYTES_SIZE: u64 = 2;
 
     const OWNER: address = @evm_admin;
 
     struct EvmLog has copy, store, drop {
         addr: address,
         topics: vector<u256>,
-        data: vector<u8>,
+        data: vector<u8>
     }
 
     #[event]
@@ -31,25 +30,37 @@ module Evm::evm {
     struct EvmResult has drop {
         is_success: bool,
         output: vector<u8>,
-        logs: vector<EvmLog>,
+        logs: vector<EvmLog>
     }
 
-    /// Mark a byte as being of fixed length for the purpose
+    // Marker byte size structs
+    struct B1 {}
+    struct B2 {}
+    struct B4 {}
+    struct B8 {}
+    struct B16 {}
+    struct B20 {}
+    struct B32 {}
+
+    /// Mark a byte array as being of fixed length for the purpose
     /// of encoding it into the Solidity ABI.
-    struct SolidityFixedBytes has drop {
+    struct SolidityFixedBytes<phantom S> has drop {
         data: vector<u8>,
     }
 
     /// Mark a collection of values as being of fixed length for the purpose
     /// of encoding it into the Solidity ABI.
     struct SolidityFixedArray<T> has drop {
-        elements: vector<T>,
+        elements: vector<T>
     }
 
-    public fun as_fixed_bytes(data: vector<u8>): SolidityFixedBytes {
-        let size = length(&data);
-        assert!(0 < size && size <= 32, error::invalid_argument(EINVALID_FIXED_BYTES_SIZE));
-        SolidityFixedBytes { data }
+    public fun as_fixed_bytes<S>(data: vector<u8>): SolidityFixedBytes<S> {
+        let actual_size = std::vector::length(&data);
+
+        // Solidity ABI always pads fixed bytes to 32 bytes
+        assert!(actual_size == 32, error::invalid_argument(EINVALID_FIXED_BYTES_SIZE));
+    
+        SolidityFixedBytes<S> { data }
     }
 
     public fun as_fixed_array<T>(elements: vector<T>): SolidityFixedArray<T> {
@@ -60,9 +71,7 @@ module Evm::evm {
     /// entry functions (namely: `value` must be zero because `FungibleAsset` cannot
     /// be exernally constructed, and there cannot be a return value).
     public entry fun entry_evm_call(
-        caller: &signer,
-        to: address,
-        data: vector<u8>
+        caller: &signer, to: address, data: vector<u8>
     ) {
         let eth_metadata = get_metadata();
         let value = fungible_asset_u256::zero(eth_metadata);
@@ -75,13 +84,16 @@ module Evm::evm {
         value: FungibleAsset,
         data: vector<u8>
     ): EvmResult {
-        native_evm_call(signer::address_of(caller), to, get_asset_value(value), data)
+        native_evm_call(
+            signer::address_of(caller),
+            to,
+            get_asset_value(value),
+            data
+        )
     }
 
     public fun evm_create(
-        caller: &signer,
-        value: FungibleAsset,
-        data: vector<u8>
+        caller: &signer, value: FungibleAsset, data: vector<u8>
     ): EvmResult {
         let caller_addr = signer::address_of(caller);
         assert!(caller_addr == OWNER, error::permission_denied(ENOT_OWNER));
@@ -111,7 +123,7 @@ module Evm::evm {
 
     /// Emit the EVM logs to MoveVM logging system
     public fun emit_evm_logs(result: &EvmResult) {
-        event::emit(EvmLogsEvent { logs: result.logs } );
+        event::emit(EvmLogsEvent { logs: result.logs });
     }
 
     fun get_asset_value(f: FungibleAsset): u256 {
@@ -128,10 +140,16 @@ module Evm::evm {
 
     // A private function used by the system to call the EVM native.
     // (For some reason we cannot call the native function directly)
-    fun system_evm_call(caller: address, to: address, value: u256, data: vector<u8>): EvmResult {
+    fun system_evm_call(
+        caller: address, to: address, value: u256, data: vector<u8>
+    ): EvmResult {
         native_evm_call(caller, to, value, data)
     }
 
-    native fun native_evm_call(caller: address, to: address, value: u256, data: vector<u8>): EvmResult;
-    native fun native_evm_create(caller: address, value: u256, data: vector<u8>): EvmResult;
+    native fun native_evm_call(
+        caller: address, to: address, value: u256, data: vector<u8>
+    ): EvmResult;
+    native fun native_evm_create(
+        caller: address, value: u256, data: vector<u8>
+    ): EvmResult;
 }

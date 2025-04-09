@@ -129,11 +129,14 @@ fn test_solidity_fixed_bytes() {
     let contract = ctx.deploy_contract("solidity_fixed_bytes");
 
     let mut call_contract =
-        |input: Vec<u8>, state: &InMemoryState, evm_storage: &InMemoryStorageTrieRepository| {
+        |fn_name: &'static str,
+         input: Vec<u8>,
+         state: &InMemoryState,
+         evm_storage: &InMemoryStorageTrieRepository| {
             let arg = MoveValue::vector_u8(input);
             let entry_fn = EntryFunction::new(
                 contract.clone(),
-                ident_str!("encode_fixed_bytes").into(),
+                ident_str!(fn_name).into(),
                 Vec::new(),
                 vec![bcs::to_bytes(&arg).unwrap()],
             );
@@ -158,25 +161,29 @@ fn test_solidity_fixed_bytes() {
             execute_transaction(input.into()).unwrap()
         };
 
-    // Calling with empty bytes is an error
-    let outcome = call_contract(Vec::new(), &ctx.state, &ctx.evm_storage);
-    outcome.vm_outcome.unwrap_err();
-    ctx.state.apply(outcome.changes.move_vm).unwrap();
-    ctx.evm_storage.apply(outcome.changes.evm).unwrap();
-
-    // Calling with bytes longer than 32 is an error
-    let outcome = call_contract(vec![0x88; 33], &ctx.state, &ctx.evm_storage);
-    outcome.vm_outcome.unwrap_err();
-    ctx.state.apply(outcome.changes.move_vm).unwrap();
-    ctx.evm_storage.apply(outcome.changes.evm).unwrap();
-
-    // Calling with any length between 1 and 32 (inclusive) works
-    for n in 1..=32 {
-        let outcome = call_contract(vec![0x88; n], &ctx.state, &ctx.evm_storage);
-        outcome.vm_outcome.unwrap();
+    vec![
+        // Calling with empty bytes is an error
+        ("encode_fixed_bytes1", Vec::new(), true),
+        // Calling with bytes longer than 32 is an error
+        ("encode_fixed_bytes1", vec![0x88; 33], true),
+        // Calling with bytes of unsupported sizes is an error
+        ("encode_fixed_bytes1", vec![0x88; 24], true),
+        // 32 byte slice should be castable to any smaller or equal size
+        ("encode_fixed_bytes1", vec![0x88; 32], false),
+        ("encode_fixed_bytes32", vec![0x88; 32], false),
+        ("encode_fixed_bytes16", vec![0x88; 32], false),
+    ]
+    .into_iter()
+    .for_each(|(fn_name, input, should_err)| {
+        let outcome = call_contract(fn_name, input, &ctx.state, &ctx.evm_storage);
+        if should_err {
+            outcome.vm_outcome.unwrap_err();
+        } else {
+            outcome.vm_outcome.unwrap();
+        }
         ctx.state.apply(outcome.changes.move_vm).unwrap();
         ctx.evm_storage.apply(outcome.changes.evm).unwrap();
-    }
+    });
 }
 
 fn balance_of(ctx: &TestContext, contract_address: AccountAddress, calldata: Vec<u8>) -> U256 {

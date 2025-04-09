@@ -7,7 +7,7 @@ use {
     },
     move_core_types::{
         ident_str,
-        language_storage::StructTag,
+        language_storage::{StructTag, TypeTag},
         value::{MoveStructLayout, MoveTypeLayout, MoveValue},
     },
     move_vm_types::{
@@ -166,16 +166,18 @@ fn move_value_to_sol_value(mv: MoveValue, annotated_layout: &MoveTypeLayout) -> 
             let mut fields = inner.into_optional_variant_and_fields().1;
 
             // Special case data marked as being fixed bytes
-            if FIXED_BYTES_TAG.eq(struct_tag) {
+            if FIXED_BYTES_TAG.module_id() == struct_tag.module_id()
+                && FIXED_BYTES_TAG.name == struct_tag.name
+            {
                 let Some(MoveValue::Vector(data)) = fields.pop() else {
                     unreachable!("SolidityFixedBytes contains a vector")
                 };
-                let size = data.len();
 
-                // Solidity only supports fixed bytes up to 32.
+                // Solidity only supports fixed bytes up to 32 by storing a whole word and slicing
+                // into it.
                 debug_assert!(
-                    0 < size && size <= 32,
-                    "Solidity only supports length between 1 and 32 (inclusive). This condition is enforced by the constructor in the Evm.move module"
+                    data.len() == 32,
+                    "Solidity pads fixed bytes length to 32. This condition is enforced by the constructor in the Evm.move module"
                 );
 
                 // Fill the fixed-sized buffer from the beginning with the given bytes
@@ -183,7 +185,8 @@ fn move_value_to_sol_value(mv: MoveValue, annotated_layout: &MoveTypeLayout) -> 
                 for (b, x) in buf.iter_mut().zip(data.into_iter().map(force_to_u8)) {
                     *b = x;
                 }
-                return DynSolValue::FixedBytes(buf.into(), size);
+                let size_arg = type_arg_to_usize(&struct_tag.type_args);
+                return DynSolValue::FixedBytes(buf.into(), size_arg);
             }
 
             // Special case data marked as being fixed-sized array.
@@ -243,11 +246,12 @@ fn layout_to_sol_type(layout: &MoveTypeLayout) -> DynSolType {
             };
 
             // Special case data marked as being fixed bytes
-            if FIXED_BYTES_TAG.eq(struct_tag) {
-                // TODO: Support any `bytesN` fixed bytes. Possibly needs a struct or enum type for each one in Evm.
-                // Currently only `bytes32` is supported as an output for `SolidityFixedBytes`.
-                // L2 contracts don't return any other `bytes` type.
-                return DynSolType::FixedBytes(32);
+            if FIXED_BYTES_TAG.module_id() == struct_tag.module_id()
+                && FIXED_BYTES_TAG.name == struct_tag.name
+            {
+                // The generic argument encodes actual size at the type level
+                let bytes_size = type_arg_to_usize(&struct_tag.type_args);
+                return DynSolType::FixedBytes(bytes_size);
             }
 
             // Equality check like fixed bytes will not work because the type tags will not match.
@@ -288,8 +292,11 @@ fn sol_to_value(sv: DynSolValue) -> Value {
             256 => Value::u256(u.to_move_u256()),
             _ => unreachable!("Only 8, 16, 32, 64, 128 and 256 bit uints are supported by move"),
         },
-        // Move doesn't have fixed-length arrays, the output will be the same regardless of the length
-        DynSolValue::FixedBytes(w, _size) => Value::vector_u8(w.to_vec()),
+        // Packing it back into type-erased `SolidityFixedBytes`
+        // TODO: any way to pass back the size type parameter?
+        DynSolValue::FixedBytes(w, _size) => {
+            Value::struct_(Struct::pack(vec![Value::vector_u8(w.to_vec())]))
+        }
         DynSolValue::Address(a) => Value::address(a.to_move_address()),
         DynSolValue::Bytes(b) => Value::vector_u8(b),
         DynSolValue::String(s) => {
@@ -303,6 +310,29 @@ fn sol_to_value(sv: DynSolValue) -> Value {
             t.into_iter().map(sol_to_value).collect::<Vec<_>>(),
         )),
         _ => unreachable!("Int, FixedArray, Function and CustomStruct are not supported"),
+    }
+}
+
+fn type_arg_to_usize(type_args: &[TypeTag]) -> usize {
+    let type_arg = type_args
+        .iter()
+        .next()
+        .expect("Type args should be at least 1 in length");
+    let type_name = type_arg
+        .struct_tag()
+        .expect("Should only be called for struct-based tags")
+        .name
+        .as_str();
+
+    match type_name {
+        "B1" => 1,
+        "B2" => 2,
+        "B4" => 4,
+        "B8" => 8,
+        "B16" => 16,
+        "B20" => 20,
+        "B32" => 32,
+        _ => unreachable!("Other sizes are not available and should cause a failure at Move level"),
     }
 }
 

@@ -187,10 +187,8 @@ fn get_input_match(solidity_type: String) -> String {
         "address[]" => "vector<address>",
         "bytes" => "vector<u8>",
         "bytes[]" => "vector<vector<u8>>",
-        // TODO: Use SolidityFixedBytes for bytesN, ie `Evm::evm::as_fixed_bytes`
-        "bytes32" => "vector<u8>",
-        "bytes32[]" => "vector<vector<u8>>",
-        "bytes4" => "vector<u8>",
+        // no other fixed bytes types in L2 contracts besides this
+        "bytes32" => "Evm::evm::SolidityFixedBytes<Evm::evm::B32>",
         "string" => "vector<u8>",
         "uint256" => "u256",
         "uint128" => "u128",
@@ -198,7 +196,7 @@ fn get_input_match(solidity_type: String) -> String {
         "uint32" => "u32",
         "uint8" => "u8",
         "bool" => "bool",
-        ty => panic!("Unknown function input type: {}", ty),
+        ty => panic!("Unexpected function input type: {}", ty),
     }
     .to_string()
 }

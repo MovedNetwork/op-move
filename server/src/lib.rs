@@ -81,7 +81,7 @@ pub async fn run() {
     };
 
     let app = initialize_app(genesis_config);
-    let app = Arc::new(RwLock::new(app));
+    let app = Arc::new(RwLock::with_max_readers(app, 4));
     let state = StateActor::new(rx, app.clone());
 
     let http_app = app.clone();

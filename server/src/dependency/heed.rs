@@ -125,6 +125,7 @@ fn create_db() -> moved_storage_heed::Env {
 
     let env = unsafe {
         EnvOpenOptions::new()
+            .max_readers(20)
             .max_dbs(moved_storage_heed::DATABASES.len() as u32)
             .map_size(1024 * 1024 * 1024 * 1024) // 1 TiB
             .open(path)

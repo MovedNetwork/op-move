@@ -59,7 +59,7 @@ mod tests {
         super::*,
         crate::methods::tests::{create_app, deposit_eth},
         alloy::primitives::Address,
-        moved_app::StateActor,
+        moved_app::CommandActor,
         moved_shared::primitives::U64,
         std::str::FromStr,
         test_case::test_case,
@@ -119,7 +119,7 @@ mod tests {
     async fn test_execute(block: &str) {
         let (state_channel, rx) = mpsc::channel(10);
         let app = create_app();
-        let state_actor = StateActor::new(rx, app.clone());
+        let state_actor = CommandActor::new(rx, app.clone());
         let state_handle = state_actor.spawn();
 
         deposit_eth("0x8fd379246834eac74b8419ffda202cf8051f7a03", &state_channel).await;

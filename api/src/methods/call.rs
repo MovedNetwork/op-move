@@ -34,7 +34,7 @@ mod tests {
             primitives::{Address, Bytes},
             rpc::types::TransactionRequest,
         },
-        moved_app::StateActor,
+        moved_app::CommandActor,
         moved_shared::primitives::U64,
         std::str::FromStr,
         test_case::test_case,
@@ -82,7 +82,7 @@ mod tests {
     async fn test_execute_call_entry_fn(block: &str) {
         let app = create_app();
         let (state_channel, rx) = mpsc::channel(10);
-        let state_actor = StateActor::new(rx, app.clone());
+        let state_actor = CommandActor::new(rx, app.clone());
         let state_handle = state_actor.spawn();
 
         // Add funds to the account to deploy the `counter` contract
@@ -120,7 +120,7 @@ mod tests {
     async fn test_execute_call_script(block: &str) {
         let app = create_app();
         let (state_channel, rx) = mpsc::channel(10);
-        let state_actor = StateActor::new(rx, app.clone());
+        let state_actor = CommandActor::new(rx, app.clone());
         let state_handle = state_actor.spawn();
 
         // Add funds to the account to deploy the `counter` contract

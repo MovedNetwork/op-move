@@ -1,6 +1,6 @@
 use {
     crate::dependency::shared::*,
-    moved_app::{Application, StateActor},
+    moved_app::{Application, CommandActor},
     moved_genesis::config::GenesisConfig,
 };
 
@@ -38,15 +38,15 @@ impl moved_app::Dependencies for InMemoryDependencies {
     }
 
     fn on_tx_batch() -> &'static Self::OnTxBatch {
-        StateActor::on_tx_batch_in_memory()
+        CommandActor::on_tx_batch_in_memory()
     }
 
     fn on_tx() -> &'static Self::OnTx {
-        StateActor::on_tx_in_memory()
+        CommandActor::on_tx_in_memory()
     }
 
     fn on_payload() -> &'static Self::OnPayload {
-        StateActor::on_payload_in_memory()
+        CommandActor::on_payload_in_memory()
     }
 
     fn transaction_repository() -> Self::TransactionRepository {

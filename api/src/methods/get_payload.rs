@@ -36,7 +36,7 @@ mod tests {
         super::*,
         crate::methods::forkchoice_updated,
         alloy::primitives::hex,
-        moved_app::{Application, Command, StateActor, TestDependencies},
+        moved_app::{Application, Command, CommandActor, TestDependencies},
         moved_blockchain::{
             block::{
                 Block, BlockRepository, Eip1559GasFee, InMemoryBlockQueries,
@@ -128,18 +128,17 @@ mod tests {
             receipt_queries: InMemoryReceiptQueries::new(),
             payload_queries: InMemoryPayloadQueries::new(),
             evm_storage,
-            on_tx: StateActor::on_tx_noop(),
-            on_tx_batch: StateActor::on_tx_batch_noop(),
-            on_payload: StateActor::on_payload_in_memory(),
+            on_tx: CommandActor::on_tx_noop(),
+            on_tx_batch: CommandActor::on_tx_batch_noop(),
+            on_payload: CommandActor::on_payload_in_memory(),
         }));
-        let state: StateActor<TestDependencies<_, _, _, _>> = StateActor::new(rx, app.clone());
+        let state: CommandActor<TestDependencies<_, _, _, _>> = CommandActor::new(rx, app.clone());
         let state_handle = state.spawn();
 
         // Set head block hash
         let msg = Command::UpdateHead {
             block_hash: head_hash,
-        }
-        .into();
+        };
         state_channel.send(msg).await.unwrap();
 
         // Update the state with an execution payload

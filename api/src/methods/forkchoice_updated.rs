@@ -8,14 +8,14 @@ use {
             PayloadStatusV1, Status,
         },
     },
-    moved_app::{Command, Payload, StateMessage, ToPayloadIdInput},
+    moved_app::{Command, Payload, ToPayloadIdInput},
     moved_blockchain::payload::NewPayloadId,
     tokio::sync::mpsc,
 };
 
 pub async fn execute_v3(
     request: serde_json::Value,
-    state_channel: mpsc::Sender<StateMessage>,
+    state_channel: mpsc::Sender<Command>,
     payload_id: &impl NewPayloadId,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let (forkchoice_state, payload_attributes) = parse_params_v3(request)?;
@@ -59,7 +59,7 @@ fn parse_params_v3(
 async fn inner_execute_v3(
     forkchoice_state: ForkchoiceStateV1,
     payload_attributes: Option<PayloadAttributesV3>,
-    state_channel: mpsc::Sender<StateMessage>,
+    state_channel: mpsc::Sender<Command>,
     payload_id_generator: &impl NewPayloadId,
 ) -> Result<ForkchoiceUpdatedResponseV1, JsonRpcError> {
     // Spec: https://github.com/ethereum/execution-apis/blob/main/src/engine/cancun.md#specification-1
@@ -69,8 +69,7 @@ async fn inner_execute_v3(
     // Update the state with the new head
     let msg = Command::UpdateHead {
         block_hash: forkchoice_state.head_block_hash,
-    }
-    .into();
+    };
     state_channel.send(msg).await.map_err(access_state_error)?;
 
     let payload_status = PayloadStatusV1 {
@@ -88,8 +87,7 @@ async fn inner_execute_v3(
         let msg = Command::StartBlockBuild {
             payload_attributes,
             payload_id,
-        }
-        .into();
+        };
         state_channel.send(msg).await.map_err(access_state_error)?;
         Some(PayloadId(payload_id))
     } else {

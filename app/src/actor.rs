@@ -1,8 +1,5 @@
 use {
-    crate::{
-        Application, Dependencies, DependenciesThreadSafe,
-        input::{Command, Query, StateMessage},
-    },
+    crate::{Application, Dependencies, DependenciesThreadSafe, input::Command},
     move_core_types::effects::ChangeSet,
     moved_blockchain::{
         payload::{InMemoryPayloadQueries, PayloadId},
@@ -10,10 +7,7 @@ use {
     },
     moved_shared::primitives::B256,
     moved_state::State,
-    std::{
-        ops::{Deref, DerefMut},
-        sync::Arc,
-    },
+    std::{ops::DerefMut, sync::Arc},
     tokio::{
         sync::{RwLock, mpsc::Receiver},
         task::JoinHandle,
@@ -29,112 +23,24 @@ pub type OnTx<S> = dyn Fn(&mut S, ChangeSet) + Send + Sync;
 /// A function invoked on an execution of a new payload.
 pub type OnPayload<S> = dyn Fn(&mut S, PayloadId, B256) + Send + Sync;
 
-pub struct StateActor<D: Dependencies> {
-    rx: Receiver<StateMessage>,
+pub struct CommandActor<D: Dependencies> {
+    rx: Receiver<Command>,
     app: Arc<RwLock<Application<D>>>,
 }
 
-impl<D: DependenciesThreadSafe> StateActor<D> {
+impl<D: DependenciesThreadSafe> CommandActor<D> {
     pub fn spawn(mut self) -> JoinHandle<()> {
         tokio::spawn(async move {
             while let Some(msg) = self.rx.recv().await {
-                match msg {
-                    StateMessage::Command(msg) => Self::handle_command(self.app.write().await, msg),
-                    StateMessage::Query(msg) => Self::handle_query(self.app.read().await, msg),
-                };
+                Self::handle_command(self.app.write().await, msg);
             }
         })
     }
 }
 
-impl<D: Dependencies> StateActor<D> {
-    pub fn new(rx: Receiver<StateMessage>, app: Arc<RwLock<Application<D>>>) -> Self {
+impl<D: Dependencies> CommandActor<D> {
+    pub fn new(rx: Receiver<Command>, app: Arc<RwLock<Application<D>>>) -> Self {
         Self { rx, app }
-    }
-
-    pub fn handle_query(app: impl Deref<Target = Application<D>>, msg: Query) {
-        match msg {
-            Query::ChainId { response_channel } => response_channel.send(app.chain_id()).ok(),
-            Query::BalanceByHeight {
-                address,
-                response_channel,
-                height,
-            } => response_channel
-                .send(app.balance_by_height(address, height))
-                .ok(),
-            Query::NonceByHeight {
-                address,
-                response_channel,
-                height,
-            } => response_channel
-                .send(app.nonce_by_height(address, height))
-                .ok(),
-            Query::BlockByHash {
-                hash,
-                response_channel,
-                include_transactions,
-            } => response_channel
-                .send(app.block_by_hash(hash, include_transactions))
-                .ok(),
-            Query::BlockByHeight {
-                height,
-                response_channel,
-                include_transactions,
-            } => response_channel
-                .send(app.block_by_height(height, include_transactions))
-                .ok(),
-            Query::BlockNumber { response_channel } => {
-                response_channel.send(app.block_number()).ok()
-            }
-            Query::FeeHistory {
-                response_channel,
-                block_count,
-                block_number,
-                reward_percentiles,
-            } => response_channel
-                .send(app.fee_history(block_count, block_number, reward_percentiles))
-                .ok(),
-            Query::EstimateGas {
-                transaction,
-                block_number,
-                response_channel,
-            } => response_channel
-                .send(app.estimate_gas(transaction, block_number))
-                .ok(),
-            Query::Call {
-                transaction,
-                response_channel,
-                block_number,
-            } => response_channel
-                .send(app.call(transaction, block_number))
-                .ok(),
-            Query::TransactionReceipt {
-                tx_hash,
-                response_channel,
-            } => response_channel.send(app.transaction_receipt(tx_hash)).ok(),
-            Query::TransactionByHash {
-                tx_hash,
-                response_channel,
-            } => response_channel.send(app.transaction_by_hash(tx_hash)).ok(),
-            Query::GetProof {
-                address,
-                storage_slots,
-                height,
-                response_channel,
-            } => response_channel
-                .send(app.proof(address, storage_slots, height))
-                .ok(),
-            Query::GetPayload {
-                id: payload_id,
-                response_channel,
-            } => response_channel.send(app.payload(payload_id)).ok(),
-            Query::GetPayloadByBlockHash {
-                block_hash,
-                response_channel,
-            } => response_channel
-                .send(app.payload_by_block_hash(block_hash))
-                .ok(),
-        };
     }
 
     pub fn handle_command(mut app: impl DerefMut<Target = Application<D>>, msg: Command) {
@@ -162,7 +68,7 @@ impl<D: Dependencies> StateActor<D> {
     }
 }
 
-impl<D: Dependencies<StateQueries = InMemoryStateQueries>> StateActor<D> {
+impl<D: Dependencies<StateQueries = InMemoryStateQueries>> CommandActor<D> {
     pub fn on_tx_in_memory() -> &'static OnTx<Application<D>> {
         &|_state, _changes| ()
     }
@@ -176,7 +82,7 @@ impl<D: Dependencies<StateQueries = InMemoryStateQueries>> StateActor<D> {
     }
 }
 
-impl<D: Dependencies<PayloadQueries = InMemoryPayloadQueries>> StateActor<D> {
+impl<D: Dependencies<PayloadQueries = InMemoryPayloadQueries>> CommandActor<D> {
     pub fn on_payload_in_memory() -> &'static OnPayload<Application<D>> {
         &|state, payload_id, block_hash| {
             state.payload_queries.add_block_hash(payload_id, block_hash)

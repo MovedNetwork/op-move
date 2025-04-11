@@ -1,7 +1,7 @@
 use {
     crate::dependency::shared::*,
     move_core_types::effects::ChangeSet,
-    moved_app::{Application, StateActor},
+    moved_app::{Application, CommandActor},
     moved_genesis::config::GenesisConfig,
     moved_state::State,
 };
@@ -44,7 +44,7 @@ impl moved_app::Dependencies for RocksDbDependencies {
     }
 
     fn on_tx() -> &'static Self::OnTx {
-        StateActor::on_tx_noop()
+        CommandActor::on_tx_noop()
     }
 
     fn on_tx_batch() -> &'static Self::OnTxBatch {

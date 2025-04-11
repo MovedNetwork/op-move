@@ -28,7 +28,7 @@ mod tests {
             methods::{forkchoice_updated, get_payload, send_raw_transaction, tests::create_app},
             schema::{ForkchoiceUpdatedResponseV1, GetPayloadResponseV3},
         },
-        moved_app::{StateActor, TestDependencies},
+        moved_app::{CommandActor, TestDependencies},
         serde_json::json,
         std::iter,
         tokio::sync::mpsc,
@@ -38,7 +38,7 @@ mod tests {
     async fn test_execute() {
         let app = create_app();
         let (state_channel, rx) = mpsc::channel(10);
-        let state: StateActor<TestDependencies> = StateActor::new(rx, app.clone());
+        let state: CommandActor<TestDependencies> = CommandActor::new(rx, app.clone());
         let state_handle = state.spawn();
 
         // 1. Send transaction

@@ -26,7 +26,7 @@ mod tests {
         super::*,
         crate::methods::tests::create_app,
         alloy::eips::BlockNumberOrTag::{self, *},
-        moved_app::{Command, StateActor, TestDependencies},
+        moved_app::{Command, CommandActor, TestDependencies},
         moved_shared::primitives::U64,
         test_case::test_case,
         tokio::sync::mpsc,
@@ -89,7 +89,7 @@ mod tests {
     async fn test_latest_block_height_is_updated_with_newly_built_block() {
         let (state_channel, rx) = mpsc::channel(10);
         let app = create_app();
-        let state: StateActor<TestDependencies> = StateActor::new(rx, app.clone());
+        let state: CommandActor<TestDependencies> = CommandActor::new(rx, app.clone());
         let state_handle = state.spawn();
 
         let request = example_request(Latest);
@@ -100,8 +100,7 @@ mod tests {
         let msg = Command::StartBlockBuild {
             payload_attributes: Default::default(),
             payload_id: U64::from(0x03421ee50df45cacu64),
-        }
-        .into();
+        };
         state_channel.send(msg).await.unwrap();
         drop(state_channel);
         state_handle.await.unwrap();
@@ -118,14 +117,13 @@ mod tests {
     async fn test_latest_block_height_is_same_as_tag(tag: BlockNumberOrTag) {
         let (state_channel, rx) = mpsc::channel(10);
         let app = create_app();
-        let state: StateActor<TestDependencies> = StateActor::new(rx, app.clone());
+        let state: CommandActor<TestDependencies> = CommandActor::new(rx, app.clone());
         let state_handle = state.spawn();
 
         let msg = Command::StartBlockBuild {
             payload_attributes: Default::default(),
             payload_id: U64::from(0x03421ee50df45cacu64),
-        }
-        .into();
+        };
         state_channel.send(msg).await.unwrap();
         drop(state_channel);
         state_handle.await.unwrap();

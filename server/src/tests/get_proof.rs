@@ -5,7 +5,7 @@ use {
         ForkchoiceUpdatedResponseV1, GetBlockResponse, GetPayloadResponseV3, PayloadStatusV1,
         Status,
     },
-    moved_app::{Application, Dependencies, StateActor, StateMessage},
+    moved_app::{Application, Command, CommandActor, Dependencies},
     moved_blockchain::{payload::StatePayloadId, state::ProofResponse},
     moved_evm_ext::state,
     moved_genesis::config::GenesisConfig,
@@ -20,7 +20,7 @@ async fn test_get_proof() -> anyhow::Result<()> {
     let genesis_config = GenesisConfig::default();
     let app = initialize_app(genesis_config);
     let app = Arc::new(RwLock::new(app));
-    let state_actor = StateActor::new(rx, app.clone());
+    let state_actor = CommandActor::new(rx, app.clone());
 
     let state_task = state_actor.spawn();
 
@@ -162,7 +162,7 @@ async fn test_get_proof() -> anyhow::Result<()> {
 
 async fn handle_request<T: DeserializeOwned>(
     request: serde_json::Value,
-    state_channel: &mpsc::Sender<StateMessage>,
+    state_channel: &mpsc::Sender<Command>,
     app: &Arc<RwLock<Application<impl Dependencies>>>,
 ) -> anyhow::Result<T> {
     let response = moved_api::request::handle(

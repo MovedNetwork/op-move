@@ -4,7 +4,7 @@ use {
     flate2::read::GzDecoder,
     jsonwebtoken::{DecodingKey, Validation},
     moved_api::method_name::MethodName,
-    moved_app::{Application, Command, Dependencies, StateActor, StateMessage},
+    moved_app::{Application, Command, CommandActor, Dependencies},
     moved_blockchain::{
         block::{Block, BlockHash, BlockRepository, ExtendedBlock, Header},
         payload::{NewPayloadId, StatePayloadId},
@@ -82,7 +82,7 @@ pub async fn run() {
 
     let app = initialize_app(genesis_config);
     let app = Arc::new(RwLock::with_max_readers(app, 4));
-    let state = StateActor::new(rx, app.clone());
+    let state = CommandActor::new(rx, app.clone());
 
     let http_app = app.clone();
     let http_state_channel = state_channel.clone();
@@ -171,16 +171,6 @@ pub fn initialize_app(genesis_config: GenesisConfig) -> Application<dependency::
     app
 }
 
-pub fn initialize_state_actor(
-    genesis_config: GenesisConfig,
-    rx: mpsc::Receiver<StateMessage>,
-) -> StateActor<dependency::Dependency> {
-    let app = initialize_app(genesis_config);
-    let app = Arc::new(RwLock::new(app));
-
-    StateActor::new(rx, app)
-}
-
 fn create_genesis_block(
     block_hash: &impl BlockHash,
     genesis_config: &GenesisConfig,
@@ -220,7 +210,7 @@ pub fn validate_jwt() -> impl Filter<Extract = (String,), Error = Rejection> + C
 }
 
 async fn mirror(
-    state_channel: mpsc::Sender<StateMessage>,
+    state_channel: mpsc::Sender<Command>,
     request: Request,
     port: &str,
     is_allowed: impl Fn(&MethodName) -> bool,
@@ -295,7 +285,7 @@ async fn mirror(
         let block = geth_genesis::extract_genesis_block(&parsed_geth_response)
             .expect("Must get genesis from geth");
         state_channel
-            .send(Command::GenesisUpdate { block }.into())
+            .send(Command::GenesisUpdate { block })
             .await
             .ok();
         let body = hyper::Body::from(geth_response_bytes);

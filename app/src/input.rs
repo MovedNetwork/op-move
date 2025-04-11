@@ -1,19 +1,10 @@
 use {
-    alloy::{
-        consensus::transaction::TxEnvelope,
-        eips::{BlockId, BlockNumberOrTag},
-        primitives::Bloom,
-        rpc::types::{FeeHistory, TransactionRequest},
-    },
+    alloy::{consensus::transaction::TxEnvelope, primitives::Bloom},
     moved_blockchain::{
-        block::{BlockResponse, ExtendedBlock, Header},
-        payload::{NewPayloadIdInput, PayloadId, PayloadResponse},
-        receipt::TransactionReceipt,
-        state::ProofResponse,
-        transaction::TransactionResponse,
+        block::{ExtendedBlock, Header},
+        payload::{NewPayloadIdInput, PayloadId},
     },
     moved_shared::primitives::{Address, B256, B2048, Bytes, ToU64, U64, U256},
-    tokio::sync::oneshot,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -30,12 +21,6 @@ pub struct Payload {
 pub type Withdrawal = alloy::rpc::types::Withdrawal;
 
 #[derive(Debug)]
-pub enum StateMessage {
-    Command(Command),
-    Query(Query),
-}
-
-#[derive(Debug)]
 pub enum Command {
     UpdateHead {
         block_hash: B256,
@@ -50,86 +35,6 @@ pub enum Command {
     GenesisUpdate {
         block: ExtendedBlock,
     },
-}
-
-impl From<Command> for StateMessage {
-    fn from(value: Command) -> Self {
-        Self::Command(value)
-    }
-}
-
-#[derive(Debug)]
-pub enum Query {
-    ChainId {
-        response_channel: oneshot::Sender<u64>,
-    },
-    BalanceByHeight {
-        address: Address,
-        height: BlockNumberOrTag,
-        response_channel: oneshot::Sender<Option<U256>>,
-    },
-    NonceByHeight {
-        address: Address,
-        height: BlockNumberOrTag,
-        response_channel: oneshot::Sender<Option<u64>>,
-    },
-    BlockByHash {
-        hash: B256,
-        include_transactions: bool,
-        response_channel: oneshot::Sender<Option<BlockResponse>>,
-    },
-    BlockByHeight {
-        height: BlockNumberOrTag,
-        include_transactions: bool,
-        response_channel: oneshot::Sender<Option<BlockResponse>>,
-    },
-    BlockNumber {
-        response_channel: oneshot::Sender<u64>,
-    },
-    FeeHistory {
-        block_count: u64,
-        block_number: BlockNumberOrTag,
-        reward_percentiles: Option<Vec<f64>>,
-        response_channel: oneshot::Sender<FeeHistory>,
-    },
-    EstimateGas {
-        transaction: TransactionRequest,
-        block_number: BlockNumberOrTag,
-        response_channel: oneshot::Sender<moved_shared::error::Result<u64>>,
-    },
-    Call {
-        transaction: TransactionRequest,
-        block_number: BlockNumberOrTag,
-        response_channel: oneshot::Sender<moved_shared::error::Result<Vec<u8>>>,
-    },
-    TransactionReceipt {
-        tx_hash: B256,
-        response_channel: oneshot::Sender<Option<TransactionReceipt>>,
-    },
-    TransactionByHash {
-        tx_hash: B256,
-        response_channel: oneshot::Sender<Option<TransactionResponse>>,
-    },
-    GetProof {
-        address: Address,
-        storage_slots: Vec<U256>,
-        height: BlockId,
-        response_channel: oneshot::Sender<Option<ProofResponse>>,
-    },
-    GetPayload {
-        id: PayloadId,
-        response_channel: oneshot::Sender<Option<PayloadResponse>>,
-    },
-    GetPayloadByBlockHash {
-        block_hash: B256,
-        response_channel: oneshot::Sender<Option<PayloadResponse>>,
-    },
-}
-
-impl From<Query> for StateMessage {
-    fn from(value: Query) -> Self {
-        Self::Query(value)
-    }
 }
 
 pub type RpcBlock = alloy::rpc::types::Block<RpcTransaction>;

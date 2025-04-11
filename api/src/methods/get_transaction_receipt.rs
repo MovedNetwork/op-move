@@ -24,7 +24,7 @@ mod tests {
             methods::{forkchoice_updated, get_payload, send_raw_transaction, tests::create_app},
             schema::{ForkchoiceUpdatedResponseV1, GetPayloadResponseV3},
         },
-        moved_app::StateActor,
+        moved_app::CommandActor,
         moved_blockchain::receipt::TransactionReceipt,
         std::iter,
         tokio::sync::mpsc,
@@ -34,7 +34,7 @@ mod tests {
     async fn test_execute() {
         let (state_channel, rx) = mpsc::channel(10);
         let app = create_app();
-        let state_actor = StateActor::new(rx, app.clone());
+        let state_actor = CommandActor::new(rx, app.clone());
         let state_handle = state_actor.spawn();
 
         // 1. Send transaction

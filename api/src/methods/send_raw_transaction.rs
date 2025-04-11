@@ -4,14 +4,14 @@ use {
         jsonrpc::JsonRpcError,
     },
     alloy::{consensus::transaction::TxEnvelope, rlp::Decodable},
-    moved_app::{Command, StateMessage},
+    moved_app::Command,
     moved_shared::primitives::{B256, Bytes},
     tokio::sync::mpsc,
 };
 
 pub async fn execute(
     request: serde_json::Value,
-    state_channel: mpsc::Sender<StateMessage>,
+    state_channel: mpsc::Sender<Command>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let tx = parse_params(request)?;
     let response = inner_execute(tx, state_channel).await?;
@@ -46,11 +46,11 @@ fn parse_params(request: serde_json::Value) -> Result<TxEnvelope, JsonRpcError> 
 
 async fn inner_execute(
     tx: TxEnvelope,
-    state_channel: mpsc::Sender<StateMessage>,
+    state_channel: mpsc::Sender<Command>,
 ) -> Result<B256, JsonRpcError> {
     let tx_hash = tx.tx_hash().0.into();
 
-    let msg = Command::AddTransaction { tx }.into();
+    let msg = Command::AddTransaction { tx };
     state_channel.send(msg).await.map_err(access_state_error)?;
 
     Ok(tx_hash)

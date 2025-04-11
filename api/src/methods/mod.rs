@@ -30,8 +30,7 @@ pub mod tests {
         },
         move_core_types::account_address::AccountAddress,
         moved_app::{
-            Application, Command, DependenciesThreadSafe, Payload, StateActor, StateMessage,
-            TestDependencies,
+            Application, Command, CommandActor, DependenciesThreadSafe, Payload, TestDependencies,
         },
         moved_blockchain::{
             block::{
@@ -62,14 +61,11 @@ pub mod tests {
     /// The address corresponding to this private key is 0x8fd379246834eac74B8419FfdA202CF8051F7A03
     pub const PRIVATE_KEY: [u8; 32] = [0xaa; 32];
 
-    pub fn create_state_actor() -> (
-        StateActor<impl DependenciesThreadSafe>,
-        Sender<StateMessage>,
-    ) {
+    pub fn create_state_actor() -> (CommandActor<impl DependenciesThreadSafe>, Sender<Command>) {
         let (state_channel, rx) = mpsc::channel(10);
         let app = create_app();
 
-        let state: StateActor<TestDependencies> = StateActor::new(rx, app);
+        let state: CommandActor<TestDependencies> = CommandActor::new(rx, app);
         (state, state_channel)
     }
 
@@ -110,9 +106,9 @@ pub mod tests {
             block_hash: MovedBlockHash,
             block_queries: InMemoryBlockQueries,
             block_repository: repository,
-            on_payload: StateActor::on_payload_in_memory(),
-            on_tx: StateActor::on_tx_noop(),
-            on_tx_batch: StateActor::on_tx_batch_noop(),
+            on_payload: CommandActor::on_payload_in_memory(),
+            on_tx: CommandActor::on_tx_noop(),
+            on_tx_batch: CommandActor::on_tx_batch_noop(),
             payload_queries: InMemoryPayloadQueries::new(),
             receipt_queries: InMemoryReceiptQueries::new(),
             receipt_repository: InMemoryReceiptRepository::new(),
@@ -126,7 +122,7 @@ pub mod tests {
         }))
     }
 
-    pub async fn deposit_eth(to: &str, channel: &Sender<StateMessage>) {
+    pub async fn deposit_eth(to: &str, channel: &Sender<Command>) {
         let to = Address::from_hex(to).unwrap();
         let amount = parse_ether("1").unwrap();
         let tx = ExtendedTxEnvelope::DepositedTx(DepositedTx {
@@ -148,12 +144,11 @@ pub mod tests {
         let msg = Command::StartBlockBuild {
             payload_attributes,
             payload_id: U64::from(0x03421ee50df45cacu64),
-        }
-        .into();
+        };
         channel.send(msg).await.map_err(access_state_error).unwrap();
     }
 
-    pub async fn deploy_contract(contract_bytes: Bytes, channel: &Sender<StateMessage>) {
+    pub async fn deploy_contract(contract_bytes: Bytes, channel: &Sender<Command>) {
         let mut tx = TxEip1559 {
             chain_id: CHAIN_ID,
             nonce: 0,
@@ -179,8 +174,7 @@ pub mod tests {
         let msg = Command::StartBlockBuild {
             payload_attributes,
             payload_id: U64::from(0x03421ee50df45cacu64),
-        }
-        .into();
+        };
         channel.send(msg).await.map_err(access_state_error).unwrap();
     }
 
@@ -205,9 +199,9 @@ pub mod tests {
             block_hash: MovedBlockHash,
             block_queries: (),
             block_repository: (),
-            on_payload: StateActor::on_payload_noop(),
-            on_tx: StateActor::on_tx_noop(),
-            on_tx_batch: StateActor::on_tx_batch_noop(),
+            on_payload: CommandActor::on_payload_noop(),
+            on_tx: CommandActor::on_tx_noop(),
+            on_tx_batch: CommandActor::on_tx_batch_noop(),
             payload_queries: (),
             receipt_queries: (),
             receipt_repository: (),
@@ -219,18 +213,5 @@ pub mod tests {
             transaction_queries: (),
             transaction_repository: (),
         }))
-    }
-
-    #[allow(clippy::type_complexity)]
-    pub fn create_state_actor_with_mock_state_queries(
-        address: AccountAddress,
-        height: u64,
-    ) -> (
-        StateActor<impl DependenciesThreadSafe<State = InMemoryState>>,
-        Sender<StateMessage>,
-    ) {
-        let (state_channel, rx) = mpsc::channel(10);
-        let state = StateActor::new(rx, create_app_with_mock_state_queries(address, height));
-        (state, state_channel)
     }
 }

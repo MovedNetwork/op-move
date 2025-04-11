@@ -1,23 +1,23 @@
 use {
-    crate::{
-        json_utils,
-        json_utils::{access_state_error, transaction_error},
-        jsonrpc::JsonRpcError,
-    },
+    crate::{json_utils, json_utils::transaction_error, jsonrpc::JsonRpcError},
     alloy::{eips::BlockNumberOrTag, rpc::types::TransactionRequest},
-    moved_app::{Query, StateMessage},
-    tokio::sync::{mpsc, oneshot},
+    moved_app::{Application, Dependencies},
+    std::sync::Arc,
+    tokio::sync::RwLock,
 };
 
 const BASE_FEE: u64 = 21_000;
 
 pub async fn execute(
     request: serde_json::Value,
-    state_channel: mpsc::Sender<StateMessage>,
+    app: &Arc<RwLock<Application<impl Dependencies>>>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let (transaction, block_number) = parse_params(request)?;
     let response = std::cmp::max(
-        inner_execute(transaction, block_number, state_channel).await?,
+        app.read()
+            .await
+            .estimate_gas(transaction, block_number)
+            .map_err(transaction_error)?,
         BASE_FEE,
     );
 
@@ -53,32 +53,17 @@ fn parse_params(
     }
 }
 
-async fn inner_execute(
-    transaction: TransactionRequest,
-    block_number: BlockNumberOrTag,
-    state_channel: mpsc::Sender<StateMessage>,
-) -> Result<u64, JsonRpcError> {
-    let (tx, rx) = oneshot::channel();
-    let msg = Query::EstimateGas {
-        transaction,
-        block_number,
-        response_channel: tx,
-    }
-    .into();
-    state_channel.send(msg).await.map_err(access_state_error)?;
-    let response = rx.await.map_err(access_state_error)?;
-    response.map_err(transaction_error)
-}
-
 #[cfg(test)]
 mod tests {
     use {
         super::*,
-        crate::methods::tests::{create_state_actor, deposit_eth},
+        crate::methods::tests::{create_app, deposit_eth},
         alloy::primitives::Address,
+        moved_app::StateActor,
         moved_shared::primitives::U64,
         std::str::FromStr,
         test_case::test_case,
+        tokio::sync::mpsc,
     };
 
     #[test]
@@ -132,7 +117,9 @@ mod tests {
     #[test_case("pending")]
     #[tokio::test]
     async fn test_execute(block: &str) {
-        let (state_actor, state_channel) = create_state_actor();
+        let (state_channel, rx) = mpsc::channel(10);
+        let app = create_app();
+        let state_actor = StateActor::new(rx, app.clone());
         let state_handle = state_actor.spawn();
 
         deposit_eth("0x8fd379246834eac74b8419ffda202cf8051f7a03", &state_channel).await;
@@ -150,10 +137,12 @@ mod tests {
             "id": 1
         });
 
-        let expected_response: serde_json::Value = serde_json::from_str(r#""0x5208""#).unwrap();
-        let response = execute(request, state_channel).await.unwrap();
-
-        assert_eq!(response, expected_response);
+        drop(state_channel);
         state_handle.await.unwrap();
+
+        let expected_response: serde_json::Value = serde_json::from_str(r#""0x5208""#).unwrap();
+        let actual_response = execute(request, &app).await.unwrap();
+
+        assert_eq!(actual_response, expected_response);
     }
 }

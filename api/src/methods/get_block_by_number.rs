@@ -1,45 +1,35 @@
 use {
-    crate::{
-        json_utils::{access_state_error, parse_params_2},
-        jsonrpc::JsonRpcError,
-        schema::{BlockNumberOrTag, GetBlockResponse},
-    },
-    moved_app::{Query, StateMessage},
-    tokio::sync::{mpsc, oneshot},
+    crate::{json_utils::parse_params_2, jsonrpc::JsonRpcError, schema::GetBlockResponse},
+    moved_app::{Application, Dependencies},
+    std::sync::Arc,
+    tokio::sync::RwLock,
 };
 
 pub async fn execute(
     request: serde_json::Value,
-    state_channel: mpsc::Sender<StateMessage>,
+    app: &Arc<RwLock<Application<impl Dependencies>>>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let (number, include_transactions) = parse_params_2(request)?;
-    let response = inner_execute(number, include_transactions, state_channel).await?;
+
+    let response = app
+        .read()
+        .await
+        .block_by_height(number, include_transactions)
+        .map(GetBlockResponse::from);
+
     Ok(serde_json::to_value(response).expect("Must be able to JSON-serialize response"))
-}
-
-async fn inner_execute(
-    height: BlockNumberOrTag,
-    include_transactions: bool,
-    state_channel: mpsc::Sender<StateMessage>,
-) -> Result<Option<GetBlockResponse>, JsonRpcError> {
-    let (response_channel, rx) = oneshot::channel();
-    let msg = Query::BlockByHeight {
-        height,
-        include_transactions,
-        response_channel,
-    }
-    .into();
-    state_channel.send(msg).await.map_err(access_state_error)?;
-    let maybe_response = rx.await.map_err(access_state_error)?;
-
-    Ok(maybe_response.map(GetBlockResponse::from))
 }
 
 #[cfg(test)]
 mod tests {
     use {
-        super::*, crate::methods::tests::create_state_actor, alloy::eips::BlockNumberOrTag::*,
-        moved_app::Command, moved_shared::primitives::U64, test_case::test_case,
+        super::*,
+        crate::methods::tests::create_app,
+        alloy::eips::BlockNumberOrTag::{self, *},
+        moved_app::{Command, StateActor, TestDependencies},
+        moved_shared::primitives::U64,
+        test_case::test_case,
+        tokio::sync::mpsc,
     };
 
     pub fn example_request(tag: BlockNumberOrTag) -> serde_json::Value {
@@ -64,8 +54,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_reads_genesis_block_successfully() {
-        let (state, state_channel) = create_state_actor();
-        let state_handle = state.spawn();
+        let app = create_app();
         let request = example_request(Number(0));
 
         let expected_response: serde_json::Value = serde_json::from_str(r#"
@@ -91,19 +80,20 @@ mod tests {
             "withdrawals": []
         }"#).unwrap();
 
-        let response = execute(request, state_channel).await.unwrap();
+        let response = execute(request, &app).await.unwrap();
 
         assert_eq!(response, expected_response);
-        state_handle.await.unwrap();
     }
 
     #[tokio::test]
     async fn test_latest_block_height_is_updated_with_newly_built_block() {
-        let (state, state_channel) = create_state_actor();
+        let (state_channel, rx) = mpsc::channel(10);
+        let app = create_app();
+        let state: StateActor<TestDependencies> = StateActor::new(rx, app.clone());
         let state_handle = state.spawn();
 
         let request = example_request(Latest);
-        let response = execute(request, state_channel.clone()).await.unwrap();
+        let response = execute(request, &app).await.unwrap();
         assert_eq!(get_block_number_from_response(response), "0x0");
 
         // Create a block, so the block height becomes 1
@@ -113,11 +103,12 @@ mod tests {
         }
         .into();
         state_channel.send(msg).await.unwrap();
+        drop(state_channel);
+        state_handle.await.unwrap();
 
         let request = example_request(Latest);
-        let response = execute(request, state_channel).await.unwrap();
+        let response = execute(request, &app).await.unwrap();
         assert_eq!(get_block_number_from_response(response), "0x1");
-        state_handle.await.unwrap();
     }
 
     #[test_case(Safe; "safe")]
@@ -125,7 +116,9 @@ mod tests {
     #[test_case(Finalized; "finalized")]
     #[tokio::test]
     async fn test_latest_block_height_is_same_as_tag(tag: BlockNumberOrTag) {
-        let (state, state_channel) = create_state_actor();
+        let (state_channel, rx) = mpsc::channel(10);
+        let app = create_app();
+        let state: StateActor<TestDependencies> = StateActor::new(rx, app.clone());
         let state_handle = state.spawn();
 
         let msg = Command::StartBlockBuild {
@@ -134,10 +127,11 @@ mod tests {
         }
         .into();
         state_channel.send(msg).await.unwrap();
+        drop(state_channel);
+        state_handle.await.unwrap();
 
         let request = example_request(tag);
-        let response = execute(request, state_channel).await.unwrap();
+        let response = execute(request, &app).await.unwrap();
         assert_eq!(get_block_number_from_response(response), "0x1");
-        state_handle.await.unwrap();
     }
 }

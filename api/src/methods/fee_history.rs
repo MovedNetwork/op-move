@@ -1,17 +1,22 @@
 use {
-    crate::{json_utils, json_utils::access_state_error, jsonrpc::JsonRpcError},
-    alloy::{eips::BlockNumberOrTag, rpc::types::FeeHistory},
-    moved_app::{Query, StateMessage},
-    tokio::sync::{mpsc, oneshot},
+    crate::{json_utils, jsonrpc::JsonRpcError},
+    alloy::eips::BlockNumberOrTag,
+    moved_app::{Application, Dependencies},
+    std::sync::Arc,
+    tokio::sync::RwLock,
 };
 
 pub async fn execute(
     request: serde_json::Value,
-    state_channel: mpsc::Sender<StateMessage>,
+    app: &Arc<RwLock<Application<impl Dependencies>>>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let (block_count, block_number, reward_percentiles) = parse_params(request)?;
-    let response =
-        inner_execute(block_count, block_number, reward_percentiles, state_channel).await?;
+
+    let response = app
+        .read()
+        .await
+        .fee_history(block_count, block_number, reward_percentiles);
+
     Ok(serde_json::to_value(response).expect("Must be able to JSON-serialize response"))
 }
 
@@ -64,29 +69,10 @@ fn parse_block_count(value: &serde_json::Value) -> Result<u64, JsonRpcError> {
     })
 }
 
-async fn inner_execute(
-    block_count: u64,
-    block_number: BlockNumberOrTag,
-    reward_percentiles: Option<Vec<f64>>,
-    state_channel: mpsc::Sender<StateMessage>,
-) -> Result<FeeHistory, JsonRpcError> {
-    let (tx, rx) = oneshot::channel();
-    let msg = Query::FeeHistory {
-        block_count,
-        block_number,
-        reward_percentiles,
-        response_channel: tx,
-    }
-    .into();
-    state_channel.send(msg).await.map_err(access_state_error)?;
-    let response = rx.await.map_err(access_state_error)?;
-    Ok(response)
-}
-
 #[cfg(test)]
 mod tests {
     use {
-        super::*, crate::methods::tests::create_state_actor, moved_shared::primitives::U64,
+        super::*, crate::methods::tests::create_app, moved_shared::primitives::U64,
         std::str::FromStr, test_case::test_case,
     };
 
@@ -171,9 +157,8 @@ mod tests {
     #[test_case("pending")]
     #[tokio::test]
     async fn test_execute(block: &str) {
-        let (state_actor, state_channel) = create_state_actor();
+        let app = create_app();
 
-        let state_handle = state_actor.spawn();
         let request: serde_json::Value = serde_json::json!({
             "jsonrpc": "2.0",
             "method": "eth_feeHistory",
@@ -189,9 +174,8 @@ mod tests {
 
         let expected_response: serde_json::Value =
             serde_json::json!({"gasUsedRatio": [], "oldestBlock": "0x0"});
-        let response = execute(request, state_channel).await.unwrap();
+        let response = execute(request, &app).await.unwrap();
 
         assert_eq!(response, expected_response);
-        state_handle.await.unwrap();
     }
 }

@@ -1,7 +1,7 @@
 use {
     self::erc20_factory::OptimismMintableERC20Factory::OptimismMintableERC20Created,
     super::*,
-    alloy::sol_types::SolEvent,
+    alloy::sol_types::{SolCall, SolEvent, SolValue},
     move_vm_runtime::session::SerializedReturnValues,
     moved_evm_ext::{extract_evm_result, EVM_NATIVE_ADDRESS},
     moved_shared::primitives::{ToEthAddress, ToMoveU256},
@@ -246,6 +246,41 @@ pub async fn l2_erc20_balance_of(token: Address, account: Address, rpc_url: &str
     let evm_result = extract_evm_result(return_values);
 
     Ok(U256::from_be_slice(&evm_result.output))
+}
+
+pub async fn l2_name_check(address: Address, rpc_url: &str) -> Result<String> {
+    let provider = ProviderBuilder::new().on_http(Url::parse(rpc_url)?);
+
+    let args = vec![
+        // The caller here does not matter because it is a view call.
+        MoveValue::Address(EVM_NATIVE_ADDRESS)
+            .simple_serialize()
+            .unwrap(),
+        MoveValue::Address(address.to_move_address())
+            .simple_serialize()
+            .unwrap(),
+    ];
+    let function_call = EntryFunction::new(
+        ModuleId::new(EVM_NATIVE_ADDRESS, ident_str!("erc20").into()),
+        ident_str!("name").into(),
+        Vec::new(),
+        args,
+    );
+    let tx_data = TransactionData::EntryFunction(function_call);
+    let data = bcs::to_bytes(&tx_data)?;
+    let eth_call_result = CallBuilder::<(), _, _, _>::new_raw(provider, data.into())
+        .to(EVM_NATIVE_ADDRESS.to_eth_address())
+        .call()
+        .await?;
+    let return_values = SerializedReturnValues {
+        mutable_reference_outputs: Vec::new(),
+        return_values: bcs::from_bytes(&eth_call_result)?,
+    };
+    let evm_result = extract_evm_result(return_values);
+    dbg!(&evm_result);
+    let name = evm_result.output;
+    eprintln!("Finished checking name");
+    Ok(String::abi_decode(&name, true).unwrap())
 }
 
 pub async fn l2_erc20_allowance(

@@ -151,12 +151,12 @@ module L2CrossDomainMessenger::l2_cross_domain_messenger {
     }
 
     struct FailedMessagesArgs {
-        key: vector<u8>,
+        key: Evm::evm::SolidityFixedBytes<Evm::evm::B32>,
     }
 
     public fun failed_messages(
         caller: &signer,
-        key: vector<u8>,
+        key: Evm::evm::SolidityFixedBytes<Evm::evm::B32>,
     ): EvmResult {
         let _value = zero(get_metadata());
         let arg_struct = FailedMessagesArgs {
@@ -307,12 +307,12 @@ module L2CrossDomainMessenger::l2_cross_domain_messenger {
     }
 
     struct SuccessfulMessagesArgs {
-        key: vector<u8>,
+        key: Evm::evm::SolidityFixedBytes<Evm::evm::B32>,
     }
 
     public fun successful_messages(
         caller: &signer,
-        key: vector<u8>,
+        key: Evm::evm::SolidityFixedBytes<Evm::evm::B32>,
     ): EvmResult {
         let _value = zero(get_metadata());
         let arg_struct = SuccessfulMessagesArgs {

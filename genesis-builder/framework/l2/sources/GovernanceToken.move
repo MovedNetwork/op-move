@@ -244,8 +244,8 @@ module GovernanceToken::governance_token {
         nonce: u256,
         expiry: u256,
         v: u8,
-        r: vector<u8>,
-        s: vector<u8>,
+        r: Evm::evm::SolidityFixedBytes<Evm::evm::B32>,
+        s: Evm::evm::SolidityFixedBytes<Evm::evm::B32>,
     }
 
     public fun delegate_by_sig(
@@ -254,8 +254,8 @@ module GovernanceToken::governance_token {
         nonce: u256,
         expiry: u256,
         v: u8,
-        r: vector<u8>,
-        s: vector<u8>,
+        r: Evm::evm::SolidityFixedBytes<Evm::evm::B32>,
+        s: Evm::evm::SolidityFixedBytes<Evm::evm::B32>,
     ): EvmResult {
         let _value = zero(get_metadata());
         let arg_struct = DelegateBySigArgs {
@@ -511,8 +511,8 @@ module GovernanceToken::governance_token {
         value: u256,
         deadline: u256,
         v: u8,
-        r: vector<u8>,
-        s: vector<u8>,
+        r: Evm::evm::SolidityFixedBytes<Evm::evm::B32>,
+        s: Evm::evm::SolidityFixedBytes<Evm::evm::B32>,
     }
 
     public fun permit(
@@ -522,8 +522,8 @@ module GovernanceToken::governance_token {
         value: u256,
         deadline: u256,
         v: u8,
-        r: vector<u8>,
-        s: vector<u8>,
+        r: Evm::evm::SolidityFixedBytes<Evm::evm::B32>,
+        s: Evm::evm::SolidityFixedBytes<Evm::evm::B32>,
     ): EvmResult {
         let _value = zero(get_metadata());
         let arg_struct = PermitArgs {

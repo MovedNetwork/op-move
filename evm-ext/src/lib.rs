@@ -8,11 +8,15 @@ pub use self::{
 };
 
 use {
+    crate::events::EVM_LOG_LAYOUT,
     move_core_types::{
-        account_address::AccountAddress, ident_str, identifier::IdentStr, value::MoveTypeLayout,
+        account_address::AccountAddress,
+        ident_str,
+        identifier::IdentStr,
+        value::{MoveStructLayout, MoveTypeLayout},
     },
     revm::primitives::Log,
-    std::sync::LazyLock,
+    std::{clone::Clone, sync::LazyLock},
 };
 
 pub mod events;
@@ -32,6 +36,14 @@ pub const EVM_NATIVE_MODULE: &IdentStr = ident_str!("evm");
 /// Layout for EVM byte code. It is simply a byte vector because we store the raw bytes directly.
 pub static CODE_LAYOUT: LazyLock<MoveTypeLayout> =
     LazyLock::new(|| MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)));
+
+pub static EVM_NATIVE_OUTCOME_LAYOUT: LazyLock<MoveTypeLayout> = LazyLock::new(|| {
+    MoveTypeLayout::Struct(MoveStructLayout::Runtime(vec![
+        MoveTypeLayout::Bool,
+        CODE_LAYOUT.clone(),
+        MoveTypeLayout::Vector(Box::new(EVM_LOG_LAYOUT.clone())),
+    ]))
+});
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EvmNativeOutcome {

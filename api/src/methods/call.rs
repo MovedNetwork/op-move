@@ -107,7 +107,7 @@ mod tests {
         drop(state_channel);
         state_handle.await.unwrap();
 
-        let expected_response = serde_json::json!([1, 1, 0, 0]);
+        let expected_response = serde_json::json!([1, 1, 0]);
         let actual_response = execute(request, &app).await.unwrap();
 
         assert_eq!(actual_response, expected_response);

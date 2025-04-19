@@ -78,13 +78,17 @@ pub static EVM_LOGS_EVENT_TAG: LazyLock<StructTag> = LazyLock::new(|| StructTag 
     type_args: Vec::new(),
 });
 
+pub static EVM_LOG_LAYOUT: LazyLock<MoveTypeLayout> = LazyLock::new(|| {
+    MoveTypeLayout::Struct(MoveStructLayout::Runtime(vec![
+        MoveTypeLayout::Address,                                // address
+        MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U256)), // topics
+        MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),   // data
+    ]))
+});
+
 pub static EVM_LOGS_EVENT_LAYOUT: LazyLock<MoveTypeLayout> = LazyLock::new(|| {
     MoveTypeLayout::Struct(MoveStructLayout::Runtime(vec![MoveTypeLayout::Vector(
-        Box::new(MoveTypeLayout::Struct(MoveStructLayout::Runtime(vec![
-            MoveTypeLayout::Address,                                // address
-            MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U256)), // topics
-            MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),   // data
-        ]))),
+        Box::new(EVM_LOG_LAYOUT.clone()),
     )]))
 });
 

@@ -3,7 +3,7 @@ use {
     super::*,
     alloy::sol_types::SolEvent,
     move_vm_runtime::session::SerializedReturnValues,
-    moved_evm_ext::{extract_evm_result, EVM_NATIVE_ADDRESS},
+    moved_evm_ext::{extract_evm_result, EVM_NATIVE_ADDRESS, EVM_NATIVE_OUTCOME_LAYOUT},
     moved_shared::primitives::{ToEthAddress, ToMoveU256},
 };
 
@@ -239,9 +239,14 @@ pub async fn l2_erc20_balance_of(token: Address, account: Address, rpc_url: &str
         .call()
         .await?;
 
+    // Extract the first result and combine with EVM result layout for deserialization
+    let output: Vec<Vec<u8>> = bcs::from_bytes(&eth_call_result)?;
     let return_values = SerializedReturnValues {
         mutable_reference_outputs: Vec::new(),
-        return_values: bcs::from_bytes(&eth_call_result)?,
+        return_values: Vec::from([(
+            output.first().unwrap().to_owned(),
+            EVM_NATIVE_OUTCOME_LAYOUT.clone(),
+        )]),
     };
     let evm_result = extract_evm_result(return_values);
 
@@ -284,9 +289,13 @@ pub async fn l2_erc20_allowance(
         .call()
         .await?;
 
+    let output: Vec<Vec<u8>> = bcs::from_bytes(&eth_call_result)?;
     let return_values = SerializedReturnValues {
         mutable_reference_outputs: Vec::new(),
-        return_values: bcs::from_bytes(&eth_call_result)?,
+        return_values: Vec::from([(
+            output.first().unwrap().to_owned(),
+            EVM_NATIVE_OUTCOME_LAYOUT.clone(),
+        )]),
     };
     let evm_result = extract_evm_result(return_values);
 

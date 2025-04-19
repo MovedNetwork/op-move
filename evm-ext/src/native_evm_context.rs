@@ -15,6 +15,7 @@ use {
     move_vm_types::{resolver::MoveResolver, value_serde::ValueSerDeContext, values::VMValueCast},
     revm::{
         DatabaseRef,
+        database::CacheDB,
         primitives::{Address, B256, KECCAK_EMPTY, U256},
         state::{Account, AccountInfo, Bytecode},
     },
@@ -37,6 +38,10 @@ pub struct NativeEVMContext<'a> {
     pub resolver: &'a dyn MoveResolver,
     pub storage_trie: &'a dyn StorageTrieRepository,
     pub transfer_logs: &'a dyn EthTransferLog,
+    // Keep the DB in `NativeEVMContext` so that the EVM storage is consistent
+    // for the whole MoveVM session; even if the EVM is invoked multiple times
+    // (this could happen if a Move script calls the EVM multiple times for example).
+    pub db: CacheDB<ResolverBackedDB<'a>>,
     pub state_changes: Vec<HashMap<Address, Account>>,
     pub block_header: HeaderForExecution,
 }
@@ -52,12 +57,14 @@ impl<'a> NativeEVMContext<'a> {
             resolver: state,
             storage_trie,
             transfer_logs,
+            db: CacheDB::new(ResolverBackedDB::new(storage_trie, state)),
             state_changes: Vec::new(),
             block_header,
         }
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct ResolverBackedDB<'a> {
     storage_trie: &'a dyn StorageTrieRepository,
     resolver: &'a dyn MoveResolver,

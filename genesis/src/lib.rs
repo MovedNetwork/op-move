@@ -21,6 +21,7 @@ pub mod config;
 #[allow(deprecated)]
 mod framework;
 
+mod bridged_tokens;
 mod l2_contracts;
 mod serde;
 mod vm;
@@ -35,8 +36,14 @@ pub fn build(
     let (changes_framework, table_changes) = framework::init_state(vm, state);
 
     // Deploy OP stack L2 contracts
-    let changes_l2 =
+    let mut changes_l2 =
         l2_contracts::init_state(config.l2_contract_genesis.clone(), state, storage_trie);
+
+    // Deploy additional bridged tokens (if any)
+    if !config.token_list.is_empty() {
+        changes_l2 = bridged_tokens::deploy_bridged_tokens(changes_l2, config.token_list.clone())
+            .expect("Bridged tokens must deploy");
+    }
 
     let mut changes = ChangeSet::new();
 

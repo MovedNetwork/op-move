@@ -18,7 +18,7 @@ use {
     },
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Changes {
     pub accounts: ChangeSet,
     pub storage: StorageTriesChanges,
@@ -92,6 +92,10 @@ pub fn genesis_state_changes(
 
 pub fn extract_evm_changes(extensions: &NativeContextExtensions) -> Changes {
     let evm_native_ctx = extensions.get::<NativeEVMContext>();
+    extract_evm_changes_from_native(evm_native_ctx)
+}
+
+pub fn extract_evm_changes_from_native(evm_native_ctx: &NativeEVMContext) -> Changes {
     let mut evm_move_account_changes = ChangeSet::new();
     let mut account_changes = AccountChangeSet::new();
     let mut storage_tries = StorageTriesChanges::empty();

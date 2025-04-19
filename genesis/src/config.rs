@@ -1,9 +1,11 @@
 use {
+    crate::bridged_tokens::{self, BridgedToken},
     alloy::{genesis::Genesis, primitives::hex},
     aptos_gas_schedule::{InitialGasSchedule, NativeGasParameters, VMGasParameters},
     aptos_vm_types::storage::StorageGasParameters,
     move_core_types::{account_address::AccountAddress, gas_algebra::GasQuantity},
     moved_shared::primitives::B256,
+    std::path::Path,
 };
 
 pub const CHAIN_ID: u64 = 404;
@@ -46,6 +48,8 @@ pub struct GenesisConfig {
     pub gas_costs: GasCosts,
     pub treasury: AccountAddress,
     pub l2_contract_genesis: Genesis,
+    /// Superchain Token List data.
+    pub token_list: Vec<BridgedToken>,
 }
 
 impl Default for GasCosts {
@@ -65,15 +69,35 @@ impl Default for GasCosts {
 
 impl Default for GenesisConfig {
     fn default() -> Self {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .join("execution/src/tests/res/bridged_tokens_test.json");
         Self {
             chain_id: CHAIN_ID,
             initial_state_root: B256::from(hex!(
-                "ffb90cd2a314afdbf1f5cc216436e1df8e015eb292591f09c4a8bb19a2e8c3e2"
+                "0xb97674627a3557d273abcd3d80fd01a3bbc0d52c5ebd7e6897f06f5ac97a4e27"
             )),
             gas_costs: GasCosts::default(),
             treasury: AccountAddress::ONE, // todo: fill in the real address
             l2_contract_genesis: serde_json::from_str(DEFAULT_L2_CONTRACT_GENESIS)
                 .expect("Default L2 contract genesis should be JSON encoded `Genesis` struct"),
+            token_list: bridged_tokens::parse_token_list(&path).expect("Tokens list should parse"),
         }
+    }
+}
+
+#[test]
+fn test_default_token_list() {
+    let config = GenesisConfig::default();
+
+    // - `USD Coin` has an override to `Bridged USDC`,
+    // - DAI is skipped because it uses a non-standard bridge,
+    // - `Aave Token` includes no overrides.
+    let expected_names = ["Bridged USDC", "Aave Token"];
+
+    assert_eq!(config.token_list.len(), expected_names.len());
+    for (token, expected_name) in config.token_list.into_iter().zip(expected_names) {
+        assert_eq!(token.name, expected_name);
     }
 }

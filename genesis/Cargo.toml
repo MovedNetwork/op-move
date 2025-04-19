@@ -10,6 +10,7 @@ test-doubles = []
 
 [dependencies]
 alloy.workspace = true
+anyhow.workspace = true
 aptos-framework.workspace = true
 aptos-gas-schedule.workspace = true
 aptos-vm-environment.workspace = true

@@ -5,6 +5,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+alloy.workspace = true
 eth_trie.workspace = true
 move-binary-format.workspace = true
 move-core-types.workspace = true
@@ -13,6 +14,7 @@ move-vm-types.workspace = true
 moved-blockchain.workspace = true
 moved-evm-ext.workspace = true
 moved-execution.workspace = true
+moved-genesis.workspace = true
 moved-shared.workspace = true
 moved-state.workspace = true
 moved-trie.workspace = true
@@ -21,6 +23,5 @@ serde.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
-alloy.workspace = true
 hex-literal.workspace = true
 op-alloy.workspace = true

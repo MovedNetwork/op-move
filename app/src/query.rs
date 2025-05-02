@@ -1,6 +1,7 @@
 use {
     crate::{ApplicationReader, Dependencies, block_hash::StorageBasedProvider},
     alloy::{
+        consensus::Header,
         eips::{
             BlockId,
             BlockNumberOrTag::{self, Earliest, Finalized, Latest, Number, Pending, Safe},
@@ -8,18 +9,19 @@ use {
         rpc::types::{FeeHistory, TransactionRequest},
     },
     moved_blockchain::{
-        block::{BlockQueries, BlockResponse},
+        block::{BaseGasFee, BlockQueries, BlockResponse},
         payload::{PayloadId, PayloadQueries, PayloadResponse},
         receipt::{ReceiptQueries, TransactionReceipt},
-        state::{ProofResponse, StateQueries},
+        state::{CallResponse, ProofResponse, StateQueries},
         transaction::{TransactionQueries, TransactionResponse},
     },
-    moved_execution::simulate::{call_transaction, simulate_transaction},
     moved_shared::{
-        error::Result,
+        error::{Error, UserError},
         primitives::{Address, B256, ToMoveAddress, U256},
     },
 };
+
+const MAX_PERCENTILE_COUNT: usize = 100;
 
 impl<D: Dependencies> ApplicationReader<D> {
     pub fn chain_id(&self) -> u64 {
@@ -68,12 +70,127 @@ impl<D: Dependencies> ApplicationReader<D> {
 
     pub fn fee_history(
         &self,
-        _block_count: u64,
-        _block_number: BlockNumberOrTag,
-        _reward_percentiles: Option<Vec<f64>>,
-    ) -> FeeHistory {
-        // TODO: Respond with a real fee history
-        FeeHistory::default()
+        block_count: u64,
+        block_number: BlockNumberOrTag,
+        reward_percentiles: Option<Vec<f64>>,
+    ) -> Result<FeeHistory, Error> {
+        if block_count < 1 {
+            return Err(Error::User(UserError::InvalidBlockCount));
+        }
+        let latest_block_num = self.block_number();
+        let block_count = if block_count > latest_block_num {
+            latest_block_num
+        } else {
+            block_count
+        };
+        // reward percentiles should be within (0..100) range and non-decreasing, up to a maximum
+        // of 100 elements
+        if let Some(reward) = &reward_percentiles {
+            if reward.len() > MAX_PERCENTILE_COUNT {
+                return Err(Error::User(UserError::RewardPercentilesTooLong));
+            }
+            if reward.iter().any(|p| !(0.0..=100.0).contains(p)) {
+                return Err(Error::User(UserError::InvalidRewardPercentiles));
+            }
+            if reward.windows(2).any(|w| w[0] > w[1]) {
+                return Err(Error::User(UserError::InvalidRewardPercentiles));
+            }
+        }
+
+        // TODO: do we need to treat pending block req differently?
+        let last_block = self
+            .resolve_height(block_number)
+            .ok_or(UserError::InvalidBlockHeight)?;
+
+        // Genesis block is counted as 0
+        let oldest_block = (last_block + 1)
+            .checked_sub(block_count)
+            .ok_or(UserError::BlockRangeTooLong)?;
+
+        let mut base_fees = Vec::new();
+        let mut gas_used_ratio = Vec::new();
+
+        let mut total_reward = Vec::new();
+
+        for block_num in oldest_block..=last_block {
+            let curr_block = self
+                .block_by_height(BlockNumberOrTag::Number(block_num), true)
+                .unwrap();
+            let Header {
+                gas_limit,
+                gas_used: block_gas_used,
+                base_fee_per_gas,
+                ..
+            } = curr_block.0.header.inner;
+
+            base_fees.push(base_fee_per_gas.unwrap_or_default().into());
+            // base fees (and blob base fees) array should include the fee of the next block past the
+            // end of the range as well. Instead of querying block repo again, we resort to direct
+            // calculation to also account for the range ending with the latest block
+            if block_num == last_block {
+                let next_block_base_fee = self
+                    .gas_fee
+                    .base_fee_per_gas(
+                        gas_limit,
+                        block_gas_used,
+                        U256::from(base_fee_per_gas.unwrap_or_default()),
+                    )
+                    .saturating_to();
+                base_fees.push(next_block_base_fee);
+            }
+
+            gas_used_ratio.push((block_gas_used as f64) / (gas_limit as f64));
+
+            let reward = reward_percentiles.as_ref().map(|percentiles| {
+                let mut price_and_gas: Vec<(u128, u64)> = curr_block
+                    .0
+                    .transactions
+                    .into_hashes()
+                    .hashes()
+                    .map(|hash| {
+                        let rx = self
+                            .transaction_receipt(hash)
+                            .expect("Tx receipt should exist");
+                        (rx.inner.effective_gas_price, rx.inner.gas_used)
+                    })
+                    .collect();
+                price_and_gas.sort_by_key(|&(price, _)| price);
+                let price_and_cum_gas = price_and_gas
+                    .iter()
+                    .scan(0u64, |cum_gas, (price, gas)| {
+                        *cum_gas += gas;
+                        Some((*price, *cum_gas))
+                    })
+                    .collect::<Vec<_>>();
+
+                percentiles
+                    .iter()
+                    .map(|p| {
+                        let threshold = ((block_gas_used as f64) * p / 100.0).round() as u64;
+                        price_and_cum_gas
+                            .iter()
+                            .find(|(_, cum_gas)| cum_gas >= &threshold)
+                            .map(|(p, _)| p)
+                            .copied()
+                            .unwrap_or_else(|| price_and_cum_gas.last().unwrap().0)
+                    })
+                    .collect::<Vec<_>>()
+            });
+            total_reward.push(reward);
+        }
+
+        // EIP-4844 txs not supported yet
+        let base_fee_per_blob_gas = vec![0u128; (block_count as usize) + 1];
+        let blob_gas_used_ratio = vec![0f64; block_count as usize];
+
+        Ok(FeeHistory {
+            base_fee_per_gas: base_fees,
+            gas_used_ratio,
+            base_fee_per_blob_gas,
+            blob_gas_used_ratio,
+            oldest_block,
+            reward: total_reward.into_iter().collect(),
+        })
     }
 
     pub fn estimate_gas(
@@ -96,16 +213,13 @@ impl<D: Dependencies> ApplicationReader<D> {
             transaction,
             &self.state_queries.resolver_at(height),
             &self.evm_storage,
+            self.resolve_height(block_number)
+                .ok_or(UserError::InvalidBlockHeight)?,
+            transaction,
             &self.genesis_config,
             &self.base_token,
-            block_height,
             &block_hash_lookup,
-        );
-
-        outcome.map(|outcome| {
-            // Add 33% extra gas as a buffer.
-            outcome.gas_used + (outcome.gas_used / 3)
-        })
+        )
     }
 
     pub fn call(
@@ -119,6 +233,9 @@ impl<D: Dependencies> ApplicationReader<D> {
             transaction,
             &self.state_queries.resolver_at(height),
             &self.evm_storage,
+            self.resolve_height(block_number)
+                .ok_or(UserError::InvalidBlockHeight)?,
+            transaction,
             &self.genesis_config,
             &self.base_token,
             &block_hash_lookup,
@@ -166,13 +283,15 @@ impl<D: Dependencies> ApplicationReader<D> {
     }
 
     fn resolve_height(&self, height: BlockNumberOrTag) -> Option<u64> {
-        Some(match height {
-            Number(height) => height,
-            Finalized | Pending | Latest | Safe => {
-                self.block_queries.latest(&self.storage).ok()??
-            }
-            Earliest => 0,
-        })
+        self.block_queries
+            .latest(&self.storage)
+            .ok()?
+            .and_then(|latest| match height {
+                Number(height) if height <= latest => Some(height),
+                Finalized | Pending | Latest | Safe => Some(latest),
+                Earliest => Some(0),
+                _ => None,
+            })
     }
 
     fn height_from_block_id(&self, id: BlockId) -> Option<u64> {

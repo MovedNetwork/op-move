@@ -5,7 +5,8 @@
 
 set -eux
 L2_RPC_URL="http://0.0.0.0:8545"
-FROM_WALLET=$(docker compose exec geth ls l1_datadir/keystore | grep -o '.\{40\}$')
+# FROM_WALLET=$(docker compose exec geth ls l1_datadir/keystore | grep -o '.\{40\}$')
+FROM_WALLET=$(docker exec $(docker ps -q -f name=moved_geth) ls l1_datadir/keystore | grep -o '.\{40\}$')
 
 BALANCE=$(curl "${L2_RPC_URL}" \
     -s \

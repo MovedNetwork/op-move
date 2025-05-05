@@ -1,17 +1,15 @@
 use {
     crate::{json_utils::parse_params_1, jsonrpc::JsonRpcError},
-    moved_app::{Application, Dependencies},
-    std::sync::Arc,
-    tokio::sync::RwLock,
+    moved_app::{ApplicationReader, Dependencies},
 };
 
 pub async fn execute(
     request: serde_json::Value,
-    app: &Arc<RwLock<Application<impl Dependencies>>>,
+    app: &ApplicationReader<impl Dependencies>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let tx_hash = parse_params_1(request)?;
 
-    let response = app.read().await.transaction_receipt(tx_hash);
+    let response = app.transaction_receipt(tx_hash);
 
     Ok(serde_json::to_value(response).expect("Must be able to JSON-serialize response"))
 }

@@ -1,21 +1,16 @@
 use {
     crate::{json_utils, jsonrpc::JsonRpcError},
     alloy::eips::BlockNumberOrTag,
-    moved_app::{Application, Dependencies},
-    std::sync::Arc,
-    tokio::sync::RwLock,
+    moved_app::{ApplicationReader, Dependencies},
 };
 
 pub async fn execute(
     request: serde_json::Value,
-    app: &Arc<RwLock<Application<impl Dependencies>>>,
+    app: &ApplicationReader<impl Dependencies>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let (block_count, block_number, reward_percentiles) = parse_params(request)?;
 
-    let response = app
-        .read()
-        .await
-        .fee_history(block_count, block_number, reward_percentiles);
+    let response = app.fee_history(block_count, block_number, reward_percentiles);
 
     Ok(serde_json::to_value(response).expect("Must be able to JSON-serialize response"))
 }

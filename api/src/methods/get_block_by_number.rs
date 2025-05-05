@@ -1,19 +1,15 @@
 use {
     crate::{json_utils::parse_params_2, jsonrpc::JsonRpcError, schema::GetBlockResponse},
-    moved_app::{Application, Dependencies},
-    std::sync::Arc,
-    tokio::sync::RwLock,
+    moved_app::{ApplicationReader, Dependencies},
 };
 
 pub async fn execute(
     request: serde_json::Value,
-    app: &Arc<RwLock<Application<impl Dependencies>>>,
+    app: &ApplicationReader<impl Dependencies>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let (number, include_transactions) = parse_params_2(request)?;
 
     let response = app
-        .read()
-        .await
         .block_by_height(number, include_transactions)
         .map(GetBlockResponse::from);
 

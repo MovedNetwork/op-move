@@ -1,22 +1,18 @@
 use {
     crate::{json_utils, json_utils::transaction_error, jsonrpc::JsonRpcError},
     alloy::{eips::BlockNumberOrTag, rpc::types::TransactionRequest},
-    moved_app::{Application, Dependencies},
-    std::sync::Arc,
-    tokio::sync::RwLock,
+    moved_app::{ApplicationReader, Dependencies},
 };
 
 const BASE_FEE: u64 = 21_000;
 
 pub async fn execute(
     request: serde_json::Value,
-    app: &Arc<RwLock<Application<impl Dependencies>>>,
+    app: &ApplicationReader<impl Dependencies>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let (transaction, block_number) = parse_params(request)?;
     let response = std::cmp::max(
-        app.read()
-            .await
-            .estimate_gas(transaction, block_number)
+        app.estimate_gas(transaction, block_number)
             .map_err(transaction_error)?,
         BASE_FEE,
     );

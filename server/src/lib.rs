@@ -4,7 +4,7 @@ use {
     flate2::read::GzDecoder,
     jsonwebtoken::{DecodingKey, Validation},
     moved_api::method_name::MethodName,
-    moved_app::{Application, Command, CommandQueue, Dependencies},
+    moved_app::{Application, ApplicationReader, Command, CommandQueue, Dependencies},
     moved_blockchain::{
         block::{Block, BlockHash, BlockQueries, ExtendedBlock, Header},
         payload::{NewPayloadId, StatePayloadId},
@@ -77,9 +77,8 @@ pub async fn run(max_buffered_commands: u32, max_concurrent_queries: u32) {
         ..Default::default()
     };
 
-    let app = initialize_app(genesis_config);
-    let app = Arc::new(RwLock::with_max_readers(app, max_concurrent_queries));
-    let (queue, state) = moved_app::create(app.clone(), max_buffered_commands);
+    let mut app = initialize_app(genesis_config);
+    let (queue, state) = moved_app::create(&mut app, max_buffered_commands);
 
     let http_app = app.clone();
     let http_cmd_queue = queue.clone();
@@ -214,7 +213,7 @@ async fn mirror(
     port: &str,
     is_allowed: impl Fn(&MethodName) -> bool,
     payload_id: &impl NewPayloadId,
-    app: Arc<RwLock<Application<impl Dependencies>>>,
+    app: ApplicationReader<impl Dependencies>,
 ) -> Result<warp::reply::Response, Rejection> {
     let (path, query, method, headers, body) = request;
 

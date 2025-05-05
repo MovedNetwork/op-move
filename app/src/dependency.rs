@@ -1,12 +1,25 @@
 #[cfg(any(feature = "test-doubles", test))]
 pub use test_doubles::TestDependencies;
-use {op_alloy::consensus::OpTxEnvelope, std::collections::HashMap};
 
 use {
     move_core_types::effects::ChangeSet, moved_blockchain::payload::PayloadId,
     moved_execution::L1GasFeeInput, moved_genesis::config::GenesisConfig,
-    moved_shared::primitives::B256,
+    moved_shared::primitives::B256, op_alloy::consensus::OpTxEnvelope, std::collections::HashMap,
 };
+
+pub struct ApplicationReader<D: Dependencies> {
+    pub genesis_config: GenesisConfig,
+    pub base_token: D::BaseTokenAccounts,
+    pub block_queries: D::BlockQueries,
+    pub payload_queries: D::PayloadQueries,
+    pub receipt_queries: D::ReceiptQueries,
+    pub receipt_memory: D::ReceiptStorage,
+    pub storage: D::SharedStorage,
+    pub state: D::State,
+    pub state_queries: D::StateQueries,
+    pub evm_storage: D::StorageTrieRepository,
+    pub transaction_queries: D::TransactionQueries,
+}
 
 pub struct Application<D: Dependencies> {
     pub genesis_config: GenesisConfig,

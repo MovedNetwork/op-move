@@ -4,15 +4,13 @@ use {
         jsonrpc::JsonRpcError,
         schema::{ExecutionPayloadV3, GetPayloadResponseV3, PayloadStatusV1, Status},
     },
-    moved_app::{Application, Dependencies},
+    moved_app::{ApplicationReader, Dependencies},
     moved_shared::primitives::B256,
-    std::sync::Arc,
-    tokio::sync::RwLock,
 };
 
 pub async fn execute_v3(
     request: serde_json::Value,
-    app: &Arc<RwLock<Application<impl Dependencies>>>,
+    app: &ApplicationReader<impl Dependencies>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let (execution_payload, expected_blob_versioned_hashes, parent_beacon_block_root) =
         parse_params_3(request)?;
@@ -30,14 +28,12 @@ async fn inner_execute_v3(
     execution_payload: ExecutionPayloadV3,
     expected_blob_versioned_hashes: Vec<B256>,
     parent_beacon_block_root: B256,
-    app: &Arc<RwLock<Application<impl Dependencies>>>,
+    app: &ApplicationReader<impl Dependencies>,
 ) -> Result<PayloadStatusV1, JsonRpcError> {
     // Spec: https://github.com/ethereum/execution-apis/blob/main/src/engine/cancun.md#specification
 
     // TODO: in theory we should start syncing to learn about this block hash.
     let response = app
-        .read()
-        .await
         .payload_by_block_hash(execution_payload.block_hash)
         .ok_or(JsonRpcError {
             code: -1,

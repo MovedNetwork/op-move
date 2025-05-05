@@ -1,19 +1,15 @@
 use {
     crate::{json_utils::parse_params_1, jsonrpc::JsonRpcError, schema::GetTransactionResponse},
-    moved_app::{Application, Dependencies},
-    std::sync::Arc,
-    tokio::sync::RwLock,
+    moved_app::{ApplicationReader, Dependencies},
 };
 
 pub async fn execute(
     request: serde_json::Value,
-    app: &Arc<RwLock<Application<impl Dependencies>>>,
+    app: &ApplicationReader<impl Dependencies>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let tx_hash = parse_params_1(request)?;
 
     let response = app
-        .read()
-        .await
         .transaction_by_hash(tx_hash)
         .map(GetTransactionResponse::from);
 

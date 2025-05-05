@@ -1,16 +1,14 @@
 use {
     crate::{json_utils::parse_params_0, jsonrpc::JsonRpcError},
-    moved_app::{Application, Dependencies},
-    std::sync::Arc,
-    tokio::sync::RwLock,
+    moved_app::{ApplicationReader, Dependencies},
 };
 
 pub async fn execute(
     request: serde_json::Value,
-    app: &Arc<RwLock<Application<impl Dependencies>>>,
+    app: &ApplicationReader<impl Dependencies>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     parse_params_0(request)?;
-    let response = app.read().await.block_number();
+    let response = app.block_number();
 
     // Format the block number as a hex string
     Ok(serde_json::to_value(format!("0x{:x}", response))

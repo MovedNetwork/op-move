@@ -4,10 +4,8 @@ use {
         jsonrpc::{JsonRpcError, JsonRpcResponse},
         method_name::MethodName,
     },
-    moved_app::{Application, CommandQueue, Dependencies},
+    moved_app::{ApplicationReader, CommandQueue, Dependencies},
     moved_blockchain::payload::NewPayloadId,
-    std::sync::Arc,
-    tokio::sync::RwLock,
 };
 
 pub async fn handle(
@@ -15,7 +13,7 @@ pub async fn handle(
     queue: CommandQueue,
     is_allowed: impl Fn(&MethodName) -> bool,
     payload_id: &impl NewPayloadId,
-    app: &Arc<RwLock<Application<impl Dependencies>>>,
+    app: &ApplicationReader<impl Dependencies>,
 ) -> JsonRpcResponse {
     let id = json_utils::get_field(&request, "id");
     let jsonrpc = json_utils::get_field(&request, "jsonrpc");
@@ -41,7 +39,7 @@ async fn inner_handle_request(
     queue: CommandQueue,
     is_allowed: impl Fn(&MethodName) -> bool,
     payload_id: &impl NewPayloadId,
-    app: &Arc<RwLock<Application<impl Dependencies>>>,
+    app: &ApplicationReader<impl Dependencies>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     use {crate::methods::*, MethodName::*};
 

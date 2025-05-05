@@ -7,11 +7,8 @@ use {
     },
     moved_shared::primitives::B256,
     moved_state::State,
-    std::{ops::DerefMut, sync::Arc},
-    tokio::{
-        sync::{RwLock, mpsc::Receiver},
-        task::JoinHandle,
-    },
+    std::ops::DerefMut,
+    tokio::{sync::mpsc::Receiver, task::JoinHandle},
 };
 
 /// A function invoked on a completion of new transaction execution batch.
@@ -23,23 +20,26 @@ pub type OnTx<S> = dyn Fn(&mut S, ChangeSet) + Send + Sync;
 /// A function invoked on an execution of a new payload.
 pub type OnPayload<S> = dyn Fn(&mut S, PayloadId, B256) + Send + Sync;
 
-pub struct CommandActor<D: Dependencies> {
+pub struct CommandActor<'a, D: Dependencies> {
     rx: Receiver<Command>,
-    app: Arc<RwLock<Application<D>>>,
+    app: &'a mut Application<D>,
 }
 
-impl<D: DependenciesThreadSafe> CommandActor<D> {
+impl<'a, D: DependenciesThreadSafe> CommandActor<'a, D>
+where
+    'a: 'static,
+{
     pub fn spawn(mut self) -> JoinHandle<()> {
         tokio::spawn(async move {
             while let Some(msg) = self.rx.recv().await {
-                Self::handle_command(self.app.write().await, msg);
+                Self::handle_command(&mut *self.app, msg);
             }
         })
     }
 }
 
-impl<D: Dependencies> CommandActor<D> {
-    pub fn new(rx: Receiver<Command>, app: Arc<RwLock<Application<D>>>) -> Self {
+impl<'a, D: Dependencies> CommandActor<'a, D> {
+    pub fn new(rx: Receiver<Command>, app: &'a mut Application<D>) -> Self {
         Self { rx, app }
     }
 

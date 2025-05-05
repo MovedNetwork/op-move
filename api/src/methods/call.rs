@@ -3,20 +3,16 @@ use {
         json_utils::{parse_params_2, transaction_error},
         jsonrpc::JsonRpcError,
     },
-    moved_app::{Application, Dependencies},
-    std::sync::Arc,
-    tokio::sync::RwLock,
+    moved_app::{ApplicationReader, Dependencies},
 };
 
 pub async fn execute(
     request: serde_json::Value,
-    app: &Arc<RwLock<Application<impl Dependencies>>>,
+    app: &ApplicationReader<impl Dependencies>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let (transaction, block_number) = parse_params_2(request)?;
 
     let response = app
-        .read()
-        .await
         .call(transaction, block_number)
         .map_err(transaction_error)?;
 

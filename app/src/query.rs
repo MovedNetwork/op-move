@@ -1,5 +1,5 @@
 use {
-    crate::{Application, Dependencies, block_hash::StorageBasedProvider},
+    crate::{Application, ApplicationReader, Dependencies, block_hash::StorageBasedProvider},
     alloy::{
         eips::{
             BlockId,
@@ -22,7 +22,7 @@ use {
     moved_state::State,
 };
 
-impl<D: Dependencies> Application<D> {
+impl<D: Dependencies> ApplicationReader<D> {
     pub fn chain_id(&self) -> u64 {
         self.genesis_config.chain_id
     }

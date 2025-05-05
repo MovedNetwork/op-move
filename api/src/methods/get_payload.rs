@@ -4,21 +4,17 @@ use {
         jsonrpc::JsonRpcError,
         schema::{GetPayloadResponseV3, PayloadId},
     },
-    moved_app::{Application, Dependencies},
-    std::sync::Arc,
-    tokio::sync::RwLock,
+    moved_app::{ApplicationReader, Dependencies},
 };
 
 pub async fn execute_v3(
     request: serde_json::Value,
-    app: &Arc<RwLock<Application<impl Dependencies>>>,
+    app: &ApplicationReader<impl Dependencies>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let payload_id: PayloadId = parse_params_1(request)?;
 
     // Spec: https://github.com/ethereum/execution-apis/blob/main/src/engine/cancun.md#specification-2
     let response = app
-        .read()
-        .await
         .payload(payload_id.clone().into())
         .map(GetPayloadResponseV3::from)
         .ok_or_else(|| JsonRpcError {

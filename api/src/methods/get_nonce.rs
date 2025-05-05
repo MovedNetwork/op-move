@@ -1,20 +1,16 @@
 use {
     crate::{json_utils, jsonrpc::JsonRpcError},
     alloy::{eips::BlockNumberOrTag, primitives::Address},
-    moved_app::{Application, Dependencies},
-    std::sync::Arc,
-    tokio::sync::RwLock,
+    moved_app::{ApplicationReader, Dependencies},
 };
 
 pub async fn execute(
     request: serde_json::Value,
-    app: &Arc<RwLock<Application<impl Dependencies>>>,
+    app: &ApplicationReader<impl Dependencies>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let (address, block_number) = parse_params(request)?;
 
     let response = app
-        .read()
-        .await
         .nonce_by_height(address, block_number)
         .ok_or(JsonRpcError::block_not_found(block_number))?;
 

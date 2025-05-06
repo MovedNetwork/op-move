@@ -21,6 +21,42 @@ pub struct ApplicationReader<D: Dependencies> {
     pub transaction_queries: D::TransactionQueries,
 }
 
+impl<D: Dependencies> Clone for ApplicationReader<D> {
+    fn clone(&self) -> Self {
+        Self {
+            genesis_config: self.genesis_config.clone(),
+            base_token: self.base_token.clone(),
+            block_queries: self.block_queries.clone(),
+            payload_queries: self.payload_queries.clone(),
+            receipt_queries: self.receipt_queries.clone(),
+            receipt_memory: self.receipt_memory.clone(),
+            storage: self.storage.clone(),
+            state: self.state.clone(),
+            state_queries: self.state_queries.clone(),
+            evm_storage: self.evm_storage.clone(),
+            transaction_queries: self.transaction_queries.clone(),
+        }
+    }
+}
+
+impl<D: Dependencies> ApplicationReader<D> {
+    pub fn new(_: D, genesis_config: &GenesisConfig) -> Self {
+        Self {
+            genesis_config: genesis_config.clone(),
+            base_token: D::base_token_accounts(genesis_config),
+            block_queries: D::block_queries(),
+            payload_queries: D::payload_queries(),
+            receipt_queries: D::receipt_queries(),
+            receipt_memory: D::receipt_memory(),
+            storage: D::shared_storage(),
+            state: D::state(),
+            state_queries: D::state_queries(genesis_config),
+            evm_storage: D::storage_trie_repository(),
+            transaction_queries: D::transaction_queries(),
+        }
+    }
+}
+
 pub struct Application<D: Dependencies> {
     pub genesis_config: GenesisConfig,
     pub mem_pool: HashMap<B256, (OpTxEnvelope, L1GasFeeInput)>,
@@ -136,10 +172,10 @@ impl<
 {
 }
 
-pub trait Dependencies: Sized {
-    type BaseTokenAccounts: moved_execution::BaseTokenAccounts;
+pub trait Dependencies {
+    type BaseTokenAccounts: moved_execution::BaseTokenAccounts + Clone;
     type BlockHash: moved_blockchain::block::BlockHash;
-    type BlockQueries: moved_blockchain::block::BlockQueries<Storage = Self::SharedStorage>;
+    type BlockQueries: moved_blockchain::block::BlockQueries<Storage = Self::SharedStorage> + Clone;
     type BlockRepository: moved_blockchain::block::BlockRepository<Storage = Self::SharedStorage>;
 
     /// A function invoked on an execution of a new payload.
@@ -151,15 +187,18 @@ pub trait Dependencies: Sized {
     /// A function invoked on a completion of new transaction execution batch.
     type OnTxBatch: Fn(&mut Application<Self>) + 'static + ?Sized;
 
-    type PayloadQueries: moved_blockchain::payload::PayloadQueries<Storage = Self::SharedStorage>;
-    type ReceiptQueries: moved_blockchain::receipt::ReceiptQueries<Storage = Self::ReceiptStorage>;
+    type PayloadQueries: moved_blockchain::payload::PayloadQueries<Storage = Self::SharedStorage>
+        + Clone;
+    type ReceiptQueries: moved_blockchain::receipt::ReceiptQueries<Storage = Self::ReceiptStorage>
+        + Clone;
     type ReceiptRepository: moved_blockchain::receipt::ReceiptRepository<Storage = Self::ReceiptStorage>;
-    type ReceiptStorage;
-    type SharedStorage;
-    type State: moved_state::State;
-    type StateQueries: moved_blockchain::state::StateQueries;
-    type StorageTrieRepository: moved_evm_ext::state::StorageTrieRepository;
-    type TransactionQueries: moved_blockchain::transaction::TransactionQueries<Storage = Self::SharedStorage>;
+    type ReceiptStorage: Clone;
+    type SharedStorage: Clone;
+    type State: moved_state::State + Clone;
+    type StateQueries: moved_blockchain::state::StateQueries + Clone;
+    type StorageTrieRepository: moved_evm_ext::state::StorageTrieRepository + Clone;
+    type TransactionQueries: moved_blockchain::transaction::TransactionQueries<Storage = Self::SharedStorage>
+        + Clone;
     type TransactionRepository: moved_blockchain::transaction::TransactionRepository<Storage = Self::SharedStorage>;
     type BaseGasFee: moved_blockchain::block::BaseGasFee;
     type CreateL1GasFee: moved_execution::CreateL1GasFee;
@@ -255,19 +294,23 @@ mod test_doubles {
     );
 
     impl<
-        SQ: StateQueries + Send + Sync + 'static,
-        S: State + Send + Sync + 'static,
-        BT: moved_execution::BaseTokenAccounts + Send + Sync + 'static,
+        SQ: StateQueries + Clone + Send + Sync + 'static,
+        S: State + Clone + Send + Sync + 'static,
+        BT: moved_execution::BaseTokenAccounts + Clone + Send + Sync + 'static,
         BH: moved_blockchain::block::BlockHash + Send + Sync + 'static,
-        BQ: moved_blockchain::block::BlockQueries<Storage = B> + Send + Sync + 'static,
+        BQ: moved_blockchain::block::BlockQueries<Storage = B> + Clone + Send + Sync + 'static,
         BR: moved_blockchain::block::BlockRepository<Storage = B> + Send + Sync + 'static,
-        PQ: moved_blockchain::payload::PayloadQueries<Storage = B> + Send + Sync + 'static,
-        RQ: moved_blockchain::receipt::ReceiptQueries<Storage = R> + Send + Sync + 'static,
+        PQ: moved_blockchain::payload::PayloadQueries<Storage = B> + Clone + Send + Sync + 'static,
+        RQ: moved_blockchain::receipt::ReceiptQueries<Storage = R> + Clone + Send + Sync + 'static,
         RR: moved_blockchain::receipt::ReceiptRepository<Storage = R> + Send + Sync + 'static,
-        R: Send + Sync + 'static,
-        B: Send + Sync + 'static,
-        ST: moved_evm_ext::state::StorageTrieRepository + Send + Sync + 'static,
-        TQ: moved_blockchain::transaction::TransactionQueries<Storage = B> + Send + Sync + 'static,
+        R: Clone + Send + Sync + 'static,
+        B: Clone + Send + Sync + 'static,
+        ST: moved_evm_ext::state::StorageTrieRepository + Clone + Send + Sync + 'static,
+        TQ: moved_blockchain::transaction::TransactionQueries<Storage = B>
+            + Clone
+            + Send
+            + Sync
+            + 'static,
         TR: moved_blockchain::transaction::TransactionRepository<Storage = B> + Send + Sync + 'static,
         BF: moved_blockchain::block::BaseGasFee + Send + Sync + 'static,
         F1: moved_execution::CreateL1GasFee + Send + Sync + 'static,

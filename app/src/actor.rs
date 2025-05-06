@@ -20,15 +20,12 @@ pub type OnTx<S> = dyn Fn(&mut S, ChangeSet) + Send + Sync;
 /// A function invoked on an execution of a new payload.
 pub type OnPayload<S> = dyn Fn(&mut S, PayloadId, B256) + Send + Sync;
 
-pub struct CommandActor<'a, D: Dependencies> {
+pub struct CommandActor<D: Dependencies> {
     rx: Receiver<Command>,
-    app: &'a mut Application<D>,
+    app: Box<Application<D>>,
 }
 
-impl<'a, D: DependenciesThreadSafe> CommandActor<'a, D>
-where
-    'a: 'static,
-{
+impl<D: DependenciesThreadSafe> CommandActor<D> {
     pub fn spawn(mut self) -> JoinHandle<()> {
         tokio::spawn(async move {
             while let Some(msg) = self.rx.recv().await {
@@ -38,8 +35,8 @@ where
     }
 }
 
-impl<'a, D: Dependencies> CommandActor<'a, D> {
-    pub fn new(rx: Receiver<Command>, app: &'a mut Application<D>) -> Self {
+impl<D: Dependencies> CommandActor<D> {
+    pub fn new(rx: Receiver<Command>, app: Box<Application<D>>) -> Self {
         Self { rx, app }
     }
 

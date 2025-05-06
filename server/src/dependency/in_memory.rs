@@ -1,13 +1,21 @@
 use {
     crate::dependency::shared::*,
-    moved_app::{Application, CommandActor},
+    moved_app::{Application, ApplicationReader, CommandActor},
     moved_genesis::config::GenesisConfig,
 };
 
 pub type Dependency = InMemoryDependencies;
 
-pub fn create(genesis_config: &GenesisConfig) -> Application<InMemoryDependencies> {
-    Application::new(InMemoryDependencies, genesis_config)
+pub fn create(
+    genesis_config: &GenesisConfig,
+) -> (
+    Application<InMemoryDependencies>,
+    ApplicationReader<InMemoryDependencies>,
+) {
+    (
+        Application::new(InMemoryDependencies, genesis_config),
+        ApplicationReader::new(InMemoryDependencies, genesis_config),
+    )
 }
 
 pub struct InMemoryDependencies;

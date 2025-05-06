@@ -17,7 +17,7 @@ pub trait ReceiptRepository {
     ) -> Result<(), Self::Err>;
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ExtendedReceipt {
     pub transaction_hash: B256,
     pub transaction_index: u64,
@@ -50,5 +50,27 @@ impl ExtendedReceipt {
     pub fn with_block_hash(mut self, block_hash: B256) -> Self {
         self.block_hash = block_hash;
         self
+    }
+}
+
+#[cfg(any(feature = "test-doubles", test))]
+mod test_doubles {
+    use {super::*, std::convert::Infallible};
+
+    impl ReceiptRepository for () {
+        type Err = Infallible;
+        type Storage = ();
+
+        fn contains(&self, _: &Self::Storage, _: B256) -> Result<bool, Self::Err> {
+            Ok(false)
+        }
+
+        fn extend(
+            &self,
+            _: &mut Self::Storage,
+            _: impl IntoIterator<Item = ExtendedReceipt>,
+        ) -> Result<(), Self::Err> {
+            Ok(())
+        }
     }
 }

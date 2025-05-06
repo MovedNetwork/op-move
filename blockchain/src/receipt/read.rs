@@ -60,3 +60,21 @@ impl From<ExtendedReceipt> for TransactionReceipt {
         }
     }
 }
+
+#[cfg(any(feature = "test-doubles", test))]
+mod test_doubles {
+    use {super::*, std::convert::Infallible};
+
+    impl ReceiptQueries for () {
+        type Err = Infallible;
+        type Storage = ();
+
+        fn by_transaction_hash(
+            &self,
+            _: &Self::Storage,
+            _: B256,
+        ) -> Result<Option<TransactionReceipt>, Self::Err> {
+            Ok(None)
+        }
+    }
+}

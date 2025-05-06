@@ -1,6 +1,6 @@
 use {
     crate::{
-        in_memory::SharedMemory,
+        in_memory::SharedMemoryReader,
         payload::{PayloadId, PayloadQueries, PayloadResponse},
     },
     moved_shared::primitives::B256,
@@ -32,7 +32,7 @@ impl InMemoryPayloadQueries {
 
 impl PayloadQueries for InMemoryPayloadQueries {
     type Err = Infallible;
-    type Storage = SharedMemory;
+    type Storage = SharedMemoryReader;
 
     fn by_hash(
         &self,
@@ -60,31 +60,5 @@ impl PayloadQueries for InMemoryPayloadQueries {
         };
 
         self.by_hash(storage, *hash)
-    }
-}
-
-#[cfg(any(feature = "test-doubles", test))]
-mod test_doubles {
-    use super::*;
-
-    impl PayloadQueries for () {
-        type Err = Infallible;
-        type Storage = ();
-
-        fn by_hash(
-            &self,
-            _: &Self::Storage,
-            _: B256,
-        ) -> Result<Option<PayloadResponse>, Self::Err> {
-            Ok(None)
-        }
-
-        fn by_id(
-            &self,
-            _: &Self::Storage,
-            _: PayloadId,
-        ) -> Result<Option<PayloadResponse>, Self::Err> {
-            Ok(None)
-        }
     }
 }

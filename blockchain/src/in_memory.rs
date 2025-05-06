@@ -1,16 +1,19 @@
 use crate::{
-    block::BlockMemory,
+    block::{BlockMemory, BlockMemoryReader},
     transaction::{TransactionMemory, TransactionMemoryReader},
 };
 
 #[derive(Debug)]
 pub struct SharedMemoryReader {
-    pub block_memory: BlockMemory,
+    pub block_memory: BlockMemoryReader,
     pub transaction_memory: TransactionMemoryReader,
 }
 
 impl SharedMemoryReader {
-    pub fn new(block_memory: BlockMemory, transaction_memory: TransactionMemoryReader) -> Self {
+    pub fn new(
+        block_memory: BlockMemoryReader,
+        transaction_memory: TransactionMemoryReader,
+    ) -> Self {
         Self {
             block_memory,
             transaction_memory,

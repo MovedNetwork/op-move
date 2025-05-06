@@ -72,7 +72,7 @@ pub mod in_memory {
     use {
         crate::{
             block::{BlockResponse, read::BlockQueries},
-            in_memory::SharedMemory,
+            in_memory::SharedMemoryReader,
         },
         moved_shared::primitives::B256,
         std::convert::Infallible,
@@ -86,7 +86,7 @@ pub mod in_memory {
 
     impl BlockQueries for InMemoryBlockQueries {
         type Err = Infallible;
-        type Storage = SharedMemory;
+        type Storage = SharedMemoryReader;
 
         fn by_hash(
             &self,

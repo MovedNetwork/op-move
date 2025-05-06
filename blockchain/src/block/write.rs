@@ -120,7 +120,7 @@ pub mod in_memory {
         }
 
         fn latest(&self, mem: &Self::Storage) -> Result<Option<ExtendedBlock>, Self::Err> {
-            Ok(mem.block_memory.last().cloned())
+            Ok(mem.block_memory.last())
         }
     }
 }

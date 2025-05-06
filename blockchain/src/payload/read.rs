@@ -117,3 +117,29 @@ pub trait PayloadQueries {
         id: PayloadId,
     ) -> Result<Option<PayloadResponse>, Self::Err>;
 }
+
+#[cfg(any(feature = "test-doubles", test))]
+mod test_doubles {
+    use {super::*, std::convert::Infallible};
+
+    impl PayloadQueries for () {
+        type Err = Infallible;
+        type Storage = ();
+
+        fn by_hash(
+            &self,
+            _: &Self::Storage,
+            _: B256,
+        ) -> Result<Option<PayloadResponse>, Self::Err> {
+            Ok(None)
+        }
+
+        fn by_id(
+            &self,
+            _: &Self::Storage,
+            _: PayloadId,
+        ) -> Result<Option<PayloadResponse>, Self::Err> {
+            Ok(None)
+        }
+    }
+}

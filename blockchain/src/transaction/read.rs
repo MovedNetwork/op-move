@@ -39,3 +39,57 @@ impl From<ExtendedTransaction> for TransactionResponse {
         }
     }
 }
+
+pub mod in_memory {
+    use {
+        crate::{
+            in_memory::SharedMemoryReader,
+            transaction::{TransactionQueries, TransactionResponse},
+        },
+        moved_shared::primitives::B256,
+        std::convert::Infallible,
+    };
+
+    #[derive(Debug, Default)]
+    pub struct InMemoryTransactionQueries;
+
+    impl InMemoryTransactionQueries {
+        pub fn new() -> Self {
+            Self
+        }
+    }
+
+    impl TransactionQueries for InMemoryTransactionQueries {
+        type Err = Infallible;
+        type Storage = SharedMemoryReader;
+
+        fn by_hash(
+            &self,
+            storage: &Self::Storage,
+            hash: B256,
+        ) -> Result<Option<TransactionResponse>, Self::Err> {
+            Ok(storage
+                .transaction_memory
+                .by_hash(hash)
+                .map(TransactionResponse::from))
+        }
+    }
+}
+
+#[cfg(any(feature = "test-doubles", test))]
+mod test_doubles {
+    use {super::*, std::convert::Infallible};
+
+    impl TransactionQueries for () {
+        type Err = Infallible;
+        type Storage = ();
+
+        fn by_hash(
+            &self,
+            _: &Self::Storage,
+            _: B256,
+        ) -> Result<Option<TransactionResponse>, Self::Err> {
+            Ok(None)
+        }
+    }
+}

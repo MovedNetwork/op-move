@@ -27,6 +27,7 @@ moved-state.workspace = true
 op-alloy.workspace = true
 serde.workspace = true
 sha2.workspace = true
+evmap.workspace = true
 
 [dev-dependencies]
 moved-genesis-image.workspace = true

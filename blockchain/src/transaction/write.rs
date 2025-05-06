@@ -1,11 +1,12 @@
 use {
+    crate::transaction::{TransactionQueries, TransactionResponse},
     alloy::eips::eip2718::Encodable2718,
     moved_shared::primitives::{B256, U256},
     op_alloy::consensus::{OpTxEnvelope, TxDeposit},
-    std::fmt::Debug,
+    std::{convert::Infallible, fmt::Debug},
 };
 
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ExtendedTransaction {
     pub inner: OpTxEnvelope,
     pub block_number: u64,
@@ -111,6 +112,57 @@ pub trait TransactionRepository {
         storage: &mut Self::Storage,
         transactions: impl IntoIterator<Item = ExtendedTransaction>,
     ) -> Result<(), Self::Err>;
+}
+
+pub mod in_memory {
+    use {
+        crate::{
+            in_memory::SharedMemory,
+            transaction::{ExtendedTransaction, TransactionRepository},
+        },
+        std::convert::Infallible,
+    };
+
+    #[derive(Debug, Default)]
+    pub struct InMemoryTransactionRepository;
+
+    impl InMemoryTransactionRepository {
+        pub fn new() -> Self {
+            Self
+        }
+    }
+
+    impl TransactionRepository for InMemoryTransactionRepository {
+        type Err = Infallible;
+        type Storage = SharedMemory;
+
+        fn extend(
+            &mut self,
+            storage: &mut Self::Storage,
+            transactions: impl IntoIterator<Item = ExtendedTransaction>,
+        ) -> Result<(), Self::Err> {
+            storage.transaction_memory.extend(transactions);
+            Ok(())
+        }
+    }
+}
+
+#[cfg(any(feature = "test-doubles", test))]
+mod test_doubles {
+    use super::*;
+
+    impl TransactionRepository for () {
+        type Err = Infallible;
+        type Storage = ();
+
+        fn extend(
+            &mut self,
+            _: &mut Self::Storage,
+            _: impl IntoIterator<Item = ExtendedTransaction>,
+        ) -> Result<(), Self::Err> {
+            Ok(())
+        }
+    }
 }
 
 #[cfg(test)]

@@ -9,6 +9,9 @@ use {
     },
 };
 
+pub type ReadHandle = evmap::ReadHandle<B256, Box<ExtendedReceipt>>;
+pub type WriteHandle = evmap::WriteHandle<B256, Box<ExtendedReceipt>>;
+
 impl Hash for ExtendedReceipt {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.transaction_hash.hash(state);
@@ -27,16 +30,12 @@ impl Hash for ExtendedReceipt {
 
 #[derive(Debug)]
 pub struct ReceiptMemory {
-    receipts: evmap::WriteHandle<B256, Box<ExtendedReceipt>>,
+    receipts: WriteHandle,
 }
 
 impl ReceiptMemory {
-    pub fn new(receipts: evmap::WriteHandle<B256, Box<ExtendedReceipt>>) -> Self {
+    pub fn new(receipts: WriteHandle) -> Self {
         Self { receipts }
-    }
-
-    pub fn contains(&self, transaction_hash: B256) -> bool {
-        self.receipts.contains_key(&transaction_hash)
     }
 
     pub fn extend(&mut self, receipts: impl IntoIterator<Item = ExtendedReceipt>) {
@@ -46,32 +45,47 @@ impl ReceiptMemory {
                 .map(|receipt| (receipt.transaction_hash, Box::new(receipt))),
         );
     }
+}
 
-    pub fn by_transaction_hash(&self, transaction_hash: B256) -> Option<ExtendedReceipt> {
-        self.receipts.get_one(&transaction_hash).map(|v| *v.clone())
+impl AsRef<ReadHandle> for ReceiptMemory {
+    fn as_ref(&self) -> &ReadHandle {
+        &self.receipts
     }
 }
 
 #[derive(Debug)]
 pub struct ReceiptMemoryReader {
-    receipts: evmap::ReadHandle<B256, Box<ExtendedReceipt>>,
+    receipts: ReadHandle,
 }
 
 impl ReceiptMemoryReader {
-    pub fn new(receipts: evmap::ReadHandle<B256, Box<ExtendedReceipt>>) -> Self {
+    pub fn new(receipts: ReadHandle) -> Self {
         Self { receipts }
-    }
-
-    pub fn contains(&self, transaction_hash: B256) -> bool {
-        self.receipts.contains_key(&transaction_hash)
-    }
-
-    pub fn by_transaction_hash(&self, transaction_hash: B256) -> Option<ExtendedReceipt> {
-        self.receipts.get_one(&transaction_hash).map(|v| *v.clone())
     }
 }
 
-#[derive(Debug)]
+impl AsRef<ReadHandle> for ReceiptMemoryReader {
+    fn as_ref(&self) -> &ReadHandle {
+        &self.receipts
+    }
+}
+
+pub trait ReadReceiptMemory {
+    fn contains(&self, transaction_hash: B256) -> bool;
+    fn by_transaction_hash(&self, transaction_hash: B256) -> Option<ExtendedReceipt>;
+}
+
+impl<T: AsRef<ReadHandle>> ReadReceiptMemory for T {
+    fn contains(&self, transaction_hash: B256) -> bool {
+        self.as_ref().contains_key(&transaction_hash)
+    }
+
+    fn by_transaction_hash(&self, transaction_hash: B256) -> Option<ExtendedReceipt> {
+        self.as_ref().get_one(&transaction_hash).map(|v| *v.clone())
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct InMemoryReceiptQueries;
 
 impl Default for InMemoryReceiptQueries {
@@ -101,7 +115,7 @@ impl ReceiptQueries for InMemoryReceiptQueries {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct InMemoryReceiptRepository;
 
 impl Default for InMemoryReceiptRepository {

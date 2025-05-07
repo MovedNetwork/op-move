@@ -7,6 +7,7 @@ pub trait BlockHash {
 }
 
 /// Computes the block hash following the Ethereum specification.
+#[derive(Debug, Clone)]
 pub struct MovedBlockHash;
 
 impl BlockHash for MovedBlockHash {

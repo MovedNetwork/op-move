@@ -34,6 +34,7 @@ pub trait BaseGasFee {
 /// * The greater the `elasticity_multiplier`, the smaller the *gas target*.
 /// * The greater the `base_fee_max_change_denominator`, the smaller the increase or decrease of
 ///   the fee.
+#[derive(Debug, Clone)]
 pub struct Eip1559GasFee {
     /// Magnifies the difference between target gas amount and limit. Here are some facts about this
     /// parameter:

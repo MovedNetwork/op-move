@@ -123,7 +123,7 @@ pub mod in_memory {
         std::convert::Infallible,
     };
 
-    #[derive(Debug, Default)]
+    #[derive(Debug, Clone, Default)]
     pub struct InMemoryTransactionRepository;
 
     impl InMemoryTransactionRepository {

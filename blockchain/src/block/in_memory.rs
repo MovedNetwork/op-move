@@ -1,20 +1,22 @@
 use {crate::block::ExtendedBlock, moved_shared::primitives::B256, std::sync::Arc};
 
+pub type WriteHashes = evmap::WriteHandle<B256, Arc<ExtendedBlock>>;
+pub type ReadHashes = evmap::ReadHandle<B256, Arc<ExtendedBlock>>;
+pub type WriteHeight = evmap::WriteHandle<u64, Arc<ExtendedBlock>>;
+pub type ReadHeights = evmap::ReadHandle<u64, Arc<ExtendedBlock>>;
+
 /// A storage for blocks that keeps data in memory.
 ///
 /// The repository keeps data stored locally and its memory is not shared outside the struct. It
 /// maintains a set of indices for efficient lookup.
 #[derive(Debug)]
 pub struct BlockMemory {
-    hashes: evmap::WriteHandle<B256, Arc<ExtendedBlock>>,
-    heights: evmap::WriteHandle<u64, Arc<ExtendedBlock>>,
+    hashes: WriteHashes,
+    heights: WriteHeight,
 }
 
 impl BlockMemory {
-    pub fn new(
-        hashes: evmap::WriteHandle<B256, Arc<ExtendedBlock>>,
-        heights: evmap::WriteHandle<u64, Arc<ExtendedBlock>>,
-    ) -> Self {
+    pub fn new(hashes: WriteHashes, heights: WriteHeight) -> Self {
         Self { hashes, heights }
     }
 
@@ -23,57 +25,69 @@ impl BlockMemory {
         self.hashes.insert(block.hash, block.clone());
         self.heights.insert(block.block.header.number, block);
     }
+}
 
-    pub fn by_hash(&self, hash: B256) -> Option<ExtendedBlock> {
-        self.hashes.get_one(&hash).map(|v| ExtendedBlock::clone(&v))
+impl AsRef<ReadHeights> for BlockMemory {
+    fn as_ref(&self) -> &ReadHeights {
+        &self.heights
     }
+}
 
-    pub fn by_height(&self, height: u64) -> Option<ExtendedBlock> {
-        self.heights
-            .get_one(&height)
-            .map(|v| ExtendedBlock::clone(&v))
-    }
-
-    pub fn height(&self) -> u64 {
-        self.heights.len() as u64 - 1
-    }
-
-    pub fn last(&self) -> Option<ExtendedBlock> {
-        self.by_height(self.height())
+impl AsRef<ReadHashes> for BlockMemory {
+    fn as_ref(&self) -> &ReadHashes {
+        &self.hashes
     }
 }
 
 #[derive(Debug)]
 pub struct BlockMemoryReader {
-    hashes: evmap::ReadHandle<B256, Arc<ExtendedBlock>>,
-    heights: evmap::ReadHandle<u64, Arc<ExtendedBlock>>,
+    hashes: ReadHashes,
+    heights: ReadHeights,
 }
 
 impl BlockMemoryReader {
-    pub fn new(
-        hashes: evmap::ReadHandle<B256, Arc<ExtendedBlock>>,
-        heights: evmap::ReadHandle<u64, Arc<ExtendedBlock>>,
-    ) -> Self {
+    pub fn new(hashes: ReadHashes, heights: ReadHeights) -> Self {
         Self { hashes, heights }
     }
 }
 
-impl BlockMemoryReader {
-    pub fn by_hash(&self, hash: B256) -> Option<ExtendedBlock> {
-        self.hashes.get_one(&hash).map(|v| ExtendedBlock::clone(&v))
+impl AsRef<ReadHeights> for BlockMemoryReader {
+    fn as_ref(&self) -> &ReadHeights {
+        &self.heights
+    }
+}
+
+impl AsRef<ReadHashes> for BlockMemoryReader {
+    fn as_ref(&self) -> &ReadHashes {
+        &self.hashes
+    }
+}
+
+pub trait ReadBlockMemory {
+    fn by_hash(&self, hash: B256) -> Option<ExtendedBlock>;
+    fn by_height(&self, height: u64) -> Option<ExtendedBlock>;
+    fn height(&self) -> u64;
+    fn last(&self) -> Option<ExtendedBlock>;
+}
+
+impl<T: AsRef<ReadHashes> + AsRef<ReadHeights>> ReadBlockMemory for T {
+    fn by_hash(&self, hash: B256) -> Option<ExtendedBlock> {
+        <T as AsRef<ReadHashes>>::as_ref(self)
+            .get_one(&hash)
+            .map(|v| ExtendedBlock::clone(&v))
     }
 
-    pub fn by_height(&self, height: u64) -> Option<ExtendedBlock> {
-        self.heights
+    fn by_height(&self, height: u64) -> Option<ExtendedBlock> {
+        <T as AsRef<ReadHeights>>::as_ref(self)
             .get_one(&height)
             .map(|v| ExtendedBlock::clone(&v))
     }
 
-    pub fn height(&self) -> u64 {
-        self.heights.len() as u64 - 1
+    fn height(&self) -> u64 {
+        <T as AsRef<ReadHeights>>::as_ref(self).len() as u64 - 1
     }
 
-    pub fn last(&self) -> Option<ExtendedBlock> {
+    fn last(&self) -> Option<ExtendedBlock> {
         self.by_height(self.height())
     }
 }

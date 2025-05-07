@@ -77,7 +77,10 @@ pub trait BlockRepository: Debug {
 pub mod in_memory {
     use {
         crate::{
-            block::write::{BlockRepository, ExtendedBlock},
+            block::{
+                ReadBlockMemory,
+                write::{BlockRepository, ExtendedBlock},
+            },
             in_memory::SharedMemory,
         },
         moved_shared::primitives::B256,

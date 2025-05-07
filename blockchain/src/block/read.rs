@@ -71,8 +71,9 @@ impl BlockResponse {
 pub mod in_memory {
     use {
         crate::{
-            block::{BlockResponse, read::BlockQueries},
+            block::{BlockResponse, ReadBlockMemory, read::BlockQueries},
             in_memory::SharedMemoryReader,
+            transaction::ReadTransactionMemory,
         },
         moved_shared::primitives::B256,
         std::convert::Infallible,

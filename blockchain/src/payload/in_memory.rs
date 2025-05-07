@@ -1,13 +1,15 @@
 use {
     crate::{
+        block::ReadBlockMemory,
         in_memory::SharedMemoryReader,
         payload::{PayloadId, PayloadQueries, PayloadResponse},
+        transaction::ReadTransactionMemory,
     },
     moved_shared::primitives::B256,
     std::{collections::HashMap, convert::Infallible},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct InMemoryPayloadQueries {
     block_hashes: HashMap<PayloadId, B256>,
 }

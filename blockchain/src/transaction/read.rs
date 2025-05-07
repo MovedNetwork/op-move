@@ -44,13 +44,15 @@ pub mod in_memory {
     use {
         crate::{
             in_memory::SharedMemoryReader,
-            transaction::{TransactionQueries, TransactionResponse},
+            transaction::{
+                TransactionQueries, TransactionResponse, in_memory::ReadTransactionMemory,
+            },
         },
         moved_shared::primitives::B256,
         std::convert::Infallible,
     };
 
-    #[derive(Debug, Default)]
+    #[derive(Debug, Clone, Default)]
     pub struct InMemoryTransactionQueries;
 
     impl InMemoryTransactionQueries {

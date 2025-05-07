@@ -17,7 +17,7 @@ pub trait ReceiptRepository {
     ) -> Result<(), Self::Err>;
 }
 
-#[derive(Debug, Clone, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ExtendedReceipt {
     pub transaction_hash: B256,
     pub transaction_index: u64,

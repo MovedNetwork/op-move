@@ -3,8 +3,27 @@ use {
         ExtendedReceipt, ReceiptQueries, TransactionReceipt, write::ReceiptRepository,
     },
     moved_shared::primitives::B256,
-    std::convert::Infallible,
+    std::{
+        convert::Infallible,
+        hash::{Hash, Hasher},
+    },
 };
+
+impl Hash for ExtendedReceipt {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.transaction_hash.hash(state);
+        self.transaction_index.hash(state);
+        self.to.hash(state);
+        self.from.hash(state);
+        self.gas_used.hash(state);
+        self.l2_gas_price.hash(state);
+        self.contract_address.hash(state);
+        self.logs_offset.hash(state);
+        self.block_hash.hash(state);
+        self.block_number.hash(state);
+        self.block_timestamp.hash(state);
+    }
+}
 
 #[derive(Debug)]
 pub struct ReceiptMemory {

@@ -13,8 +13,8 @@ pub struct ApplicationReader<D: Dependencies> {
     pub block_queries: D::BlockQueries,
     pub payload_queries: D::PayloadQueries,
     pub receipt_queries: D::ReceiptQueries,
-    pub receipt_memory: D::ReceiptStorage,
-    pub storage: D::SharedStorage,
+    pub receipt_memory: D::ReceiptStorageReader,
+    pub storage: D::SharedStorageReader,
     pub state: D::State,
     pub state_queries: D::StateQueries,
     pub evm_storage: D::StorageTrieRepository,
@@ -47,8 +47,8 @@ impl<D: Dependencies> ApplicationReader<D> {
             block_queries: D::block_queries(),
             payload_queries: D::payload_queries(),
             receipt_queries: D::receipt_queries(),
-            receipt_memory: D::receipt_memory(),
-            storage: D::shared_storage(),
+            receipt_memory: D::receipt_memory_reader(),
+            storage: D::shared_storage_reader(),
             state: D::state(),
             state_queries: D::state_queries(genesis_config),
             evm_storage: D::storage_trie_repository(),
@@ -75,6 +75,8 @@ pub struct Application<D: Dependencies> {
     pub receipt_repository: D::ReceiptRepository,
     pub receipt_memory: D::ReceiptStorage,
     pub storage: D::SharedStorage,
+    pub receipt_memory_reader: D::ReceiptStorageReader,
+    pub storage_reader: D::SharedStorageReader,
     pub state: D::State,
     pub state_queries: D::StateQueries,
     pub evm_storage: D::StorageTrieRepository,
@@ -102,6 +104,8 @@ impl<D: Dependencies> Application<D> {
             receipt_repository: D::receipt_repository(),
             receipt_memory: D::receipt_memory(),
             storage: D::shared_storage(),
+            receipt_memory_reader: D::receipt_memory_reader(),
+            storage_reader: D::shared_storage_reader(),
             state: D::state(),
             state_queries: D::state_queries(genesis_config),
             evm_storage: D::storage_trie_repository(),
@@ -129,6 +133,8 @@ pub trait DependenciesThreadSafe:
         ReceiptRepository: Send + Sync + 'static,
         ReceiptStorage: Send + Sync + 'static,
         SharedStorage: Send + Sync + 'static,
+        ReceiptStorageReader: Send + Sync + 'static,
+        SharedStorageReader: Send + Sync + 'static,
         State: Send + Sync + 'static,
         StateQueries: Send + Sync + 'static,
         StorageTrieRepository: Send + Sync + 'static,
@@ -157,6 +163,8 @@ impl<
             ReceiptRepository: Send + Sync + 'static,
             ReceiptStorage: Send + Sync + 'static,
             SharedStorage: Send + Sync + 'static,
+            ReceiptStorageReader: Send + Sync + 'static,
+            SharedStorageReader: Send + Sync + 'static,
             State: Send + Sync + 'static,
             StateQueries: Send + Sync + 'static,
             StorageTrieRepository: Send + Sync + 'static,
@@ -175,7 +183,8 @@ impl<
 pub trait Dependencies {
     type BaseTokenAccounts: moved_execution::BaseTokenAccounts + Clone;
     type BlockHash: moved_blockchain::block::BlockHash;
-    type BlockQueries: moved_blockchain::block::BlockQueries<Storage = Self::SharedStorage> + Clone;
+    type BlockQueries: moved_blockchain::block::BlockQueries<Storage = Self::SharedStorageReader>
+        + Clone;
     type BlockRepository: moved_blockchain::block::BlockRepository<Storage = Self::SharedStorage>;
 
     /// A function invoked on an execution of a new payload.
@@ -187,17 +196,19 @@ pub trait Dependencies {
     /// A function invoked on a completion of new transaction execution batch.
     type OnTxBatch: Fn(&mut Application<Self>) + 'static + ?Sized;
 
-    type PayloadQueries: moved_blockchain::payload::PayloadQueries<Storage = Self::SharedStorage>
+    type PayloadQueries: moved_blockchain::payload::PayloadQueries<Storage = Self::SharedStorageReader>
         + Clone;
-    type ReceiptQueries: moved_blockchain::receipt::ReceiptQueries<Storage = Self::ReceiptStorage>
+    type ReceiptQueries: moved_blockchain::receipt::ReceiptQueries<Storage = Self::ReceiptStorageReader>
         + Clone;
     type ReceiptRepository: moved_blockchain::receipt::ReceiptRepository<Storage = Self::ReceiptStorage>;
-    type ReceiptStorage: Clone;
-    type SharedStorage: Clone;
+    type ReceiptStorage;
+    type SharedStorage;
+    type ReceiptStorageReader: Clone;
+    type SharedStorageReader: Clone;
     type State: moved_state::State + Clone;
     type StateQueries: moved_blockchain::state::StateQueries + Clone;
     type StorageTrieRepository: moved_evm_ext::state::StorageTrieRepository + Clone;
-    type TransactionQueries: moved_blockchain::transaction::TransactionQueries<Storage = Self::SharedStorage>
+    type TransactionQueries: moved_blockchain::transaction::TransactionQueries<Storage = Self::SharedStorageReader>
         + Clone;
     type TransactionRepository: moved_blockchain::transaction::TransactionRepository<Storage = Self::SharedStorage>;
     type BaseGasFee: moved_blockchain::block::BaseGasFee;
@@ -227,6 +238,10 @@ pub trait Dependencies {
     fn receipt_memory() -> Self::ReceiptStorage;
 
     fn shared_storage() -> Self::SharedStorage;
+
+    fn receipt_memory_reader() -> Self::ReceiptStorageReader;
+
+    fn shared_storage_reader() -> Self::SharedStorageReader;
 
     fn state() -> Self::State;
 
@@ -267,6 +282,8 @@ mod test_doubles {
         RR = moved_blockchain::receipt::InMemoryReceiptRepository,
         R = moved_blockchain::receipt::ReceiptMemory,
         B = moved_blockchain::in_memory::SharedMemory,
+        RMR = moved_blockchain::receipt::ReceiptMemoryReader,
+        BMR = moved_blockchain::in_memory::SharedMemoryReader,
         ST = moved_evm_ext::state::InMemoryStorageTrieRepository,
         TQ = moved_blockchain::transaction::InMemoryTransactionQueries,
         TR = moved_blockchain::transaction::InMemoryTransactionRepository,
@@ -285,6 +302,8 @@ mod test_doubles {
         RR,
         R,
         B,
+        RMR,
+        BMR,
         ST,
         TQ,
         TR,
@@ -298,15 +317,17 @@ mod test_doubles {
         S: State + Clone + Send + Sync + 'static,
         BT: moved_execution::BaseTokenAccounts + Clone + Send + Sync + 'static,
         BH: moved_blockchain::block::BlockHash + Send + Sync + 'static,
-        BQ: moved_blockchain::block::BlockQueries<Storage = B> + Clone + Send + Sync + 'static,
+        BQ: moved_blockchain::block::BlockQueries<Storage = BMR> + Clone + Send + Sync + 'static,
         BR: moved_blockchain::block::BlockRepository<Storage = B> + Send + Sync + 'static,
-        PQ: moved_blockchain::payload::PayloadQueries<Storage = B> + Clone + Send + Sync + 'static,
-        RQ: moved_blockchain::receipt::ReceiptQueries<Storage = R> + Clone + Send + Sync + 'static,
+        PQ: moved_blockchain::payload::PayloadQueries<Storage = BMR> + Clone + Send + Sync + 'static,
+        RQ: moved_blockchain::receipt::ReceiptQueries<Storage = RMR> + Clone + Send + Sync + 'static,
         RR: moved_blockchain::receipt::ReceiptRepository<Storage = R> + Send + Sync + 'static,
-        R: Clone + Send + Sync + 'static,
-        B: Clone + Send + Sync + 'static,
+        R: Send + Sync + 'static,
+        B: Send + Sync + 'static,
+        RMR: Clone + Send + Sync + 'static,
+        BMR: Clone + Send + Sync + 'static,
         ST: moved_evm_ext::state::StorageTrieRepository + Clone + Send + Sync + 'static,
-        TQ: moved_blockchain::transaction::TransactionQueries<Storage = B>
+        TQ: moved_blockchain::transaction::TransactionQueries<Storage = BMR>
             + Clone
             + Send
             + Sync
@@ -316,7 +337,27 @@ mod test_doubles {
         F1: moved_execution::CreateL1GasFee + Send + Sync + 'static,
         F2: moved_execution::CreateL2GasFee + Send + Sync + 'static,
     > Dependencies
-        for TestDependencies<SQ, S, BT, BH, BQ, BR, PQ, RQ, RR, R, B, ST, TQ, TR, BF, F1, F2>
+        for TestDependencies<
+            SQ,
+            S,
+            BT,
+            BH,
+            BQ,
+            BR,
+            PQ,
+            RQ,
+            RR,
+            R,
+            B,
+            RMR,
+            BMR,
+            ST,
+            TQ,
+            TR,
+            BF,
+            F1,
+            F2,
+        >
     {
         type BaseTokenAccounts = BT;
         type BlockHash = BH;
@@ -330,6 +371,8 @@ mod test_doubles {
         type ReceiptRepository = RR;
         type ReceiptStorage = R;
         type SharedStorage = B;
+        type ReceiptStorageReader = RMR;
+        type SharedStorageReader = BMR;
         type State = S;
         type StateQueries = SQ;
         type StorageTrieRepository = ST;
@@ -384,6 +427,14 @@ mod test_doubles {
         }
 
         fn shared_storage() -> Self::SharedStorage {
+            unimplemented!("Dependencies are created manually in tests")
+        }
+
+        fn receipt_memory_reader() -> Self::ReceiptStorageReader {
+            unimplemented!("Dependencies are created manually in tests")
+        }
+
+        fn shared_storage_reader() -> Self::SharedStorageReader {
             unimplemented!("Dependencies are created manually in tests")
         }
 

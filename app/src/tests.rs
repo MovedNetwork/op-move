@@ -20,9 +20,11 @@ use {
             Block, BlockHash, BlockRepository, Eip1559GasFee, Header, InMemoryBlockQueries,
             InMemoryBlockRepository, MovedBlockHash,
         },
-        in_memory::SharedMemory,
+        in_memory::{SharedMemory, shared_memory},
         payload::InMemoryPayloadQueries,
-        receipt::{InMemoryReceiptQueries, InMemoryReceiptRepository, ReceiptMemory},
+        receipt::{
+            InMemoryReceiptQueries, InMemoryReceiptRepository, ReceiptMemory, receipt_memory,
+        },
         state::{BlockHeight, InMemoryStateQueries, MockStateQueries, StateQueries},
         transaction::{InMemoryTransactionQueries, InMemoryTransactionRepository},
     },
@@ -57,10 +59,13 @@ impl Signer {
     }
 }
 
-fn create_app_with_given_queries<SQ: StateQueries + Send + Sync + 'static>(
+fn create_app_with_given_queries<SQ: StateQueries + Clone + Send + Sync + 'static>(
     height: u64,
     state_queries: SQ,
-) -> Application<TestDependencies<SQ>> {
+) -> (
+    Application<TestDependencies<SQ>>,
+    ApplicationReader<TestDependencies<SQ>>,
+) {
     let genesis_config = GenesisConfig::default();
 
     let head_hash = B256::new(hex!(
@@ -68,7 +73,7 @@ fn create_app_with_given_queries<SQ: StateQueries + Send + Sync + 'static>(
     ));
     let genesis_block = Block::default().with_hash(head_hash).with_value(U256::ZERO);
 
-    let mut memory = SharedMemory::new();
+    let (memory_reader, mut memory) = shared_memory::new();
     let mut repository = InMemoryBlockRepository::new();
 
     for i in 0..=height {
@@ -89,30 +94,49 @@ fn create_app_with_given_queries<SQ: StateQueries + Send + Sync + 'static>(
         &mut evm_storage,
     );
 
-    Application {
-        mem_pool: Default::default(),
-        genesis_config,
-        base_token: MovedBaseTokenAccounts::new(AccountAddress::ONE),
-        block_hash: MovedBlockHash,
-        block_queries: InMemoryBlockQueries,
-        block_repository: repository,
-        on_payload: CommandActor::on_payload_noop(),
-        on_tx: CommandActor::on_tx_noop(),
-        on_tx_batch: CommandActor::on_tx_batch_noop(),
-        payload_queries: InMemoryPayloadQueries::new(),
-        receipt_queries: InMemoryReceiptQueries::new(),
-        receipt_repository: InMemoryReceiptRepository::new(),
-        receipt_memory: ReceiptMemory::new(),
-        storage: memory,
-        state,
-        state_queries,
-        evm_storage,
-        transaction_queries: InMemoryTransactionQueries::new(),
-        transaction_repository: InMemoryTransactionRepository::new(),
-        gas_fee: Eip1559GasFee::default(),
-        l1_fee: U256::ZERO,
-        l2_fee: U256::ZERO,
-    }
+    let (receipt_memory_reader, receipt_memory) = receipt_memory::new();
+
+    (
+        Application {
+            mem_pool: Default::default(),
+            genesis_config: genesis_config.clone(),
+            base_token: MovedBaseTokenAccounts::new(AccountAddress::ONE),
+            block_hash: MovedBlockHash,
+            block_queries: InMemoryBlockQueries,
+            block_repository: repository,
+            on_payload: CommandActor::on_payload_noop(),
+            on_tx: CommandActor::on_tx_noop(),
+            on_tx_batch: CommandActor::on_tx_batch_noop(),
+            payload_queries: InMemoryPayloadQueries::new(),
+            receipt_queries: InMemoryReceiptQueries::new(),
+            receipt_repository: InMemoryReceiptRepository::new(),
+            receipt_memory,
+            receipt_memory_reader: receipt_memory_reader.clone(),
+            storage: memory,
+            storage_reader: memory_reader.clone(),
+            state,
+            state_queries: state_queries.clone(),
+            evm_storage: evm_storage.clone(),
+            transaction_queries: InMemoryTransactionQueries::new(),
+            transaction_repository: InMemoryTransactionRepository::new(),
+            gas_fee: Eip1559GasFee::default(),
+            l1_fee: U256::ZERO,
+            l2_fee: U256::ZERO,
+        },
+        ApplicationReader {
+            genesis_config,
+            base_token: MovedBaseTokenAccounts::new(AccountAddress::ONE),
+            block_queries: InMemoryBlockQueries,
+            payload_queries: InMemoryPayloadQueries::new(),
+            receipt_queries: InMemoryReceiptQueries::new(),
+            receipt_memory: receipt_memory_reader,
+            storage: memory_reader,
+            state,
+            state_queries,
+            evm_storage,
+            transaction_queries: InMemoryTransactionQueries::new(),
+        },
+    )
 }
 
 fn mint_eth(

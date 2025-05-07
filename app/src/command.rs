@@ -191,7 +191,8 @@ impl<D: Dependencies> Application<D> {
                 normalized_tx.gas_limit(),
                 normalized_tx.effective_gas_price(base_fee),
             );
-            let block_hash_lookup = StorageBasedProvider::new(&self.storage, &self.block_queries);
+            let block_hash_lookup =
+                StorageBasedProvider::new(&self.storage_reader, &self.block_queries);
             let input = match &normalized_tx {
                 NormalizedExtendedTxEnvelope::Canonical(tx) => CanonicalExecutionInput {
                     tx,

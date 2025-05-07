@@ -3,7 +3,7 @@ use crate::{
     transaction::{TransactionMemory, TransactionMemoryReader},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SharedMemoryReader {
     pub block_memory: BlockMemoryReader,
     pub transaction_memory: TransactionMemoryReader,
@@ -33,5 +33,27 @@ impl SharedMemory {
             block_memory,
             transaction_memory,
         }
+    }
+}
+
+pub mod shared_memory {
+    use crate::{
+        block::{BlockMemory, BlockMemoryReader},
+        in_memory::{SharedMemory, SharedMemoryReader},
+        transaction::{TransactionMemory, TransactionMemoryReader},
+    };
+
+    pub fn new() -> (SharedMemoryReader, SharedMemory) {
+        let (r1, w1) = evmap::new();
+        let (r2, w2) = evmap::new();
+        let bw = BlockMemory::new(w1, w2);
+        let br = BlockMemoryReader::new(r1, r2);
+        let (r1, w1) = evmap::new();
+        let tw = TransactionMemory::new(w1);
+        let tr = TransactionMemoryReader::new(r1);
+        let w = SharedMemory::new(bw, tw);
+        let r = SharedMemoryReader::new(br, tr);
+
+        (r, w)
     }
 }

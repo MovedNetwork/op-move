@@ -69,7 +69,7 @@ pub trait BaseTokenAccounts {
     ) -> Result<(), moved_shared::error::Error>;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MovedBaseTokenAccounts {
     eth_treasury: AccountAddress,
 }

@@ -291,9 +291,9 @@ impl DbWithRoot for InMemoryDb {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct InMemoryStorageTrieRepository {
-    accounts: RwLock<HashMap<Address, Arc<StagingEthTrieDb<BoxedTrieDb>>>>,
+    accounts: Arc<RwLock<HashMap<Address, Arc<StagingEthTrieDb<BoxedTrieDb>>>>>,
 }
 
 impl InMemoryStorageTrieRepository {

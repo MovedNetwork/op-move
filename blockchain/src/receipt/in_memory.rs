@@ -53,7 +53,7 @@ impl AsRef<ReadHandle> for ReceiptMemory {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ReceiptMemoryReader {
     receipts: ReadHandle,
 }
@@ -82,6 +82,16 @@ impl<T: AsRef<ReadHandle>> ReadReceiptMemory for T {
 
     fn by_transaction_hash(&self, transaction_hash: B256) -> Option<ExtendedReceipt> {
         self.as_ref().get_one(&transaction_hash).map(|v| *v.clone())
+    }
+}
+
+pub mod receipt_memory {
+    use crate::receipt::{ReceiptMemory, ReceiptMemoryReader};
+
+    pub fn new() -> (ReceiptMemoryReader, ReceiptMemory) {
+        let (r, w) = evmap::new();
+
+        (ReceiptMemoryReader::new(r), ReceiptMemory::new(w))
     }
 }
 

@@ -39,7 +39,7 @@ impl AsRef<ReadHashes> for BlockMemory {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BlockMemoryReader {
     hashes: ReadHashes,
     heights: ReadHeights,

@@ -82,7 +82,7 @@ pub mod in_memory {
     /// Block query implementation that works with in memory backing store [`BlockMemory`].
     ///
     /// [`BlockMemory`]: crate::block::BlockMemory
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct InMemoryBlockQueries;
 
     impl BlockQueries for InMemoryBlockQueries {

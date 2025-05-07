@@ -87,7 +87,7 @@ pub trait StateQueries {
     ) -> Option<ProofResponse>;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct StateMemory {
     state_roots: Vec<B256>,
 }
@@ -119,7 +119,7 @@ impl StateMemory {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct InMemoryStateQueries {
     storage: StateMemory,
 }

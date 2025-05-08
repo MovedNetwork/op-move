@@ -107,7 +107,7 @@ impl TestContext {
     /// Creates a new test context with initialized state and default signer
     pub fn new() -> Self {
         let genesis_config = GenesisConfig::default();
-        let mut state = InMemoryState::new();
+        let mut state = InMemoryState::default();
         let mut evm_storage = InMemoryStorageTrieRepository::new();
         let (changes, tables, evm_storage_changes) = moved_genesis_image::load();
         moved_genesis::apply(

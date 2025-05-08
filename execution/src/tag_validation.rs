@@ -525,7 +525,7 @@ mod tests {
 
         let moved_vm = MovedVm::new(&Default::default());
         let vm = moved_vm.create_move_vm().unwrap();
-        let state = InMemoryState::new();
+        let state = InMemoryState::default();
         let module_bytes_storage = ResolverBasedModuleBytesStorage::new(state.resolver());
         let code_storage = module_bytes_storage.as_unsync_code_storage(&moved_vm);
         let evm_storage = InMemoryStorageTrieRepository::new();
@@ -613,7 +613,7 @@ mod tests {
 
         let moved_vm = MovedVm::new(&Default::default());
         let vm = moved_vm.create_move_vm().unwrap();
-        let state = InMemoryState::new();
+        let state = InMemoryState::default();
         let module_bytes_storage = ResolverBasedModuleBytesStorage::new(state.resolver());
         let code_storage = module_bytes_storage.as_unsync_code_storage(&moved_vm);
         let evm_storage = InMemoryStorageTrieRepository::new();

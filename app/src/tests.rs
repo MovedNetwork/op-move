@@ -131,7 +131,6 @@ fn create_app_with_given_queries<SQ: StateQueries + Clone + Send + Sync + 'stati
             receipt_queries: InMemoryReceiptQueries::new(),
             receipt_memory: receipt_memory_reader,
             storage: memory_reader,
-            state,
             state_queries,
             evm_storage,
             transaction_queries: InMemoryTransactionQueries::new(),

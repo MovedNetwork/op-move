@@ -70,11 +70,7 @@ impl<D: Dependencies<StateQueries = InMemoryStateQueries>> CommandActor<D> {
     }
 
     pub fn on_tx_batch_in_memory() -> &'static OnTxBatch<Application<D>> {
-        &|state| {
-            state
-                .state_queries
-                .push_state_root(state.state.state_root())
-        }
+        &|_state| ()
     }
 }
 

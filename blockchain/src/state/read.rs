@@ -83,10 +83,13 @@ pub trait StateQueries {
         storage_slots: &[U256],
         height: BlockHeight,
     ) -> Option<ProofResponse>;
+
+    fn resolver_at<'a>(&'a self, height: BlockHeight) -> impl MoveResolver + TableResolver + 'a;
 }
 
 pub trait ReadStateRoot {
     fn root_by_height(&self, height: BlockHeight) -> Option<B256>;
+    fn height(&self) -> BlockHeight;
 }
 
 impl ReadStateRoot for SharedMemoryReader {
@@ -94,10 +97,14 @@ impl ReadStateRoot for SharedMemoryReader {
         self.block_memory
             .map_by_height(height, |v| v.block.header.state_root)
     }
+
+    fn height(&self) -> BlockHeight {
+        self.block_memory.height()
+    }
 }
 
 #[derive(Debug, Clone)]
-pub struct InMemoryStateQueries<R: ReadStateRoot, D: DB> {
+pub struct InMemoryStateQueries<R: ReadStateRoot = SharedMemoryReader, D: DB = eth_trie::MemoryDB> {
     memory: R,
     db: Arc<D>,
 }
@@ -220,6 +227,10 @@ impl<R: ReadStateRoot, D: DB> StateQueries for InMemoryStateQueries<R, D> {
         let mut tree = EthTrie::from(self.db.clone(), root).expect(IN_MEMORY_EXPECT_MSG);
 
         proof_from_trie_and_resolver(address, storage_slots, &mut tree, &resolver, evm_storage)
+    }
+
+    fn resolver_at<'a>(&'a self, height: BlockHeight) -> impl MoveResolver + TableResolver + 'a {
+        self.resolver(height).unwrap()
     }
 }
 
@@ -348,6 +359,10 @@ pub mod test_doubles {
         ) -> Option<ProofResponse> {
             None
         }
+
+        fn resolver_at<'a>(&'a self, _: BlockHeight) -> impl MoveResolver + TableResolver + 'a {
+            EthTrieResolver::new(EthTrie::new(Arc::new(eth_trie::MemoryDB::new(true))))
+        }
     }
 }
 
@@ -373,6 +388,10 @@ mod tests {
     impl ReadStateRoot for Vec<B256> {
         fn root_by_height(&self, height: BlockHeight) -> Option<B256> {
             self.get(height as usize).cloned()
+        }
+
+        fn height(&self) -> BlockHeight {
+            self.len() as u64 - 1
         }
     }
 

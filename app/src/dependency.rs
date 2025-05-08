@@ -15,7 +15,6 @@ pub struct ApplicationReader<D: Dependencies> {
     pub receipt_queries: D::ReceiptQueries,
     pub receipt_memory: D::ReceiptStorageReader,
     pub storage: D::SharedStorageReader,
-    pub state: D::State,
     pub state_queries: D::StateQueries,
     pub evm_storage: D::StorageTrieRepository,
     pub transaction_queries: D::TransactionQueries,
@@ -31,7 +30,6 @@ impl<D: Dependencies> Clone for ApplicationReader<D> {
             receipt_queries: self.receipt_queries.clone(),
             receipt_memory: self.receipt_memory.clone(),
             storage: self.storage.clone(),
-            state: self.state.clone(),
             state_queries: self.state_queries.clone(),
             evm_storage: self.evm_storage.clone(),
             transaction_queries: self.transaction_queries.clone(),
@@ -49,7 +47,6 @@ impl<D: Dependencies> ApplicationReader<D> {
             receipt_queries: D::receipt_queries(),
             receipt_memory: D::receipt_memory_reader(),
             storage: D::shared_storage_reader(),
-            state: D::state(),
             state_queries: D::state_queries(genesis_config),
             evm_storage: D::storage_trie_repository(),
             transaction_queries: D::transaction_queries(),
@@ -205,7 +202,7 @@ pub trait Dependencies {
     type SharedStorage;
     type ReceiptStorageReader: Clone;
     type SharedStorageReader: Clone;
-    type State: moved_state::State + Clone;
+    type State: moved_state::State;
     type StateQueries: moved_blockchain::state::StateQueries + Clone;
     type StorageTrieRepository: moved_evm_ext::state::StorageTrieRepository + Clone;
     type TransactionQueries: moved_blockchain::transaction::TransactionQueries<Storage = Self::SharedStorageReader>
@@ -314,7 +311,7 @@ mod test_doubles {
 
     impl<
         SQ: StateQueries + Clone + Send + Sync + 'static,
-        S: State + Clone + Send + Sync + 'static,
+        S: State + Send + Sync + 'static,
         BT: moved_execution::BaseTokenAccounts + Clone + Send + Sync + 'static,
         BH: moved_blockchain::block::BlockHash + Send + Sync + 'static,
         BQ: moved_blockchain::block::BlockQueries<Storage = BMR> + Clone + Send + Sync + 'static,

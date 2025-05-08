@@ -336,6 +336,7 @@ pub mod test_doubles {
         std::sync::Arc,
     };
 
+    #[derive(Debug, Clone)]
     pub struct MockStateQueries(pub AccountAddress, pub BlockHeight);
 
     impl StateQueries for MockStateQueries {

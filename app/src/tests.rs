@@ -295,12 +295,12 @@ fn test_nonce_is_fetched_by_height_successfully(
     expected_height: BlockHeight,
 ) {
     let address = Address::new(hex!("11223344556677889900ffeeaabbccddee111111"));
-    let app = create_app_with_given_queries(
+    let (_, reader) = create_app_with_given_queries(
         head_height,
         MockStateQueries(address.to_move_address(), expected_height),
     );
 
-    let actual_nonce = app.nonce_by_height(address, height).unwrap();
+    let actual_nonce = reader.nonce_by_height(address, height).unwrap();
     let expected_nonce = 3;
 
     assert_eq!(actual_nonce, expected_nonce);

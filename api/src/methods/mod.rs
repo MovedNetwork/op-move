@@ -29,14 +29,15 @@ pub mod tests {
         },
         move_core_types::account_address::AccountAddress,
         moved_app::{
-            Application, Command, CommandActor, DependenciesThreadSafe, Payload, TestDependencies,
+            Application, ApplicationReader, Command, CommandActor, DependenciesThreadSafe, Payload,
+            TestDependencies,
         },
         moved_blockchain::{
             block::{
                 Block, BlockQueries, BlockRepository, BlockResponse, Eip1559GasFee,
                 InMemoryBlockQueries, InMemoryBlockRepository, MovedBlockHash,
             },
-            in_memory::SharedMemory,
+            in_memory::{SharedMemory, shared_memory},
             payload::InMemoryPayloadQueries,
             receipt::{InMemoryReceiptQueries, InMemoryReceiptRepository, ReceiptMemory},
             state::{InMemoryStateQueries, MockStateQueries},
@@ -55,7 +56,10 @@ pub mod tests {
     /// The address corresponding to this private key is 0x8fd379246834eac74B8419FfdA202CF8051F7A03
     pub const PRIVATE_KEY: [u8; 32] = [0xaa; 32];
 
-    pub fn create_app() -> Arc<RwLock<Application<TestDependencies>>> {
+    pub fn create_app() -> (
+        ApplicationReader<TestDependencies>,
+        Application<TestDependencies>,
+    ) {
         let genesis_config = GenesisConfig::default();
 
         let head_hash = B256::new(hex!(
@@ -63,7 +67,7 @@ pub mod tests {
         ));
         let genesis_block = Block::default().with_hash(head_hash).with_value(U256::ZERO);
 
-        let mut memory = SharedMemory::new();
+        let (memory_reader, mut memory) = shared_memory::new();
         let mut repository = InMemoryBlockRepository::new();
         repository.add(&mut memory, genesis_block).unwrap();
 
@@ -80,30 +84,45 @@ pub mod tests {
         );
         let initial_state_root = genesis_config.initial_state_root;
 
-        Arc::new(RwLock::new(Application {
-            mem_pool: Default::default(),
-            genesis_config,
-            gas_fee: Eip1559GasFee::default(),
-            base_token: MovedBaseTokenAccounts::new(AccountAddress::ONE),
-            l1_fee: U256::ZERO,
-            l2_fee: U256::ZERO,
-            block_hash: MovedBlockHash,
-            block_queries: InMemoryBlockQueries,
-            block_repository: repository,
-            on_payload: CommandActor::on_payload_in_memory(),
-            on_tx: CommandActor::on_tx_noop(),
-            on_tx_batch: CommandActor::on_tx_batch_noop(),
-            payload_queries: InMemoryPayloadQueries::new(),
-            receipt_queries: InMemoryReceiptQueries::new(),
-            receipt_repository: InMemoryReceiptRepository::new(),
-            receipt_memory: ReceiptMemory::new(),
-            storage: memory,
-            state,
-            state_queries: InMemoryStateQueries::from_genesis(initial_state_root),
-            evm_storage,
-            transaction_queries: InMemoryTransactionQueries::new(),
-            transaction_repository: InMemoryTransactionRepository::new(),
-        }))
+        (
+            ApplicationReader {
+                genesis_config,
+                base_token: (),
+                block_queries: (),
+                payload_queries: (),
+                receipt_queries: (),
+                receipt_memory: (),
+                storage: memory_reader,
+                state: (),
+                state_queries: (),
+                evm_storage: (),
+                transaction_queries: (),
+            },
+            Application {
+                mem_pool: Default::default(),
+                genesis_config,
+                gas_fee: Eip1559GasFee::default(),
+                base_token: MovedBaseTokenAccounts::new(AccountAddress::ONE),
+                l1_fee: U256::ZERO,
+                l2_fee: U256::ZERO,
+                block_hash: MovedBlockHash,
+                block_queries: InMemoryBlockQueries,
+                block_repository: repository,
+                on_payload: CommandActor::on_payload_in_memory(),
+                on_tx: CommandActor::on_tx_noop(),
+                on_tx_batch: CommandActor::on_tx_batch_noop(),
+                payload_queries: InMemoryPayloadQueries::new(),
+                receipt_queries: InMemoryReceiptQueries::new(),
+                receipt_repository: InMemoryReceiptRepository::new(),
+                receipt_memory: ReceiptMemory::new(),
+                storage: memory,
+                state,
+                state_queries: InMemoryStateQueries::from_genesis(initial_state_root),
+                evm_storage,
+                transaction_queries: InMemoryTransactionQueries::new(),
+                transaction_repository: InMemoryTransactionRepository::new(),
+            },
+        )
     }
 
     pub async fn deposit_eth(to: &str, channel: &Sender<Command>) {

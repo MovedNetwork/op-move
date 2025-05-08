@@ -47,7 +47,7 @@ pub mod tests {
         moved_execution::MovedBaseTokenAccounts,
         moved_genesis::config::{CHAIN_ID, GenesisConfig},
         moved_shared::primitives::{Address, B256, U64, U256},
-        moved_state::InMemoryState,
+        moved_state::{InMemoryState, State},
         op_alloy::consensus::{OpTxEnvelope, TxDeposit},
         std::{convert::Infallible, sync::Arc},
         tokio::sync::{RwLock, mpsc::Sender},
@@ -83,6 +83,7 @@ pub mod tests {
             &mut evm_storage,
         );
         let initial_state_root = genesis_config.initial_state_root;
+        let state_queries = InMemoryStateQueries::new(memory_reader.clone(), state.db());
 
         (
             ApplicationReader {
@@ -94,7 +95,7 @@ pub mod tests {
                 receipt_memory: (),
                 storage: memory_reader,
                 state: (),
-                state_queries: (),
+                state_queries: state_queries.clone(),
                 evm_storage: (),
                 transaction_queries: (),
             },
@@ -117,7 +118,7 @@ pub mod tests {
                 receipt_memory: ReceiptMemory::new(),
                 storage: memory,
                 state,
-                state_queries: InMemoryStateQueries::from_genesis(initial_state_root),
+                state_queries: state_queries,
                 evm_storage,
                 transaction_queries: InMemoryTransactionQueries::new(),
                 transaction_repository: InMemoryTransactionRepository::new(),

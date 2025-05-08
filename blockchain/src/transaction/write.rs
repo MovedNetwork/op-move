@@ -1,9 +1,8 @@
 use {
-    crate::transaction::{TransactionQueries, TransactionResponse},
     alloy::eips::eip2718::Encodable2718,
     moved_shared::primitives::{B256, U256},
     op_alloy::consensus::{OpTxEnvelope, TxDeposit},
-    std::{convert::Infallible, fmt::Debug},
+    std::fmt::Debug,
 };
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -149,7 +148,7 @@ pub mod in_memory {
 
 #[cfg(any(feature = "test-doubles", test))]
 mod test_doubles {
-    use super::*;
+    use {super::*, std::convert::Infallible};
 
     impl TransactionRepository for () {
         type Err = Infallible;

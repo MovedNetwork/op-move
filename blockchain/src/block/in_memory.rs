@@ -65,9 +65,14 @@ impl AsRef<ReadHashes> for BlockMemoryReader {
 
 pub trait ReadBlockMemory {
     fn by_hash(&self, hash: B256) -> Option<ExtendedBlock>;
-    fn by_height(&self, height: u64) -> Option<ExtendedBlock>;
+    fn by_height(&self, height: u64) -> Option<ExtendedBlock> {
+        self.map_by_height(height, Clone::clone)
+    }
+    fn map_by_height<U>(&self, height: u64, f: impl FnOnce(&'_ ExtendedBlock) -> U) -> Option<U>;
     fn height(&self) -> u64;
-    fn last(&self) -> Option<ExtendedBlock>;
+    fn last(&self) -> Option<ExtendedBlock> {
+        self.by_height(self.height())
+    }
 }
 
 impl<T: AsRef<ReadHashes> + AsRef<ReadHeights>> ReadBlockMemory for T {
@@ -77,17 +82,13 @@ impl<T: AsRef<ReadHashes> + AsRef<ReadHeights>> ReadBlockMemory for T {
             .map(|v| ExtendedBlock::clone(&v))
     }
 
-    fn by_height(&self, height: u64) -> Option<ExtendedBlock> {
+    fn map_by_height<U>(&self, height: u64, f: impl FnOnce(&'_ ExtendedBlock) -> U) -> Option<U> {
         <T as AsRef<ReadHeights>>::as_ref(self)
             .get_one(&height)
-            .map(|v| ExtendedBlock::clone(&v))
+            .map(|v| f(&v))
     }
 
     fn height(&self) -> u64 {
         <T as AsRef<ReadHeights>>::as_ref(self).len() as u64 - 1
-    }
-
-    fn last(&self) -> Option<ExtendedBlock> {
-        self.by_height(self.height())
     }
 }

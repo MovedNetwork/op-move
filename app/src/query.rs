@@ -1,5 +1,5 @@
 use {
-    crate::{Application, ApplicationReader, Dependencies, block_hash::StorageBasedProvider},
+    crate::{ApplicationReader, Dependencies, block_hash::StorageBasedProvider},
     alloy::{
         eips::{
             BlockId,
@@ -29,7 +29,6 @@ impl<D: Dependencies> ApplicationReader<D> {
 
     pub fn balance_by_height(&self, address: Address, height: BlockNumberOrTag) -> Option<U256> {
         self.state_queries.balance_at(
-            self.state.db(),
             &self.evm_storage,
             address.to_move_address(),
             self.resolve_height(height)?,
@@ -38,7 +37,6 @@ impl<D: Dependencies> ApplicationReader<D> {
 
     pub fn nonce_by_height(&self, address: Address, height: BlockNumberOrTag) -> Option<u64> {
         self.state_queries.nonce_at(
-            self.state.db(),
             &self.evm_storage,
             address.to_move_address(),
             self.resolve_height(height)?,
@@ -149,7 +147,6 @@ impl<D: Dependencies> ApplicationReader<D> {
     ) -> Option<ProofResponse> {
         self.height_from_block_id(height).and_then(|height| {
             self.state_queries.proof_at(
-                self.state.db(),
                 &self.evm_storage,
                 address.to_move_address(),
                 &storage_slots,

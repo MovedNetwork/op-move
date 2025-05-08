@@ -2,7 +2,7 @@ use {
     crate::{block::write::ExtendedBlock, transaction::ExtendedTransaction},
     alloy::{eips::eip4895::Withdrawals, network::primitives::BlockTransactions},
     moved_shared::primitives::B256,
-    std::{convert::Infallible, fmt::Debug},
+    std::fmt::Debug,
 };
 
 pub trait BlockQueries: Debug {
@@ -135,7 +135,7 @@ pub mod in_memory {
 
 #[cfg(any(feature = "test-doubles", test))]
 mod test_doubles {
-    use super::*;
+    use {super::*, std::convert::Infallible};
 
     impl BlockQueries for () {
         type Err = Infallible;

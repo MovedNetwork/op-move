@@ -1,4 +1,5 @@
 use {
+    crate::{block::ReadBlockMemory, in_memory::SharedMemoryReader},
     alloy::{
         primitives::keccak256,
         rpc::types::{EIP1186AccountProofResponse, EIP1186StorageProof},
@@ -61,7 +62,6 @@ pub trait StateQueries {
     /// base token associated with `account`.
     fn balance_at(
         &self,
-        db: Arc<impl DB>,
         evm_storage: &impl StorageTrieRepository,
         account: AccountAddress,
         height: BlockHeight,
@@ -71,7 +71,6 @@ pub trait StateQueries {
     /// associated with `account`.
     fn nonce_at(
         &self,
-        db: Arc<impl DB>,
         evm_storage: &impl StorageTrieRepository,
         account: AccountAddress,
         height: BlockHeight,
@@ -79,7 +78,6 @@ pub trait StateQueries {
 
     fn proof_at(
         &self,
-        db: Arc<impl DB>,
         evm_storage: &impl StorageTrieRepository,
         account: AccountAddress,
         storage_slots: &[U256],
@@ -87,58 +85,40 @@ pub trait StateQueries {
     ) -> Option<ProofResponse>;
 }
 
-#[derive(Debug, Clone)]
-pub struct StateMemory {
-    state_roots: Vec<B256>,
+pub trait ReadStateRoot {
+    fn root_by_height(&self, height: BlockHeight) -> Option<B256>;
 }
 
-impl StateMemory {
-    /// Creates state memory with `genesis_changes` on `version` 0 tagged as block `height` 0.
-    pub fn from_genesis(genesis_state_root: B256) -> Self {
-        Self {
-            state_roots: vec![genesis_state_root],
-        }
+impl ReadStateRoot for SharedMemoryReader {
+    fn root_by_height(&self, height: BlockHeight) -> Option<B256> {
+        self.block_memory
+            .map_by_height(height, |v| v.block.header.state_root)
     }
+}
 
-    fn push_state_root(&mut self, root: B256) {
-        self.state_roots.push(root);
+#[derive(Debug, Clone)]
+pub struct InMemoryStateQueries<R: ReadStateRoot, D: DB> {
+    memory: R,
+    db: Arc<D>,
+}
+
+impl<R: ReadStateRoot, D: DB> InMemoryStateQueries<R, D> {
+    pub fn new(memory: R, db: Arc<D>) -> Self {
+        Self { memory, db }
     }
 
     fn root_by_height(&self, height: BlockHeight) -> Option<B256> {
-        self.state_roots.get(height as usize).copied()
+        self.memory.root_by_height(height)
     }
 
     fn resolver<'a>(
         &'a self,
-        db: Arc<impl DB + 'a>,
         height: BlockHeight,
     ) -> Option<impl MoveResolver + TableResolver + 'a> {
         Some(EthTrieResolver::new(
-            EthTrie::from(db, self.root_by_height(height)?).expect("State root should be valid"),
+            EthTrie::from(self.db.clone(), self.root_by_height(height)?)
+                .expect("State root should be valid"),
         ))
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct InMemoryStateQueries {
-    storage: StateMemory,
-}
-
-impl InMemoryStateQueries {
-    pub fn new(storage: StateMemory) -> Self {
-        Self { storage }
-    }
-
-    /// Creates state memory with `genesis_changes` on `version` 0 tagged as block `height` 0.
-    pub fn from_genesis(genesis_state_root: B256) -> Self {
-        Self::new(StateMemory::from_genesis(genesis_state_root))
-    }
-
-    /// Marks current state root with current block height.
-    ///
-    /// The internal block height number is incremented by this operation.
-    pub fn push_state_root(&mut self, root: B256) {
-        self.storage.push_state_root(root);
     }
 }
 
@@ -198,34 +178,31 @@ pub fn proof_from_trie_and_resolver(
     })
 }
 
-impl StateQueries for InMemoryStateQueries {
+impl<R: ReadStateRoot, D: DB> StateQueries for InMemoryStateQueries<R, D> {
     fn balance_at(
         &self,
-        db: Arc<impl DB>,
         evm_storage: &impl StorageTrieRepository,
         account: AccountAddress,
         height: BlockHeight,
     ) -> Option<Balance> {
-        let resolver = self.storage.resolver(db, height)?;
+        let resolver = self.resolver(height)?;
 
         Some(quick_get_eth_balance(&account, &resolver, evm_storage))
     }
 
     fn nonce_at(
         &self,
-        db: Arc<impl DB>,
         evm_storage: &impl StorageTrieRepository,
         account: AccountAddress,
         height: BlockHeight,
     ) -> Option<Nonce> {
-        let resolver = self.storage.resolver(db, height)?;
+        let resolver = self.resolver(height)?;
 
         Some(quick_get_nonce(&account, &resolver, evm_storage))
     }
 
     fn proof_at(
         &self,
-        db: Arc<impl DB>,
         evm_storage: &impl StorageTrieRepository,
         account: AccountAddress,
         storage_slots: &[U256],
@@ -238,9 +215,9 @@ impl StateQueries for InMemoryStateQueries {
             return None;
         }
 
-        let root = self.storage.root_by_height(height)?;
-        let resolver = self.storage.resolver(db.clone(), height)?;
-        let mut tree = EthTrie::from(db, root).expect(IN_MEMORY_EXPECT_MSG);
+        let root = self.root_by_height(height)?;
+        let resolver = self.resolver(height)?;
+        let mut tree = EthTrie::from(self.db.clone(), root).expect(IN_MEMORY_EXPECT_MSG);
 
         proof_from_trie_and_resolver(address, storage_slots, &mut tree, &resolver, evm_storage)
     }
@@ -330,10 +307,8 @@ pub mod test_doubles {
     use {
         super::*,
         crate::state::{Balance, BlockHeight, Nonce, ProofResponse},
-        eth_trie::DB,
         move_core_types::account_address::AccountAddress,
         moved_shared::primitives::U256,
-        std::sync::Arc,
     };
 
     #[derive(Debug, Clone)]
@@ -342,7 +317,6 @@ pub mod test_doubles {
     impl StateQueries for MockStateQueries {
         fn balance_at(
             &self,
-            _db: Arc<impl DB>,
             _evm_storage: &impl StorageTrieRepository,
             account: AccountAddress,
             height: BlockHeight,
@@ -355,7 +329,6 @@ pub mod test_doubles {
 
         fn nonce_at(
             &self,
-            _db: Arc<impl DB>,
             _evm_storage: &impl StorageTrieRepository,
             account: AccountAddress,
             height: BlockHeight,
@@ -368,7 +341,6 @@ pub mod test_doubles {
 
         fn proof_at(
             &self,
-            _db: Arc<impl DB>,
             _evm_storage: &impl StorageTrieRepository,
             _account: AccountAddress,
             _storage_slots: &[U256],
@@ -397,6 +369,12 @@ mod tests {
         moved_shared::primitives::B256,
         moved_state::{InMemoryState, ResolverBasedModuleBytesStorage, State},
     };
+
+    impl ReadStateRoot for Vec<B256> {
+        fn root_by_height(&self, height: BlockHeight) -> Option<B256> {
+            self.get(height as usize).cloned()
+        }
+    }
 
     struct StateSpy(InMemoryState, ChangeSet);
 
@@ -485,15 +463,15 @@ mod tests {
         let mut state = state.0;
         let addr = AccountAddress::TWO;
 
-        let mut storage = StateMemory::from_genesis(genesis_config.initial_state_root);
+        let mut storage = vec![genesis_config.initial_state_root];
 
         mint_one_eth(&mut state, addr);
-        storage.push_state_root(state.state_root());
+        storage.push(state.state_root());
 
-        let query = InMemoryStateQueries::new(storage);
+        let query = InMemoryStateQueries::new(storage, state.db());
 
         let actual_balance = query
-            .balance_at(state.db(), &evm_storage, addr, 1)
+            .balance_at(&evm_storage, addr, 1)
             .expect("Block height should exist");
         let expected_balance = U256::from(1u64);
 
@@ -521,18 +499,18 @@ mod tests {
 
         let addr = AccountAddress::TWO;
 
-        let mut storage = StateMemory::from_genesis(genesis_config.initial_state_root);
+        let mut storage = vec![genesis_config.initial_state_root];
 
         mint_one_eth(&mut state, addr);
-        storage.push_state_root(state.state_root());
+        storage.push(state.state_root());
         mint_one_eth(&mut state, addr);
         mint_one_eth(&mut state, addr);
-        storage.push_state_root(state.state_root());
+        storage.push(state.state_root());
 
-        let query = InMemoryStateQueries::new(storage);
+        let query = InMemoryStateQueries::new(storage, state.db());
 
         let actual_balance = query
-            .balance_at(state.db(), &evm_storage, addr, 1)
+            .balance_at(&evm_storage, addr, 1)
             .expect("Block height should exist");
         let expected_balance = U256::from(1u64);
 
@@ -560,25 +538,25 @@ mod tests {
 
         let addr = AccountAddress::TWO;
 
-        let mut storage = StateMemory::from_genesis(genesis_config.initial_state_root);
+        let mut storage = vec![genesis_config.initial_state_root];
 
         mint_one_eth(&mut state, addr);
-        storage.push_state_root(state.state_root());
+        storage.push(state.state_root());
         mint_one_eth(&mut state, addr);
         mint_one_eth(&mut state, addr);
-        storage.push_state_root(state.state_root());
+        storage.push(state.state_root());
 
-        let query = InMemoryStateQueries::new(storage);
+        let query = InMemoryStateQueries::new(storage, state.db());
 
         let actual_balance = query
-            .balance_at(state.db(), &evm_storage, addr, 1)
+            .balance_at(&evm_storage, addr, 1)
             .expect("Block height should exist");
         let expected_balance = U256::from(1u64);
 
         assert_eq!(actual_balance, expected_balance);
 
         let actual_balance = query
-            .balance_at(state.db(), &evm_storage, addr, 2)
+            .balance_at(&evm_storage, addr, 2)
             .expect("Block height should exist");
         let expected_balance = U256::from(3u64);
 
@@ -608,12 +586,12 @@ mod tests {
             "123456136717634683648732647632874638726487fefefefefeefefefefefff"
         ));
 
-        let storage = StateMemory::from_genesis(genesis_config.initial_state_root);
+        let storage = vec![genesis_config.initial_state_root];
 
-        let query = InMemoryStateQueries::new(storage);
+        let query = InMemoryStateQueries::new(storage, state.db());
 
         let actual_balance = query
-            .balance_at(state.db(), &evm_storage, addr, 0)
+            .balance_at(&evm_storage, addr, 0)
             .expect("Block height should exist");
         let expected_balance = U256::ZERO;
 
@@ -675,15 +653,15 @@ mod tests {
         let mut state = state.0;
         let addr = AccountAddress::TWO;
 
-        let mut storage = StateMemory::from_genesis(genesis_config.initial_state_root);
+        let mut storage = vec![genesis_config.initial_state_root];
 
         inc_one_nonce(0, &mut state, addr);
-        storage.push_state_root(state.state_root());
+        storage.push(state.state_root());
 
-        let query = InMemoryStateQueries::new(storage);
+        let query = InMemoryStateQueries::new(storage, state.db());
 
         let actual_nonce = query
-            .nonce_at(state.db(), &evm_storage, addr, 1)
+            .nonce_at(&evm_storage, addr, 1)
             .expect("Block height should exist");
         let expected_nonce = 1u64;
 
@@ -711,18 +689,18 @@ mod tests {
 
         let addr = AccountAddress::TWO;
 
-        let mut storage = StateMemory::from_genesis(genesis_config.initial_state_root);
+        let mut storage = vec![genesis_config.initial_state_root];
 
         inc_one_nonce(0, &mut state, addr);
-        storage.push_state_root(state.state_root());
+        storage.push(state.state_root());
         inc_one_nonce(1, &mut state, addr);
         inc_one_nonce(2, &mut state, addr);
-        storage.push_state_root(state.state_root());
+        storage.push(state.state_root());
 
-        let query = InMemoryStateQueries::new(storage);
+        let query = InMemoryStateQueries::new(storage, state.db());
 
         let actual_nonce = query
-            .nonce_at(state.db(), &evm_storage, addr, 1)
+            .nonce_at(&evm_storage, addr, 1)
             .expect("Block height should exist");
         let expected_nonce = 1u64;
 
@@ -750,25 +728,25 @@ mod tests {
 
         let addr = AccountAddress::TWO;
 
-        let mut storage = StateMemory::from_genesis(genesis_config.initial_state_root);
+        let mut storage = vec![genesis_config.initial_state_root];
 
         inc_one_nonce(0, &mut state, addr);
-        storage.push_state_root(state.state_root());
+        storage.push(state.state_root());
         inc_one_nonce(1, &mut state, addr);
         inc_one_nonce(2, &mut state, addr);
-        storage.push_state_root(state.state_root());
+        storage.push(state.state_root());
 
-        let query = InMemoryStateQueries::new(storage);
+        let query = InMemoryStateQueries::new(storage, state.db());
 
         let actual_nonce = query
-            .nonce_at(state.db(), &evm_storage, addr, 1)
+            .nonce_at(&evm_storage, addr, 1)
             .expect("Block height should exist");
         let expected_nonce = 1u64;
 
         assert_eq!(actual_nonce, expected_nonce);
 
         let actual_nonce = query
-            .nonce_at(state.db(), &evm_storage, addr, 2)
+            .nonce_at(&evm_storage, addr, 2)
             .expect("Block height should exist");
         let expected_nonce = 3u64;
 
@@ -798,12 +776,12 @@ mod tests {
             "123456136717634683648732647632874638726487fefefefefeefefefefefff"
         ));
 
-        let storage = StateMemory::from_genesis(genesis_config.initial_state_root);
+        let storage = vec![genesis_config.initial_state_root];
 
-        let query = InMemoryStateQueries::new(storage);
+        let query = InMemoryStateQueries::new(storage, state.db());
 
         let actual_nonce = query
-            .nonce_at(state.db(), &evm_storage, addr, 0)
+            .nonce_at(&evm_storage, addr, 0)
             .expect("Block height should exist");
         let expected_nonce = 0u64;
 

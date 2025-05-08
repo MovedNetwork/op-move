@@ -343,7 +343,7 @@ mod tests {
             .count();
         assert_eq!(sui_framework_len, SUI_MODULES_LEN);
 
-        let mut state = InMemoryState::new();
+        let mut state = InMemoryState::default();
         let vm = MovedVm::new(&Default::default());
         let change_set = deploy_framework(&vm, &mut state).unwrap();
         assert_eq!(change_set.modules().count(), TOTAL_MODULES_LEN);

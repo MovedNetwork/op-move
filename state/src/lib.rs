@@ -72,7 +72,7 @@ pub struct InMemoryState {
 
 impl Default for InMemoryState {
     fn default() -> Self {
-        Self::new()
+        Self::new(Self::create_db())
     }
 }
 
@@ -81,10 +81,14 @@ impl InMemoryState {
     // at the time of submission.
     const IS_LIGHT: bool = false;
 
-    pub fn new() -> Self {
+    pub fn create_db() -> Arc<MemoryDB> {
+        Arc::new(MemoryDB::new(Self::IS_LIGHT))
+    }
+
+    pub fn new(db: Arc<MemoryDB>) -> Self {
         Self {
             resolver: InMemoryStorage::new(),
-            db: Arc::new(MemoryDB::new(Self::IS_LIGHT)),
+            db,
             current_state_root: None,
         }
     }

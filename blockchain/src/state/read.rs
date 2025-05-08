@@ -103,10 +103,16 @@ impl ReadStateRoot for SharedMemoryReader {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct InMemoryStateQueries<R: ReadStateRoot = SharedMemoryReader, D: DB = eth_trie::MemoryDB> {
     memory: R,
     db: Arc<D>,
+}
+
+impl<R: ReadStateRoot + Clone, D: DB> Clone for InMemoryStateQueries<R, D> {
+    fn clone(&self) -> Self {
+        Self::new(self.memory.clone(), self.db.clone())
+    }
 }
 
 impl<R: ReadStateRoot, D: DB> InMemoryStateQueries<R, D> {
@@ -465,7 +471,7 @@ mod tests {
     #[test]
     fn test_query_fetches_latest_balance() {
         let mut evm_storage = InMemoryStorageTrieRepository::new();
-        let state = InMemoryState::new();
+        let state = InMemoryState::default();
         let mut state = StateSpy(state, ChangeSet::new());
 
         let genesis_config = GenesisConfig::default();
@@ -500,7 +506,7 @@ mod tests {
     #[test]
     fn test_query_fetches_older_balance() {
         let mut evm_storage = InMemoryStorageTrieRepository::new();
-        let state = InMemoryState::new();
+        let state = InMemoryState::default();
         let mut state = StateSpy(state, ChangeSet::new());
 
         let genesis_config = GenesisConfig::default();
@@ -539,7 +545,7 @@ mod tests {
     #[test]
     fn test_query_fetches_latest_and_previous_balance() {
         let mut evm_storage = InMemoryStorageTrieRepository::new();
-        let state = InMemoryState::new();
+        let state = InMemoryState::default();
         let mut state = StateSpy(state, ChangeSet::new());
 
         let genesis_config = GenesisConfig::default();
@@ -585,7 +591,7 @@ mod tests {
     #[test]
     fn test_query_fetches_zero_balance_for_non_existent_account() {
         let mut evm_storage = InMemoryStorageTrieRepository::new();
-        let state = InMemoryState::new();
+        let state = InMemoryState::default();
         let mut state = StateSpy(state, ChangeSet::new());
 
         let genesis_config = GenesisConfig::default();
@@ -655,7 +661,7 @@ mod tests {
     #[test]
     fn test_query_fetches_latest_nonce() {
         let mut evm_storage = InMemoryStorageTrieRepository::new();
-        let state = InMemoryState::new();
+        let state = InMemoryState::default();
         let mut state = StateSpy(state, ChangeSet::new());
 
         let genesis_config = GenesisConfig::default();
@@ -690,7 +696,7 @@ mod tests {
     #[test]
     fn test_query_fetches_older_nonce() {
         let mut evm_storage = InMemoryStorageTrieRepository::new();
-        let state = InMemoryState::new();
+        let state = InMemoryState::default();
         let mut state = StateSpy(state, ChangeSet::new());
 
         let genesis_config = GenesisConfig::default();
@@ -729,7 +735,7 @@ mod tests {
     #[test]
     fn test_query_fetches_latest_and_previous_nonce() {
         let mut evm_storage = InMemoryStorageTrieRepository::new();
-        let state = InMemoryState::new();
+        let state = InMemoryState::default();
         let mut state = StateSpy(state, ChangeSet::new());
 
         let genesis_config = GenesisConfig::default();
@@ -775,7 +781,7 @@ mod tests {
     #[test]
     fn test_query_fetches_zero_nonce_for_non_existent_account() {
         let mut evm_storage = InMemoryStorageTrieRepository::new();
-        let state = InMemoryState::new();
+        let state = InMemoryState::default();
         let mut state = StateSpy(state, ChangeSet::new());
 
         let genesis_config = GenesisConfig::default();

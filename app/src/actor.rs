@@ -6,7 +6,6 @@ use {
         state::InMemoryStateQueries,
     },
     moved_shared::primitives::B256,
-    moved_state::State,
     std::ops::DerefMut,
     tokio::{sync::mpsc::Receiver, task::JoinHandle},
 };

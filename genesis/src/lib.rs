@@ -29,7 +29,7 @@ pub fn build(
     config: &GenesisConfig,
     storage_trie: &impl StorageTrieRepository,
 ) -> (ChangeSet, TableChangeSet, StorageTriesChanges) {
-    let mut state = InMemoryState::new();
+    let mut state = InMemoryState::default();
     // Deploy Move/Aptos/Sui frameworks
     let changes_framework = framework::init_state(vm, &mut state);
 

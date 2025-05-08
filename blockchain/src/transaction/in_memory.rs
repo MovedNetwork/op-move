@@ -1,7 +1,11 @@
-use {crate::transaction::ExtendedTransaction, moved_shared::primitives::B256};
+use {
+    crate::transaction::ExtendedTransaction,
+    moved_shared::primitives::B256,
+    std::{ops::Deref, sync::Arc},
+};
 
-pub type ReadHandle = evmap::ReadHandle<B256, Box<ExtendedTransaction>>;
-pub type WriteHandle = evmap::WriteHandle<B256, Box<ExtendedTransaction>>;
+pub type ReadHandle = evmap::ReadHandle<B256, Arc<ExtendedTransaction>>;
+pub type WriteHandle = evmap::WriteHandle<B256, Arc<ExtendedTransaction>>;
 
 #[derive(Debug, Clone)]
 pub struct TransactionMemoryReader {
@@ -32,7 +36,7 @@ impl TransactionMemory {
 
     pub fn extend(&mut self, tx: impl IntoIterator<Item = ExtendedTransaction>) {
         self.transactions
-            .extend(tx.into_iter().map(|tx| (tx.hash(), Box::new(tx))));
+            .extend(tx.into_iter().map(|tx| (tx.hash(), Arc::new(tx))));
     }
 }
 
@@ -50,8 +54,8 @@ pub trait ReadTransactionMemory {
 impl<T: AsRef<ReadHandle>> ReadTransactionMemory for T {
     fn by_hash(&self, hash: B256) -> Option<ExtendedTransaction> {
         self.as_ref()
-            .get(&hash)
-            .and_then(|v| v.iter().next().map(|v| *v.clone()))
+            .get_one(&hash)
+            .map(|v| ExtendedTransaction::clone(v.deref()))
     }
 
     fn by_hashes(&self, hashes: impl IntoIterator<Item = B256>) -> Vec<ExtendedTransaction> {

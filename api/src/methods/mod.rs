@@ -94,7 +94,6 @@ pub mod tests {
                 receipt_queries: (),
                 receipt_memory: (),
                 storage: memory_reader,
-                state: (),
                 state_queries: state_queries.clone(),
                 evm_storage: (),
                 transaction_queries: (),

@@ -57,3 +57,47 @@ pub mod shared_memory {
         (r, w)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use {
+        super::*,
+        crate::block::{ExtendedBlock, ReadBlockMemory},
+        alloy::hex,
+        moved_shared::primitives::B256,
+    };
+
+    #[test]
+    fn test_block_reader_is_connected_to_block_writer() {
+        let (r, mut w) = shared_memory::new();
+
+        w.block_memory.add(ExtendedBlock::default());
+        let actual_block = r.block_memory.by_height(0);
+        let expected_block = Some(ExtendedBlock::default());
+
+        assert_eq!(actual_block, expected_block);
+    }
+
+    #[test]
+    fn test_block_reader_counts_height_based_on_additions_to_block_writer() {
+        let (r, mut w) = shared_memory::new();
+
+        w.block_memory.add(ExtendedBlock::default());
+        let actual_height = r.block_memory.height();
+        let expected_height = 0;
+
+        assert_eq!(actual_height, expected_height);
+
+        let mut block = ExtendedBlock::default();
+        block.hash = B256::new(hex!(
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ));
+        block.block.header.number = 1;
+        w.block_memory.add(block);
+
+        let actual_height = r.block_memory.height();
+        let expected_height = 1;
+
+        assert_eq!(actual_height, expected_height);
+    }
+}

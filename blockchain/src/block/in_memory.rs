@@ -2,7 +2,7 @@ use {crate::block::ExtendedBlock, moved_shared::primitives::B256, std::sync::Arc
 
 pub type WriteHashes = evmap::WriteHandle<B256, Arc<ExtendedBlock>>;
 pub type ReadHashes = evmap::ReadHandle<B256, Arc<ExtendedBlock>>;
-pub type WriteHeight = evmap::WriteHandle<u64, Arc<ExtendedBlock>>;
+pub type WriteHeights = evmap::WriteHandle<u64, Arc<ExtendedBlock>>;
 pub type ReadHeights = evmap::ReadHandle<u64, Arc<ExtendedBlock>>;
 
 /// A storage for blocks that keeps data in memory.
@@ -12,11 +12,11 @@ pub type ReadHeights = evmap::ReadHandle<u64, Arc<ExtendedBlock>>;
 #[derive(Debug)]
 pub struct BlockMemory {
     hashes: WriteHashes,
-    heights: WriteHeight,
+    heights: WriteHeights,
 }
 
 impl BlockMemory {
-    pub fn new(hashes: WriteHashes, heights: WriteHeight) -> Self {
+    pub fn new(hashes: WriteHashes, heights: WriteHeights) -> Self {
         Self { hashes, heights }
     }
 
@@ -24,6 +24,8 @@ impl BlockMemory {
         let block = Arc::new(block);
         self.hashes.insert(block.hash, block.clone());
         self.heights.insert(block.block.header.number, block);
+        self.hashes.refresh();
+        self.heights.refresh();
     }
 }
 

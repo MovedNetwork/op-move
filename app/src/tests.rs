@@ -20,11 +20,9 @@ use {
             Block, BlockHash, BlockRepository, Eip1559GasFee, Header, InMemoryBlockQueries,
             InMemoryBlockRepository, MovedBlockHash,
         },
-        in_memory::{SharedMemory, shared_memory},
+        in_memory::shared_memory,
         payload::InMemoryPayloadQueries,
-        receipt::{
-            InMemoryReceiptQueries, InMemoryReceiptRepository, ReceiptMemory, receipt_memory,
-        },
+        receipt::{InMemoryReceiptQueries, InMemoryReceiptRepository, receipt_memory},
         state::{BlockHeight, InMemoryStateQueries, MockStateQueries, StateQueries},
         transaction::{InMemoryTransactionQueries, InMemoryTransactionRepository},
     },
@@ -63,8 +61,8 @@ fn create_app_with_given_queries<SQ: StateQueries + Clone + Send + Sync + 'stati
     height: u64,
     state_queries: SQ,
 ) -> (
-    Application<TestDependencies<SQ>>,
     ApplicationReader<TestDependencies<SQ>>,
+    Application<TestDependencies<SQ>>,
 ) {
     let genesis_config = GenesisConfig::default();
 
@@ -79,10 +77,11 @@ fn create_app_with_given_queries<SQ: StateQueries + Clone + Send + Sync + 'stati
     for i in 0..=height {
         let mut block = genesis_block.clone();
         block.block.header.number = i;
+        block.hash = block.block.header.hash_slow();
         repository.add(&mut memory, block).unwrap();
     }
 
-    let mut state = InMemoryState::new();
+    let mut state = InMemoryState::new(InMemoryState::create_db());
     let mut evm_storage = InMemoryStorageTrieRepository::new();
     let (changes, tables, evm_storage_changes) = moved_genesis_image::load();
     moved_genesis::apply(
@@ -97,9 +96,21 @@ fn create_app_with_given_queries<SQ: StateQueries + Clone + Send + Sync + 'stati
     let (receipt_memory_reader, receipt_memory) = receipt_memory::new();
 
     (
+        ApplicationReader {
+            genesis_config: genesis_config.clone(),
+            base_token: MovedBaseTokenAccounts::new(AccountAddress::ONE),
+            block_queries: InMemoryBlockQueries,
+            payload_queries: InMemoryPayloadQueries::new(),
+            receipt_queries: InMemoryReceiptQueries::new(),
+            receipt_memory: receipt_memory_reader.clone(),
+            storage: memory_reader.clone(),
+            state_queries: state_queries.clone(),
+            evm_storage: evm_storage.clone(),
+            transaction_queries: InMemoryTransactionQueries::new(),
+        },
         Application {
             mem_pool: Default::default(),
-            genesis_config: genesis_config.clone(),
+            genesis_config,
             base_token: MovedBaseTokenAccounts::new(AccountAddress::ONE),
             block_hash: MovedBlockHash,
             block_queries: InMemoryBlockQueries,
@@ -111,29 +122,17 @@ fn create_app_with_given_queries<SQ: StateQueries + Clone + Send + Sync + 'stati
             receipt_queries: InMemoryReceiptQueries::new(),
             receipt_repository: InMemoryReceiptRepository::new(),
             receipt_memory,
-            receipt_memory_reader: receipt_memory_reader.clone(),
+            receipt_memory_reader,
             storage: memory,
-            storage_reader: memory_reader.clone(),
+            storage_reader: memory_reader,
             state,
-            state_queries: state_queries.clone(),
-            evm_storage: evm_storage.clone(),
+            state_queries,
+            evm_storage,
             transaction_queries: InMemoryTransactionQueries::new(),
             transaction_repository: InMemoryTransactionRepository::new(),
             gas_fee: Eip1559GasFee::default(),
             l1_fee: U256::ZERO,
             l2_fee: U256::ZERO,
-        },
-        ApplicationReader {
-            genesis_config,
-            base_token: MovedBaseTokenAccounts::new(AccountAddress::ONE),
-            block_queries: InMemoryBlockQueries,
-            payload_queries: InMemoryPayloadQueries::new(),
-            receipt_queries: InMemoryReceiptQueries::new(),
-            receipt_memory: receipt_memory_reader,
-            storage: memory_reader,
-            state_queries,
-            evm_storage,
-            transaction_queries: InMemoryTransactionQueries::new(),
         },
     )
 }
@@ -176,7 +175,10 @@ fn mint_eth(
 fn create_app_with_fake_queries(
     addr: AccountAddress,
     initial_balance: U256,
-) -> Application<TestDependencies> {
+) -> (
+    ApplicationReader<TestDependencies>,
+    Application<TestDependencies>,
+) {
     let genesis_config = GenesisConfig::default();
 
     let head_hash = B256::new(hex!(
@@ -184,12 +186,13 @@ fn create_app_with_fake_queries(
     ));
     let genesis_block = Block::default().with_hash(head_hash).with_value(U256::ZERO);
 
-    let mut memory = SharedMemory::new();
+    let (memory_reader, mut memory) = shared_memory::new();
     let mut repository = InMemoryBlockRepository::new();
     repository.add(&mut memory, genesis_block).unwrap();
 
     let evm_storage = InMemoryStorageTrieRepository::new();
-    let mut state = InMemoryState::new();
+    let trie_db = InMemoryState::create_db();
+    let mut state = InMemoryState::new(trie_db.clone());
     let (genesis_changes, table_changes, evm_storage_changes) = moved_genesis_image::load();
     state
         .apply_with_tables(genesis_changes.clone(), table_changes)
@@ -198,32 +201,50 @@ fn create_app_with_fake_queries(
     let changes_addition = mint_eth(&state, &evm_storage, addr, initial_balance);
     state.apply(changes_addition.clone()).unwrap();
 
-    let state_queries = InMemoryStateQueries::from_genesis(state.state_root());
+    let (receipt_reader, receipt_memory) = receipt_memory::new();
 
-    Application::<TestDependencies> {
-        mem_pool: Default::default(),
-        genesis_config,
-        base_token: MovedBaseTokenAccounts::new(AccountAddress::ONE),
-        block_hash: MovedBlockHash,
-        block_queries: InMemoryBlockQueries,
-        block_repository: repository,
-        on_payload: CommandActor::on_payload_in_memory(),
-        on_tx: CommandActor::on_tx_in_memory(),
-        on_tx_batch: CommandActor::on_tx_batch_in_memory(),
-        payload_queries: InMemoryPayloadQueries::new(),
-        receipt_queries: InMemoryReceiptQueries::new(),
-        receipt_repository: InMemoryReceiptRepository::new(),
-        receipt_memory: ReceiptMemory::new(),
-        storage: memory,
-        state,
-        state_queries,
-        evm_storage,
-        transaction_queries: InMemoryTransactionQueries::new(),
-        transaction_repository: InMemoryTransactionRepository::new(),
-        gas_fee: Eip1559GasFee::default(),
-        l1_fee: U256::ZERO,
-        l2_fee: U256::ZERO,
-    }
+    let state_queries = InMemoryStateQueries::new(memory_reader.clone(), trie_db);
+
+    (
+        ApplicationReader {
+            genesis_config: genesis_config.clone(),
+            base_token: MovedBaseTokenAccounts::new(AccountAddress::ONE),
+            block_queries: InMemoryBlockQueries,
+            payload_queries: InMemoryPayloadQueries::new(),
+            receipt_queries: InMemoryReceiptQueries::new(),
+            receipt_memory: receipt_reader.clone(),
+            storage: memory_reader.clone(),
+            state_queries: state_queries.clone(),
+            evm_storage: evm_storage.clone(),
+            transaction_queries: InMemoryTransactionQueries::new(),
+        },
+        Application::<TestDependencies> {
+            mem_pool: Default::default(),
+            genesis_config,
+            base_token: MovedBaseTokenAccounts::new(AccountAddress::ONE),
+            block_hash: MovedBlockHash,
+            block_queries: InMemoryBlockQueries,
+            block_repository: repository,
+            on_payload: CommandActor::on_payload_in_memory(),
+            on_tx: CommandActor::on_tx_in_memory(),
+            on_tx_batch: CommandActor::on_tx_batch_in_memory(),
+            payload_queries: InMemoryPayloadQueries::new(),
+            receipt_queries: InMemoryReceiptQueries::new(),
+            receipt_repository: InMemoryReceiptRepository::new(),
+            receipt_memory,
+            storage: memory,
+            receipt_memory_reader: receipt_reader,
+            storage_reader: memory_reader,
+            state,
+            state_queries,
+            evm_storage,
+            transaction_queries: InMemoryTransactionQueries::new(),
+            transaction_repository: InMemoryTransactionRepository::new(),
+            gas_fee: Eip1559GasFee::default(),
+            l1_fee: U256::ZERO,
+            l2_fee: U256::ZERO,
+        },
+    )
 }
 
 #[test]
@@ -294,7 +315,7 @@ fn test_nonce_is_fetched_by_height_successfully(
     expected_height: BlockHeight,
 ) {
     let address = Address::new(hex!("11223344556677889900ffeeaabbccddee111111"));
-    let (_, reader) = create_app_with_given_queries(
+    let (reader, _app) = create_app_with_given_queries(
         head_height,
         MockStateQueries(address.to_move_address(), expected_height),
     );
@@ -317,12 +338,12 @@ fn test_balance_is_fetched_by_height_successfully(
     expected_height: BlockHeight,
 ) {
     let address = Address::new(hex!("44223344556677889900ffeeaabbccddee111111"));
-    let app = create_app_with_given_queries(
+    let (reader, _app) = create_app_with_given_queries(
         head_height,
         MockStateQueries(address.to_move_address(), expected_height),
     );
 
-    let actual_balance = app.balance_by_height(address, height).unwrap();
+    let actual_balance = reader.balance_by_height(address, height).unwrap();
     let expected_balance = U256::from(5);
 
     assert_eq!(actual_balance, expected_balance);
@@ -353,19 +374,20 @@ fn test_fetched_balances_are_updated_after_transfer_of_funds() {
     let to = Address::new(hex!("44223344556677889900ffeeaabbccddee111111"));
     let initial_balance = U256::from(5);
     let amount = U256::from(4);
-    let mut app = create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), initial_balance);
+    let (reader, mut app) =
+        create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), initial_balance);
 
     let tx = create_transaction(0);
 
     app.add_transaction(tx);
     app.start_block_build(Default::default(), U64::from(0x03421ee50df45cacu64));
 
-    let actual_recipient_balance = app.balance_by_height(to, Latest).unwrap();
+    let actual_recipient_balance = reader.balance_by_height(to, Latest).unwrap();
     let expected_recipient_balance = amount;
 
     assert_eq!(actual_recipient_balance, expected_recipient_balance);
 
-    let actual_sender_balance = app.balance_by_height(EVM_ADDRESS, Latest).unwrap();
+    let actual_sender_balance = reader.balance_by_height(EVM_ADDRESS, Latest).unwrap();
     let expected_sender_balance = initial_balance - amount;
 
     assert_eq!(actual_sender_balance, expected_sender_balance);
@@ -375,19 +397,20 @@ fn test_fetched_balances_are_updated_after_transfer_of_funds() {
 fn test_fetched_nonces_are_updated_after_executing_transaction() {
     let to = Address::new(hex!("44223344556677889900ffeeaabbccddee111111"));
     let initial_balance = U256::from(5);
-    let mut app = create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), initial_balance);
+    let (reader, mut app) =
+        create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), initial_balance);
 
     let tx = create_transaction(0);
 
     app.add_transaction(tx);
     app.start_block_build(Default::default(), U64::from(0x03421ee50df45cacu64));
 
-    let actual_recipient_balance = app.nonce_by_height(to, Latest).unwrap();
+    let actual_recipient_balance = reader.nonce_by_height(to, Latest).unwrap();
     let expected_recipient_balance = 0;
 
     assert_eq!(actual_recipient_balance, expected_recipient_balance);
 
-    let actual_sender_balance = app.nonce_by_height(EVM_ADDRESS, Latest).unwrap();
+    let actual_sender_balance = reader.nonce_by_height(EVM_ADDRESS, Latest).unwrap();
     let expected_sender_balance = 1;
 
     assert_eq!(actual_sender_balance, expected_sender_balance);
@@ -396,7 +419,8 @@ fn test_fetched_nonces_are_updated_after_executing_transaction() {
 #[test]
 fn test_one_payload_can_be_fetched_repeatedly() {
     let initial_balance = U256::from(5);
-    let mut app = create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), initial_balance);
+    let (reader, mut app) =
+        create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), initial_balance);
 
     let tx = create_transaction(0);
 
@@ -406,8 +430,8 @@ fn test_one_payload_can_be_fetched_repeatedly() {
 
     app.start_block_build(Default::default(), payload_id);
 
-    let expected_payload = app.payload(payload_id);
-    let actual_payload = app.payload(payload_id);
+    let expected_payload = reader.payload(payload_id);
+    let actual_payload = reader.payload(payload_id);
 
     assert_eq!(expected_payload, actual_payload);
 }
@@ -415,7 +439,8 @@ fn test_one_payload_can_be_fetched_repeatedly() {
 #[test]
 fn test_older_payload_can_be_fetched_again_successfully() {
     let initial_balance = U256::from(15);
-    let mut app = create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), initial_balance);
+    let (reader, mut app) =
+        create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), initial_balance);
 
     let tx = create_transaction(0);
 
@@ -431,7 +456,7 @@ fn test_older_payload_can_be_fetched_again_successfully() {
         payload_id,
     );
 
-    let expected_payload = app.payload(payload_id);
+    let expected_payload = reader.payload(payload_id);
 
     let tx = create_transaction(1);
 
@@ -448,9 +473,9 @@ fn test_older_payload_can_be_fetched_again_successfully() {
         payload_2_id,
     );
 
-    app.payload(payload_2_id);
+    reader.payload(payload_2_id);
 
-    let actual_payload = app.payload(payload_id);
+    let actual_payload = reader.payload(payload_id);
 
     assert_eq!(expected_payload, actual_payload);
 }

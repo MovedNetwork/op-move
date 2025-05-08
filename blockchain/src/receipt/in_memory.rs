@@ -6,11 +6,12 @@ use {
     std::{
         convert::Infallible,
         hash::{Hash, Hasher},
+        sync::Arc,
     },
 };
 
-pub type ReadHandle = evmap::ReadHandle<B256, Box<ExtendedReceipt>>;
-pub type WriteHandle = evmap::WriteHandle<B256, Box<ExtendedReceipt>>;
+pub type ReadHandle = evmap::ReadHandle<B256, Arc<ExtendedReceipt>>;
+pub type WriteHandle = evmap::WriteHandle<B256, Arc<ExtendedReceipt>>;
 
 impl Hash for ExtendedReceipt {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -42,7 +43,7 @@ impl ReceiptMemory {
         self.receipts.extend(
             receipts
                 .into_iter()
-                .map(|receipt| (receipt.transaction_hash, Box::new(receipt))),
+                .map(|receipt| (receipt.transaction_hash, Arc::new(receipt))),
         );
     }
 }
@@ -81,7 +82,9 @@ impl<T: AsRef<ReadHandle>> ReadReceiptMemory for T {
     }
 
     fn by_transaction_hash(&self, transaction_hash: B256) -> Option<ExtendedReceipt> {
-        self.as_ref().get_one(&transaction_hash).map(|v| *v.clone())
+        self.as_ref()
+            .get_one(&transaction_hash)
+            .map(|v| ExtendedReceipt::clone(&v))
     }
 }
 

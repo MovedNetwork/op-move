@@ -307,7 +307,7 @@ mod tests {
 
     #[test]
     fn test_state_root_from_empty_tree_is_zero() {
-        let actual_root = InMemoryState::new().state_root();
+        let actual_root = InMemoryState::default().state_root();
         let expected_root = B256::ZERO;
 
         assert_eq!(actual_root, expected_root);
@@ -315,7 +315,7 @@ mod tests {
 
     #[test]
     fn test_insert_to_empty_tree_produces_new_state_root() {
-        let mut state = InMemoryState::new();
+        let mut state = InMemoryState::default();
         let mut change_set = ChangeSet::new();
 
         change_set
@@ -331,7 +331,7 @@ mod tests {
 
     #[test]
     fn test_state_root_is_different_after_update_changes_trie() {
-        let mut state = InMemoryState::new();
+        let mut state = InMemoryState::default();
         let mut change_set = ChangeSet::new();
 
         change_set
@@ -360,7 +360,7 @@ mod tests {
 
     #[test]
     fn test_state_root_remains_the_same_when_update_does_not_change_trie() {
-        let state = InMemoryState::new();
+        let state = InMemoryState::default();
         let mut change_set = ChangeSet::new();
 
         let mut account_change_set = AccountChanges::new();

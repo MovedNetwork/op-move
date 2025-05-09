@@ -114,8 +114,8 @@ mod tests {
     #[tokio::test]
     async fn test_execute(block: &str) {
         let (state_channel, rx) = mpsc::channel(10);
-        let app = create_app();
-        let state_actor = CommandActor::new(rx, app.clone());
+        let (reader, app) = create_app();
+        let state_actor = CommandActor::new(rx, Box::new(app));
         let state_handle = state_actor.spawn();
 
         deposit_eth("0x8fd379246834eac74b8419ffda202cf8051f7a03", &state_channel).await;
@@ -137,7 +137,7 @@ mod tests {
         state_handle.await.unwrap();
 
         let expected_response: serde_json::Value = serde_json::from_str(r#""0x6326""#).unwrap();
-        let actual_response = execute(request, &app).await.unwrap();
+        let actual_response = execute(request, &reader).await.unwrap();
 
         assert_eq!(actual_response, expected_response);
     }

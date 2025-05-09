@@ -1,8 +1,6 @@
 use {
     crate::{json_utils::parse_params_2, jsonrpc::JsonRpcError},
-    moved_app::{Application, ApplicationReader, Dependencies},
-    std::sync::Arc,
-    tokio::sync::RwLock,
+    moved_app::{ApplicationReader, Dependencies},
 };
 
 pub async fn execute(
@@ -65,7 +63,7 @@ mod tests {
     #[test_case("pending")]
     #[tokio::test]
     async fn test_execute(block: &str) {
-        let app = create_app_with_mock_state_queries(AccountAddress::ONE, 1);
+        let (reader, _app) = *create_app_with_mock_state_queries(AccountAddress::ONE, 1);
 
         let request: serde_json::Value = serde_json::json!({
             "jsonrpc": "2.0",
@@ -78,7 +76,7 @@ mod tests {
         });
 
         let expected_response: serde_json::Value = serde_json::from_str(r#""0x5""#).unwrap();
-        let response = execute(request, &app).await.unwrap();
+        let response = execute(request, &reader).await.unwrap();
 
         assert_eq!(response, expected_response);
     }
@@ -87,7 +85,7 @@ mod tests {
     async fn test_endpoint_returns_json_encoded_balance_query_result_successfully() {
         let expected_balance = 5;
         let height = 3;
-        let app = create_app_with_mock_state_queries(
+        let (reader, _app) = *create_app_with_mock_state_queries(
             AccountAddress::new(hex!(
                 "0000000000000000000000002222222222222223333333333333333333111100"
             )),
@@ -106,7 +104,7 @@ mod tests {
         });
 
         let expected_response = serde_json::Value::String(format!("0x{expected_balance}"));
-        let response = execute(request, &app).await.unwrap();
+        let response = execute(request, &reader).await.unwrap();
 
         assert_eq!(response, expected_response);
     }

@@ -21,7 +21,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute() {
-        let app = create_app();
+        let (reader, _app) = create_app();
 
         let request: serde_json::Value = serde_json::json!({
             "jsonrpc": "2.0",
@@ -31,7 +31,7 @@ mod tests {
         });
 
         let expected_response: serde_json::Value = serde_json::from_str(r#""0x0""#).unwrap();
-        let actual_response = execute(request, &app).await.unwrap();
+        let actual_response = execute(request, &reader).await.unwrap();
 
         assert_eq!(actual_response, expected_response);
     }

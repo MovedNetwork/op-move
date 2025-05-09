@@ -76,9 +76,9 @@ mod tests {
     #[test_case("pending")]
     #[tokio::test]
     async fn test_execute_call_entry_fn(block: &str) {
-        let app = create_app();
+        let (reader, app) = create_app();
         let (state_channel, rx) = mpsc::channel(10);
-        let state_actor = CommandActor::new(rx, app.clone());
+        let state_actor = CommandActor::new(rx, Box::new(app));
         let state_handle = state_actor.spawn();
 
         // Add funds to the account to deploy the `counter` contract
@@ -104,7 +104,7 @@ mod tests {
         state_handle.await.unwrap();
 
         let expected_response = serde_json::json!([1, 1, 0]);
-        let actual_response = execute(request, &app).await.unwrap();
+        let actual_response = execute(request, &reader).await.unwrap();
 
         assert_eq!(actual_response, expected_response);
     }
@@ -114,9 +114,9 @@ mod tests {
     #[test_case("pending")]
     #[tokio::test]
     async fn test_execute_call_script(block: &str) {
-        let app = create_app();
+        let (reader, app) = create_app();
         let (state_channel, rx) = mpsc::channel(10);
-        let state_actor = CommandActor::new(rx, app.clone());
+        let state_actor = CommandActor::new(rx, Box::new(app));
         let state_handle = state_actor.spawn();
 
         // Add funds to the account to deploy the `counter` contract
@@ -140,6 +140,6 @@ mod tests {
         state_handle.await.unwrap();
 
         // Counter script call should succeed
-        execute(request, &app).await.unwrap();
+        execute(request, &reader).await.unwrap();
     }
 }

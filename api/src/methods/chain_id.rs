@@ -17,10 +17,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute() {
-        let app = create_app();
+        let (reader, _app) = create_app();
 
         let expected_response: serde_json::Value = serde_json::from_str(r#""0x194""#).unwrap();
-        let actual_response = execute(&app).await.unwrap();
+        let actual_response = execute(&reader).await.unwrap();
 
         assert_eq!(actual_response, expected_response);
     }

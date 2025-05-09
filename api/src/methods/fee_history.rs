@@ -152,7 +152,7 @@ mod tests {
     #[test_case("pending")]
     #[tokio::test]
     async fn test_execute(block: &str) {
-        let app = create_app();
+        let (reader, _app) = create_app();
 
         let request: serde_json::Value = serde_json::json!({
             "jsonrpc": "2.0",
@@ -169,7 +169,7 @@ mod tests {
 
         let expected_response: serde_json::Value =
             serde_json::json!({"gasUsedRatio": [], "oldestBlock": "0x0"});
-        let response = execute(request, &app).await.unwrap();
+        let response = execute(request, &reader).await.unwrap();
 
         assert_eq!(response, expected_response);
     }

@@ -50,7 +50,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_reads_genesis_block_successfully() {
-        let app = create_app();
+        let (reader, _app) = create_app();
         let request = example_request(Number(0));
 
         let expected_response: serde_json::Value = serde_json::from_str(r#"
@@ -76,7 +76,7 @@ mod tests {
             "withdrawals": []
         }"#).unwrap();
 
-        let response = execute(request, &app).await.unwrap();
+        let response = execute(request, &reader).await.unwrap();
 
         assert_eq!(response, expected_response);
     }
@@ -84,12 +84,12 @@ mod tests {
     #[tokio::test]
     async fn test_latest_block_height_is_updated_with_newly_built_block() {
         let (state_channel, rx) = mpsc::channel(10);
-        let app = create_app();
-        let state: CommandActor<TestDependencies> = CommandActor::new(rx, app.clone());
+        let (reader, app) = create_app();
+        let state: CommandActor<TestDependencies> = CommandActor::new(rx, Box::new(app));
         let state_handle = state.spawn();
 
         let request = example_request(Latest);
-        let response = execute(request, &app).await.unwrap();
+        let response = execute(request, &reader).await.unwrap();
         assert_eq!(get_block_number_from_response(response), "0x0");
 
         // Create a block, so the block height becomes 1
@@ -102,7 +102,7 @@ mod tests {
         state_handle.await.unwrap();
 
         let request = example_request(Latest);
-        let response = execute(request, &app).await.unwrap();
+        let response = execute(request, &reader).await.unwrap();
         assert_eq!(get_block_number_from_response(response), "0x1");
     }
 
@@ -112,8 +112,8 @@ mod tests {
     #[tokio::test]
     async fn test_latest_block_height_is_same_as_tag(tag: BlockNumberOrTag) {
         let (state_channel, rx) = mpsc::channel(10);
-        let app = create_app();
-        let state: CommandActor<TestDependencies> = CommandActor::new(rx, app.clone());
+        let (reader, app) = create_app();
+        let state: CommandActor<TestDependencies> = CommandActor::new(rx, Box::new(app));
         let state_handle = state.spawn();
 
         let msg = Command::StartBlockBuild {
@@ -125,7 +125,7 @@ mod tests {
         state_handle.await.unwrap();
 
         let request = example_request(tag);
-        let response = execute(request, &app).await.unwrap();
+        let response = execute(request, &reader).await.unwrap();
         assert_eq!(get_block_number_from_response(response), "0x1");
     }
 }

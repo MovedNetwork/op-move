@@ -39,7 +39,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_reads_genesis_block_successfully() {
-        let app = create_app();
+        let (reader, _app) = create_app();
         let request = example_request();
 
         let expected_response: serde_json::Value = serde_json::from_str(r#"
@@ -65,7 +65,7 @@ mod tests {
             "withdrawals": []
         }"#).unwrap();
 
-        let response = execute(request, &app).await.unwrap();
+        let response = execute(request, &reader).await.unwrap();
 
         assert_eq!(response, expected_response);
     }

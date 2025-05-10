@@ -111,9 +111,9 @@ pub trait ReadBlockMemory {
         self.map_by_height(height, Clone::clone)
     }
     fn map_by_height<U>(&self, height: u64, f: impl FnOnce(&'_ ExtendedBlock) -> U) -> Option<U>;
-    fn height(&self) -> u64;
+    fn height(&self) -> Option<u64>;
     fn last(&self) -> Option<ExtendedBlock> {
-        self.by_height(self.height())
+        self.by_height(self.height()?)
     }
 }
 
@@ -136,7 +136,7 @@ impl<T: AsRef<ReadHashes> + AsRef<ReadHeights> + AsRef<ReadPayloadIds>> ReadBloc
             .map(|v| f(&v))
     }
 
-    fn height(&self) -> u64 {
-        <T as AsRef<ReadHeights>>::as_ref(self).len() as u64 - 1
+    fn height(&self) -> Option<u64> {
+        (<T as AsRef<ReadHeights>>::as_ref(self).len() as u64).checked_sub(1)
     }
 }

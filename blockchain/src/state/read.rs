@@ -99,7 +99,9 @@ impl ReadStateRoot for SharedMemoryReader {
     }
 
     fn height(&self) -> BlockHeight {
-        self.block_memory.height()
+        self.block_memory
+            .height()
+            .expect("Genesis should not be missing")
     }
 }
 

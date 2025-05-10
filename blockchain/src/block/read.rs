@@ -128,7 +128,7 @@ pub mod in_memory {
         }
 
         fn latest(&self, mem: &Self::Storage) -> Result<Option<u64>, Self::Err> {
-            Ok(Some(mem.block_memory.height()))
+            Ok(mem.block_memory.height())
         }
     }
 }

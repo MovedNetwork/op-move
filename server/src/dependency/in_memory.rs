@@ -146,7 +146,7 @@ lazy_static::lazy_static! {
     )> = {
         let (memory_reader, memory) = shared_memory::new();
 
-        Mutex::new((iter::repeat_n(memory_reader, 3).collect(), Some(memory)))
+        Mutex::new((iter::repeat_n(memory_reader, 4).collect(), Some(memory)))
     };
     static ref RECEIPT_MEM: Mutex<(
         Vec<moved_blockchain::receipt::ReceiptMemoryReader>,

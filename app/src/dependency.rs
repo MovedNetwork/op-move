@@ -20,6 +20,8 @@ pub struct ApplicationReader<D: Dependencies> {
     pub transaction_queries: D::TransactionQueries,
 }
 
+unsafe impl<D: Dependencies> Sync for ApplicationReader<D> {}
+
 impl<D: Dependencies> Clone for ApplicationReader<D> {
     fn clone(&self) -> Self {
         Self {

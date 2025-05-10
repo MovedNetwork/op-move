@@ -85,7 +85,7 @@ mod tests {
 
         w.block_memory.add(ExtendedBlock::default());
         let actual_height = r.block_memory.height();
-        let expected_height = 0;
+        let expected_height = Some(0);
 
         assert_eq!(actual_height, expected_height);
 
@@ -97,7 +97,7 @@ mod tests {
         w.block_memory.add(block);
 
         let actual_height = r.block_memory.height();
-        let expected_height = 1;
+        let expected_height = Some(1);
 
         assert_eq!(actual_height, expected_height);
     }

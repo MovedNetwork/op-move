@@ -133,12 +133,14 @@ mod tests {
             "id": 1
         });
 
-        drop(state_channel);
-        state_handle.await.unwrap();
+        state_channel.reserve_many(10).await.unwrap();
 
         let expected_response: serde_json::Value = serde_json::from_str(r#""0x6326""#).unwrap();
         let actual_response = execute(request, &reader).await.unwrap();
 
         assert_eq!(actual_response, expected_response);
+
+        drop(state_channel);
+        state_handle.await.unwrap();
     }
 }

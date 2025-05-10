@@ -98,12 +98,16 @@ mod tests {
             payload_id: U64::from(0x03421ee50df45cacu64),
         };
         state_channel.send(msg).await.unwrap();
-        drop(state_channel);
-        state_handle.await.unwrap();
+
+        state_channel.reserve_many(10).await.unwrap();
 
         let request = example_request(Latest);
         let response = execute(request, &reader).await.unwrap();
+
         assert_eq!(get_block_number_from_response(response), "0x1");
+
+        drop(state_channel);
+        state_handle.await.unwrap();
     }
 
     #[test_case(Safe; "safe")]
@@ -121,11 +125,14 @@ mod tests {
             payload_id: U64::from(0x03421ee50df45cacu64),
         };
         state_channel.send(msg).await.unwrap();
-        drop(state_channel);
-        state_handle.await.unwrap();
+
+        state_channel.reserve_many(10).await.unwrap();
 
         let request = example_request(tag);
         let response = execute(request, &reader).await.unwrap();
         assert_eq!(get_block_number_from_response(response), "0x1");
+
+        drop(state_channel);
+        state_handle.await.unwrap();
     }
 }

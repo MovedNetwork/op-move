@@ -37,6 +37,7 @@ impl TransactionMemory {
     pub fn extend(&mut self, tx: impl IntoIterator<Item = ExtendedTransaction>) {
         self.transactions
             .extend(tx.into_iter().map(|tx| (tx.hash(), Arc::new(tx))));
+        self.transactions.refresh();
     }
 }
 

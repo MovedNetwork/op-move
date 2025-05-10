@@ -53,8 +53,8 @@ mod tests {
             .unwrap(),
         )
         .unwrap();
-        drop(queue);
-        state_handle.await.unwrap();
+
+        queue.wait_for_pending_commands().await;
 
         let request = serde_json::Value::Object(
             iter::once((
@@ -103,5 +103,8 @@ mod tests {
         });
 
         assert_eq!(actual_response, expected_response);
+
+        drop(queue);
+        state_handle.await.unwrap();
     }
 }

@@ -52,8 +52,7 @@ mod tests {
         )
         .unwrap();
 
-        drop(queue);
-        state_handle.await.unwrap();
+        queue.wait_for_pending_commands().await;
 
         let request = serde_json::Value::Object(
             iter::once((
@@ -85,5 +84,8 @@ mod tests {
         assert_eq!(receipt.inner.block_hash, Some(block_hash));
         assert!(receipt.inner.inner.status());
         assert_eq!(receipt.inner.inner.logs().len(), 2);
+
+        drop(queue);
+        state_handle.await.unwrap();
     }
 }

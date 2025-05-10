@@ -222,10 +222,13 @@ mod tests {
             }
         "#).unwrap();
 
-        drop(queue);
-        state_handle.await.unwrap();
+        queue.wait_for_pending_commands().await;
+
         let actual_response = execute_v3(request, &reader).await.unwrap();
 
         assert_eq!(actual_response, expected_response);
+
+        drop(queue);
+        state_handle.await.unwrap();
     }
 }

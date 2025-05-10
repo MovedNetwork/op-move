@@ -426,8 +426,7 @@ mod tests {
             .await
             .unwrap();
 
-        drop(queue);
-        state_handle.await.unwrap();
+        queue.wait_for_pending_commands().await;
 
         get_payload::execute_v3(get_payload_request, &reader)
             .await
@@ -447,5 +446,8 @@ mod tests {
         .unwrap();
 
         assert_eq!(response, expected_response);
+
+        drop(queue);
+        state_handle.await.unwrap();
     }
 }

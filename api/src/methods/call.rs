@@ -71,7 +71,7 @@ mod tests {
         }
     }
 
-    #[test_case("0x1")]
+    #[test_case("0x2")]
     #[test_case("latest")]
     #[test_case("pending")]
     #[tokio::test]
@@ -100,16 +100,18 @@ mod tests {
             "id": 1
         });
 
-        drop(state_channel);
-        state_handle.await.unwrap();
+        state_channel.reserve_many(10).await.unwrap();
 
         let expected_response = serde_json::json!([1, 1, 0]);
         let actual_response = execute(request, &reader).await.unwrap();
 
         assert_eq!(actual_response, expected_response);
+
+        drop(state_channel);
+        state_handle.await.unwrap();
     }
 
-    #[test_case("0x1")]
+    #[test_case("0x2")]
     #[test_case("latest")]
     #[test_case("pending")]
     #[tokio::test]
@@ -136,10 +138,12 @@ mod tests {
             "id": 1
         });
 
-        drop(state_channel);
-        state_handle.await.unwrap();
+        state_channel.reserve_many(10).await.unwrap();
 
         // Counter script call should succeed
         execute(request, &reader).await.unwrap();
+
+        drop(state_channel);
+        state_handle.await.unwrap();
     }
 }

@@ -45,6 +45,7 @@ impl ReceiptMemory {
                 .into_iter()
                 .map(|receipt| (receipt.transaction_hash, Arc::new(receipt))),
         );
+        self.receipts.refresh();
     }
 }
 

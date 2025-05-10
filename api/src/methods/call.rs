@@ -8,7 +8,7 @@ use {
 
 pub async fn execute(
     request: serde_json::Value,
-    app: &ApplicationReader<impl Dependencies>,
+    app: ApplicationReader<impl Dependencies>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let (transaction, block_number) = parse_params_2(request)?;
 
@@ -103,7 +103,7 @@ mod tests {
         state_channel.reserve_many(10).await.unwrap();
 
         let expected_response = serde_json::json!([1, 1, 0]);
-        let actual_response = execute(request, &reader).await.unwrap();
+        let actual_response = execute(request, reader.clone()).await.unwrap();
 
         assert_eq!(actual_response, expected_response);
 
@@ -141,7 +141,7 @@ mod tests {
         state_channel.reserve_many(10).await.unwrap();
 
         // Counter script call should succeed
-        execute(request, &reader).await.unwrap();
+        execute(request, reader.clone()).await.unwrap();
 
         drop(state_channel);
         state_handle.await.unwrap();

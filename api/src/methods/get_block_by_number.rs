@@ -5,7 +5,7 @@ use {
 
 pub async fn execute(
     request: serde_json::Value,
-    app: &ApplicationReader<impl Dependencies>,
+    app: ApplicationReader<impl Dependencies>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let (number, include_transactions) = parse_params_2(request)?;
 
@@ -76,7 +76,7 @@ mod tests {
             "withdrawals": []
         }"#).unwrap();
 
-        let response = execute(request, &reader).await.unwrap();
+        let response = execute(request, reader.clone()).await.unwrap();
 
         assert_eq!(response, expected_response);
     }
@@ -89,7 +89,7 @@ mod tests {
         let state_handle = state.spawn();
 
         let request = example_request(Latest);
-        let response = execute(request, &reader).await.unwrap();
+        let response = execute(request, reader.clone()).await.unwrap();
         assert_eq!(get_block_number_from_response(response), "0x0");
 
         // Create a block, so the block height becomes 1
@@ -102,7 +102,7 @@ mod tests {
         state_channel.reserve_many(10).await.unwrap();
 
         let request = example_request(Latest);
-        let response = execute(request, &reader).await.unwrap();
+        let response = execute(request, reader.clone()).await.unwrap();
 
         assert_eq!(get_block_number_from_response(response), "0x1");
 
@@ -129,7 +129,7 @@ mod tests {
         state_channel.reserve_many(10).await.unwrap();
 
         let request = example_request(tag);
-        let response = execute(request, &reader).await.unwrap();
+        let response = execute(request, reader.clone()).await.unwrap();
         assert_eq!(get_block_number_from_response(response), "0x1");
 
         drop(state_channel);

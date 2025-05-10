@@ -24,7 +24,7 @@ async fn test_get_proof() -> anyhow::Result<()> {
            format!("{block_hash}")
         ]
     });
-    let response: ProofResponse = handle_request(request, &ctx.queue, &ctx.app).await?;
+    let response: ProofResponse = handle_request(request, &ctx.queue, ctx.app.clone()).await?;
 
     // Proof is verified successfully
     let trie = EthTrie::new(Arc::new(MemoryDB::new(false)));
@@ -33,8 +33,7 @@ async fn test_get_proof() -> anyhow::Result<()> {
         state_root,
         key.as_slice(),
         response.account_proof.iter().map(|x| x.to_vec()).collect(),
-    )
-    .unwrap()
+    )?
     .unwrap();
 
     // Proof contains the right account data

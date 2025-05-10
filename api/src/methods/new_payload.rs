@@ -10,7 +10,7 @@ use {
 
 pub async fn execute_v3(
     request: serde_json::Value,
-    app: &ApplicationReader<impl Dependencies>,
+    app: ApplicationReader<impl Dependencies>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let (execution_payload, expected_blob_versioned_hashes, parent_beacon_block_root) =
         parse_params_3(request)?;
@@ -28,7 +28,7 @@ async fn inner_execute_v3(
     execution_payload: ExecutionPayloadV3,
     expected_blob_versioned_hashes: Vec<B256>,
     parent_beacon_block_root: B256,
-    app: &ApplicationReader<impl Dependencies>,
+    app: ApplicationReader<impl Dependencies>,
 ) -> Result<PayloadStatusV1, JsonRpcError> {
     // Spec: https://github.com/ethereum/execution-apis/blob/main/src/engine/cancun.md#specification
 
@@ -428,11 +428,13 @@ mod tests {
 
         queue.wait_for_pending_commands().await;
 
-        get_payload::execute_v3(get_payload_request, &reader)
+        get_payload::execute_v3(get_payload_request, reader.clone())
             .await
             .unwrap();
 
-        let response = execute_v3(new_payload_request, &reader).await.unwrap();
+        let response = execute_v3(new_payload_request, reader.clone())
+            .await
+            .unwrap();
 
         let expected_response: serde_json::Value = serde_json::from_str(
             r#"

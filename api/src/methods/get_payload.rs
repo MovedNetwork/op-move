@@ -9,7 +9,7 @@ use {
 
 pub async fn execute_v3(
     request: serde_json::Value,
-    app: &ApplicationReader<impl Dependencies>,
+    app: ApplicationReader<impl Dependencies>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let payload_id: PayloadId = parse_params_1(request)?;
 
@@ -224,7 +224,7 @@ mod tests {
 
         queue.wait_for_pending_commands().await;
 
-        let actual_response = execute_v3(request, &reader).await.unwrap();
+        let actual_response = execute_v3(request, reader.clone()).await.unwrap();
 
         assert_eq!(actual_response, expected_response);
 

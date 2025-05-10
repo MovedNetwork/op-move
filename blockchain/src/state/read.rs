@@ -104,7 +104,10 @@ impl ReadStateRoot for SharedMemoryReader {
 }
 
 #[derive(Debug)]
-pub struct InMemoryStateQueries<R: ReadStateRoot = SharedMemoryReader, D: DB = eth_trie::MemoryDB> {
+pub struct InMemoryStateQueries<
+    R: ReadStateRoot = SharedMemoryReader,
+    D: DB = moved_state::InMemoryTrieDb,
+> {
     memory: R,
     db: Arc<D>,
 }

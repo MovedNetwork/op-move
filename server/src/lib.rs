@@ -142,7 +142,12 @@ pub fn initialize_app(
 ) {
     let (mut app, app_reader) = dependency::create(&genesis_config);
 
-    if app.block_queries.latest(&app.storage).unwrap().is_none() {
+    if app
+        .block_queries
+        .latest(&app.storage_reader)
+        .unwrap()
+        .is_none()
+    {
         let (genesis_changes, table_changes, evm_storage_changes) = {
             #[cfg(test)]
             {
@@ -267,7 +272,7 @@ async fn mirror(
 
     let request = request.expect("geth responded, so body must have been JSON");
     let op_move_response =
-        moved_api::request::handle(request.clone(), queue.clone(), is_allowed, payload_id, &app)
+        moved_api::request::handle(request.clone(), queue.clone(), is_allowed, payload_id, app)
             .await;
     let log = MirrorLog {
         request: &request,

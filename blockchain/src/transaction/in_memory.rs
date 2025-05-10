@@ -13,7 +13,7 @@ pub struct TransactionMemoryReader {
 }
 
 impl TransactionMemoryReader {
-    pub fn new(transactions: ReadHandle) -> Self {
+    pub const fn new(transactions: ReadHandle) -> Self {
         Self { transactions }
     }
 }
@@ -30,7 +30,7 @@ pub struct TransactionMemory {
 }
 
 impl TransactionMemory {
-    pub fn new(transactions: WriteHandle) -> Self {
+    pub const fn new(transactions: WriteHandle) -> Self {
         Self { transactions }
     }
 

@@ -6,7 +6,7 @@ use {
 
 pub async fn execute(
     request: serde_json::Value,
-    app: &ApplicationReader<impl Dependencies>,
+    app: ApplicationReader<impl Dependencies>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let (block_count, block_number, reward_percentiles) = parse_params(request)?;
 
@@ -169,7 +169,7 @@ mod tests {
 
         let expected_response: serde_json::Value =
             serde_json::json!({"gasUsedRatio": [], "oldestBlock": "0x0"});
-        let response = execute(request, &reader).await.unwrap();
+        let response = execute(request, reader.clone()).await.unwrap();
 
         assert_eq!(response, expected_response);
     }

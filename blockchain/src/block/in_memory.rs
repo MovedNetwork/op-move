@@ -23,7 +23,11 @@ pub struct BlockMemory {
 }
 
 impl BlockMemory {
-    pub fn new(hashes: WriteHashes, heights: WriteHeights, payload_ids: WritePayloadIds) -> Self {
+    pub const fn new(
+        hashes: WriteHashes,
+        heights: WriteHeights,
+        payload_ids: WritePayloadIds,
+    ) -> Self {
         Self {
             hashes,
             heights,
@@ -69,7 +73,11 @@ pub struct BlockMemoryReader {
 }
 
 impl BlockMemoryReader {
-    pub fn new(hashes: ReadHashes, heights: ReadHeights, payload_ids: ReadPayloadIds) -> Self {
+    pub const fn new(
+        hashes: ReadHashes,
+        heights: ReadHeights,
+        payload_ids: ReadPayloadIds,
+    ) -> Self {
         Self {
             hashes,
             heights,

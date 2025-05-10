@@ -8,7 +8,7 @@ const BASE_FEE: u64 = 21_000;
 
 pub async fn execute(
     request: serde_json::Value,
-    app: &ApplicationReader<impl Dependencies>,
+    app: ApplicationReader<impl Dependencies>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let (transaction, block_number) = parse_params(request)?;
     let response = std::cmp::max(
@@ -136,7 +136,7 @@ mod tests {
         state_channel.reserve_many(10).await.unwrap();
 
         let expected_response: serde_json::Value = serde_json::from_str(r#""0x6326""#).unwrap();
-        let actual_response = execute(request, &reader).await.unwrap();
+        let actual_response = execute(request, reader.clone()).await.unwrap();
 
         assert_eq!(actual_response, expected_response);
 

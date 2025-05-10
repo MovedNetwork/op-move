@@ -9,12 +9,11 @@ use {
         ForkchoiceUpdatedResponseV1, GetBlockResponse, GetPayloadResponseV3, PayloadStatusV1,
         Status,
     },
-    moved_app::{Application, CommandQueue, Dependencies},
+    moved_app::{ApplicationReader, CommandQueue, Dependencies},
     moved_blockchain::{payload::StatePayloadId, receipt::TransactionReceipt},
     moved_genesis::config::GenesisConfig,
     serde::de::DeserializeOwned,
-    std::sync::Arc,
-    tokio::{sync::RwLock, task::JoinHandle},
+    tokio::task::JoinHandle,
 };
 
 const DEPOSIT_TX: &[u8] = &hex!("7ef8f8a032595a51f0561028c684fbeeb46c7221a34be9a2eedda60a93069dd77320407e94deaddeaddeaddeaddeaddeaddeaddeaddead00019442000000000000000000000000000000000000158080830f424080b8a4440a5e2000000000000000000000000000000000000000006807cdc800000000000000220000000000000000000000000000000000000000000000000000000000a68a3a000000000000000000000000000000000000000000000000000000000000000198663a8bf712c08273a02876877759b43dc4df514214cc2f6008870b9a8503380000000000000000000000008c67a7b8624044f8f672e9ec374dfa596f01afb9");
@@ -22,7 +21,7 @@ const DEPOSIT_TX: &[u8] = &hex!("7ef8f8a032595a51f0561028c684fbeeb46c7221a34be9a
 pub struct TestContext {
     pub genesis_config: GenesisConfig,
     pub queue: CommandQueue,
-    pub app: Arc<RwLock<Application<dependency::Dependency>>>,
+    pub app: ApplicationReader<dependency::Dependency>,
     head: B256,
     timestamp: u64,
     state_task: JoinHandle<()>,
@@ -31,9 +30,8 @@ pub struct TestContext {
 impl TestContext {
     pub async fn new() -> anyhow::Result<Self> {
         let genesis_config = GenesisConfig::default();
-        let app = initialize_app(genesis_config.clone());
-        let app = Arc::new(RwLock::new(app));
-        let (queue, state) = moved_app::create(app.clone(), 10);
+        let (app, reader) = initialize_app(genesis_config.clone());
+        let (queue, state) = moved_app::create(Box::new(app), 10);
 
         let state_task = state.spawn();
 
@@ -46,7 +44,8 @@ impl TestContext {
                 true
             ]
         });
-        let genesis_block: GetBlockResponse = handle_request(request, &queue, &app).await?;
+        let genesis_block: GetBlockResponse =
+            handle_request(request, &queue, reader.clone()).await?;
         let genesis_hash = genesis_block.0.header.hash;
         let timestamp = genesis_block.0.header.timestamp;
 
@@ -63,13 +62,14 @@ impl TestContext {
                 null
             ]
         });
-        let response: ForkchoiceUpdatedResponseV1 = handle_request(request, &queue, &app).await?;
+        let response: ForkchoiceUpdatedResponseV1 =
+            handle_request(request, &queue, reader.clone()).await?;
         assert_eq!(response.payload_status.status, Status::Valid);
 
         Ok(Self {
             genesis_config,
             queue,
-            app,
+            app: reader,
             state_task,
             head: genesis_hash,
             timestamp,
@@ -105,7 +105,7 @@ impl TestContext {
             ]
         });
         let response: ForkchoiceUpdatedResponseV1 =
-            handle_request(request, &self.queue, &self.app).await?;
+            handle_request(request, &self.queue, self.app.clone()).await?;
         let payload_id = response.payload_id.unwrap();
 
         self.queue.wait_for_pending_commands().await;
@@ -119,7 +119,7 @@ impl TestContext {
             ]
         });
         let response: GetPayloadResponseV3 =
-            handle_request(request, &self.queue, &self.app).await?;
+            handle_request(request, &self.queue, self.app.clone()).await?;
 
         let request = serde_json::json!({
             "jsonrpc": "2.0",
@@ -131,7 +131,8 @@ impl TestContext {
                "0x0000000000000000000000000000000000000000000000000000000000000000"
             ]
         });
-        let response: PayloadStatusV1 = handle_request(request, &self.queue, &self.app).await?;
+        let response: PayloadStatusV1 =
+            handle_request(request, &self.queue, self.app.clone()).await?;
         assert_eq!(response.status, Status::Valid);
 
         self.head = response.latest_valid_hash.unwrap();
@@ -148,7 +149,7 @@ impl TestContext {
                 format!("0x{}", hex::encode(bytes)),
             ]
         });
-        let tx_hash: B256 = handle_request(request, &self.queue, &self.app).await?;
+        let tx_hash: B256 = handle_request(request, &self.queue, self.app.clone()).await?;
         Ok(tx_hash)
     }
 
@@ -164,7 +165,7 @@ impl TestContext {
                 format!("{tx_hash:?}"),
             ]
         });
-        let receipt = handle_request(request, &self.queue, &self.app).await?;
+        let receipt = handle_request(request, &self.queue, self.app.clone()).await?;
         Ok(receipt)
     }
 
@@ -189,7 +190,8 @@ impl TestContext {
                 true
             ]
         });
-        let block: GetBlockResponse = handle_request(request, &self.queue, &self.app).await?;
+        let block: GetBlockResponse =
+            handle_request(request, &self.queue, self.app.clone()).await?;
         Ok(block)
     }
 
@@ -202,7 +204,7 @@ impl TestContext {
 pub async fn handle_request<T: DeserializeOwned>(
     request: serde_json::Value,
     queue: &CommandQueue,
-    app: &Arc<RwLock<Application<impl Dependencies>>>,
+    app: ApplicationReader<impl Dependencies>,
 ) -> anyhow::Result<T> {
     let response = moved_api::request::handle(
         request.clone(),

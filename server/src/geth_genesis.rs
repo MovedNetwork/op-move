@@ -44,6 +44,11 @@ pub fn extract_genesis_block(geth_response: &serde_json::Value) -> Option<Extend
         requests_hash: geth_block.header.requests_hash,
     };
     let block = Block::new(header, Vec::new());
-    let ext_block = ExtendedBlock::new(geth_block.header.hash, Default::default(), block);
+    let ext_block = ExtendedBlock::new(
+        geth_block.header.hash,
+        Default::default(),
+        Default::default(),
+        block,
+    );
     Some(ext_block)
 }

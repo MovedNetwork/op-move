@@ -5,7 +5,7 @@ use {
 
 pub async fn execute(
     request: serde_json::Value,
-    app: &ApplicationReader<impl Dependencies>,
+    app: ApplicationReader<impl Dependencies>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let tx_hash = parse_params_1(request)?;
 
@@ -65,9 +65,12 @@ mod tests {
             ))
             .collect(),
         );
-        let payload_response: GetPayloadResponseV3 =
-            serde_json::from_value(get_payload::execute_v3(request, &reader).await.unwrap())
-                .unwrap();
+        let payload_response: GetPayloadResponseV3 = serde_json::from_value(
+            get_payload::execute_v3(request, reader.clone())
+                .await
+                .unwrap(),
+        )
+        .unwrap();
         let block_hash = payload_response.execution_payload.block_hash;
 
         let request = serde_json::Value::Object(
@@ -78,7 +81,7 @@ mod tests {
             .collect(),
         );
         let actual_response: serde_json::Value =
-            serde_json::from_value(execute(request, &reader).await.unwrap()).unwrap();
+            serde_json::from_value(execute(request, reader.clone()).await.unwrap()).unwrap();
         let expected_response = json!({
             "type": "0x2",
             "chainId": "0x194",

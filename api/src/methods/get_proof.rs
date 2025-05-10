@@ -12,7 +12,7 @@ use {
 
 pub async fn execute(
     request: serde_json::Value,
-    app: &ApplicationReader<impl Dependencies>,
+    app: ApplicationReader<impl Dependencies>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let (address, storage_slots, block_number) = parse_params(request)?;
 
@@ -114,7 +114,7 @@ mod tests {
         });
 
         let response: ProofResponse =
-            serde_json::from_value(execute(request, &reader).await.unwrap()).unwrap();
+            serde_json::from_value(execute(request, reader.clone()).await.unwrap()).unwrap();
 
         assert_eq!(
             response.address,

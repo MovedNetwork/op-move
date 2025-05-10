@@ -5,7 +5,7 @@ use {
 
 pub async fn execute(
     request: serde_json::Value,
-    app: &ApplicationReader<impl Dependencies>,
+    app: ApplicationReader<impl Dependencies>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let tx_hash = parse_params_1(request)?;
 
@@ -63,9 +63,12 @@ mod tests {
             ))
             .collect(),
         );
-        let payload_response: GetPayloadResponseV3 =
-            serde_json::from_value(get_payload::execute_v3(request, &reader).await.unwrap())
-                .unwrap();
+        let payload_response: GetPayloadResponseV3 = serde_json::from_value(
+            get_payload::execute_v3(request, reader.clone())
+                .await
+                .unwrap(),
+        )
+        .unwrap();
         let block_hash = payload_response.execution_payload.block_hash;
 
         // 3. Get transaction receipt
@@ -77,7 +80,7 @@ mod tests {
             .collect(),
         );
         let receipt: TransactionReceipt =
-            serde_json::from_value(execute(request, &reader).await.unwrap()).unwrap();
+            serde_json::from_value(execute(request, reader.clone()).await.unwrap()).unwrap();
 
         // Confirm the receipt contains correct information about the transaction
         assert_eq!(receipt.inner.transaction_index, Some(2));

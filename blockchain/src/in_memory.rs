@@ -10,7 +10,7 @@ pub struct SharedMemoryReader {
 }
 
 impl SharedMemoryReader {
-    pub fn new(
+    pub const fn new(
         block_memory: BlockMemoryReader,
         transaction_memory: TransactionMemoryReader,
     ) -> Self {
@@ -28,7 +28,7 @@ pub struct SharedMemory {
 }
 
 impl SharedMemory {
-    pub fn new(block_memory: BlockMemory, transaction_memory: TransactionMemory) -> Self {
+    pub const fn new(block_memory: BlockMemory, transaction_memory: TransactionMemory) -> Self {
         Self {
             block_memory,
             transaction_memory,

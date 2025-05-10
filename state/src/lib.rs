@@ -66,7 +66,7 @@ pub trait State {
 
 pub struct InMemoryState {
     resolver: InMemoryStorage,
-    db: Arc<MemoryDB>,
+    db: Arc<InMemoryTrieDb>,
     current_state_root: Option<B256>,
 }
 
@@ -76,16 +76,18 @@ impl Default for InMemoryState {
     }
 }
 
+pub type InMemoryTrieDb = MemoryDB;
+
 impl InMemoryState {
     // Per `eth-trie` docs: If "light" is true, the data is deleted from the database
     // at the time of submission.
     const IS_LIGHT: bool = false;
 
-    pub fn create_db() -> Arc<MemoryDB> {
+    pub fn create_db() -> Arc<InMemoryTrieDb> {
         Arc::new(MemoryDB::new(Self::IS_LIGHT))
     }
 
-    pub fn new(db: Arc<MemoryDB>) -> Self {
+    pub fn new(db: Arc<InMemoryTrieDb>) -> Self {
         Self {
             resolver: InMemoryStorage::new(),
             db,
@@ -93,7 +95,7 @@ impl InMemoryState {
         }
     }
 
-    fn tree(&self) -> EthTrie<MemoryDB> {
+    fn tree(&self) -> EthTrie<InMemoryTrieDb> {
         let db = self.db.clone();
         match self.current_state_root {
             None => EthTrie::new(db),

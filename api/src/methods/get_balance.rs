@@ -5,7 +5,7 @@ use {
 
 pub async fn execute(
     request: serde_json::Value,
-    app: &ApplicationReader<impl Dependencies>,
+    app: ApplicationReader<impl Dependencies>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let (address, block_number) = parse_params_2(request)?;
 
@@ -76,7 +76,7 @@ mod tests {
         });
 
         let expected_response: serde_json::Value = serde_json::from_str(r#""0x5""#).unwrap();
-        let response = execute(request, &reader).await.unwrap();
+        let response = execute(request, reader.clone()).await.unwrap();
 
         assert_eq!(response, expected_response);
     }
@@ -104,7 +104,7 @@ mod tests {
         });
 
         let expected_response = serde_json::Value::String(format!("0x{expected_balance}"));
-        let response = execute(request, &reader).await.unwrap();
+        let response = execute(request, reader.clone()).await.unwrap();
 
         assert_eq!(response, expected_response);
     }

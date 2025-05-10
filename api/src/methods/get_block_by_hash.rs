@@ -5,7 +5,7 @@ use {
 
 pub async fn execute(
     request: serde_json::Value,
-    app: &ApplicationReader<impl Dependencies>,
+    app: ApplicationReader<impl Dependencies>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let (block_hash, include_transactions) = parse_params_2(request)?;
 
@@ -65,7 +65,7 @@ mod tests {
             "withdrawals": []
         }"#).unwrap();
 
-        let response = execute(request, &reader).await.unwrap();
+        let response = execute(request, reader.clone()).await.unwrap();
 
         assert_eq!(response, expected_response);
     }

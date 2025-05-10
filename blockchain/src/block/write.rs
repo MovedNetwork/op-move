@@ -1,4 +1,5 @@
 use {
+    crate::payload::PayloadId,
     moved_shared::primitives::{B256, U256},
     std::fmt::Debug,
 };
@@ -19,16 +20,27 @@ pub struct ExtendedBlock {
     /// for free and raise the base fee for everyone else. Alternatively, they could refund the base
     /// fee to some users off-chain, leading to a more opaque and complex transaction fee market.
     pub value: U256,
+    pub payload_id: PayloadId,
     pub block: Block,
 }
 
 impl ExtendedBlock {
-    pub fn new(hash: B256, value: U256, block: Block) -> Self {
-        Self { hash, value, block }
+    pub fn new(hash: B256, value: U256, payload_id: PayloadId, block: Block) -> Self {
+        Self {
+            hash,
+            value,
+            payload_id,
+            block,
+        }
     }
 
     pub fn with_value(mut self, value: U256) -> Self {
         self.value = value;
+        self
+    }
+
+    pub fn with_payload_id(mut self, payload_id: PayloadId) -> Self {
+        self.payload_id = payload_id;
         self
     }
 
@@ -53,7 +65,7 @@ impl Block {
     }
 
     pub fn with_hash(self, hash: B256) -> ExtendedBlock {
-        ExtendedBlock::new(hash, U256::ZERO, self)
+        ExtendedBlock::new(hash, U256::ZERO, PayloadId::from(0u64), self)
     }
 }
 

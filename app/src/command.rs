@@ -102,7 +102,8 @@ impl<D: Dependencies> Application<D> {
 
         let block = Block::new(header, transactions.iter().map(|v| v.trie_hash()).collect())
             .with_hash(block_hash)
-            .with_value(total_tip);
+            .with_value(total_tip)
+            .with_payload_id(id);
 
         let block_number = block.block.header.number;
         let base_fee = block.block.header.base_fee_per_gas;

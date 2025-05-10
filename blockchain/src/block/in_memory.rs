@@ -1,9 +1,15 @@
-use {crate::block::ExtendedBlock, moved_shared::primitives::B256, std::sync::Arc};
+use {
+    crate::{block::ExtendedBlock, payload::PayloadId},
+    moved_shared::primitives::B256,
+    std::sync::Arc,
+};
 
 pub type WriteHashes = evmap::WriteHandle<B256, Arc<ExtendedBlock>>;
 pub type ReadHashes = evmap::ReadHandle<B256, Arc<ExtendedBlock>>;
 pub type WriteHeights = evmap::WriteHandle<u64, Arc<ExtendedBlock>>;
 pub type ReadHeights = evmap::ReadHandle<u64, Arc<ExtendedBlock>>;
+pub type WritePayloadIds = evmap::WriteHandle<PayloadId, Arc<ExtendedBlock>>;
+pub type ReadPayloadIds = evmap::ReadHandle<PayloadId, Arc<ExtendedBlock>>;
 
 /// A storage for blocks that keeps data in memory.
 ///
@@ -13,19 +19,27 @@ pub type ReadHeights = evmap::ReadHandle<u64, Arc<ExtendedBlock>>;
 pub struct BlockMemory {
     hashes: WriteHashes,
     heights: WriteHeights,
+    payload_ids: WritePayloadIds,
 }
 
 impl BlockMemory {
-    pub fn new(hashes: WriteHashes, heights: WriteHeights) -> Self {
-        Self { hashes, heights }
+    pub fn new(hashes: WriteHashes, heights: WriteHeights, payload_ids: WritePayloadIds) -> Self {
+        Self {
+            hashes,
+            heights,
+            payload_ids,
+        }
     }
 
     pub fn add(&mut self, block: ExtendedBlock) {
         let block = Arc::new(block);
         self.hashes.insert(block.hash, block.clone());
-        self.heights.insert(block.block.header.number, block);
+        self.heights
+            .insert(block.block.header.number, block.clone());
+        self.payload_ids.insert(block.payload_id, block);
         self.hashes.refresh();
         self.heights.refresh();
+        self.payload_ids.refresh();
     }
 }
 
@@ -41,15 +55,26 @@ impl AsRef<ReadHashes> for BlockMemory {
     }
 }
 
+impl AsRef<ReadPayloadIds> for BlockMemory {
+    fn as_ref(&self) -> &ReadPayloadIds {
+        &self.payload_ids
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct BlockMemoryReader {
     hashes: ReadHashes,
     heights: ReadHeights,
+    payload_ids: ReadPayloadIds,
 }
 
 impl BlockMemoryReader {
-    pub fn new(hashes: ReadHashes, heights: ReadHeights) -> Self {
-        Self { hashes, heights }
+    pub fn new(hashes: ReadHashes, heights: ReadHeights, payload_ids: ReadPayloadIds) -> Self {
+        Self {
+            hashes,
+            heights,
+            payload_ids,
+        }
     }
 }
 
@@ -65,8 +90,15 @@ impl AsRef<ReadHashes> for BlockMemoryReader {
     }
 }
 
+impl AsRef<ReadPayloadIds> for BlockMemoryReader {
+    fn as_ref(&self) -> &ReadPayloadIds {
+        &self.payload_ids
+    }
+}
+
 pub trait ReadBlockMemory {
     fn by_hash(&self, hash: B256) -> Option<ExtendedBlock>;
+    fn by_payload_id(&self, payload_id: PayloadId) -> Option<ExtendedBlock>;
     fn by_height(&self, height: u64) -> Option<ExtendedBlock> {
         self.map_by_height(height, Clone::clone)
     }
@@ -77,10 +109,16 @@ pub trait ReadBlockMemory {
     }
 }
 
-impl<T: AsRef<ReadHashes> + AsRef<ReadHeights>> ReadBlockMemory for T {
+impl<T: AsRef<ReadHashes> + AsRef<ReadHeights> + AsRef<ReadPayloadIds>> ReadBlockMemory for T {
     fn by_hash(&self, hash: B256) -> Option<ExtendedBlock> {
         <T as AsRef<ReadHashes>>::as_ref(self)
             .get_one(&hash)
+            .map(|v| ExtendedBlock::clone(&v))
+    }
+
+    fn by_payload_id(&self, payload_id: PayloadId) -> Option<ExtendedBlock> {
+        <T as AsRef<ReadPayloadIds>>::as_ref(self)
+            .get_one(&payload_id)
             .map(|v| ExtendedBlock::clone(&v))
     }
 

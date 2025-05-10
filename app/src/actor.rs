@@ -75,8 +75,6 @@ impl<D: Dependencies<StateQueries = InMemoryStateQueries>> CommandActor<D> {
 
 impl<D: Dependencies<PayloadQueries = InMemoryPayloadQueries>> CommandActor<D> {
     pub fn on_payload_in_memory() -> &'static OnPayload<Application<D>> {
-        &|state, payload_id, block_hash| {
-            state.payload_queries.add_block_hash(payload_id, block_hash)
-        }
+        &|_state, _payload_id, _block_hash| ()
     }
 }

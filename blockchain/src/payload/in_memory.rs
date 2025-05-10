@@ -1,18 +1,16 @@
 use {
     crate::{
-        block::ReadBlockMemory,
+        block::{ExtendedBlock, ReadBlockMemory},
         in_memory::SharedMemoryReader,
         payload::{PayloadId, PayloadQueries, PayloadResponse},
         transaction::ReadTransactionMemory,
     },
     moved_shared::primitives::B256,
-    std::{collections::HashMap, convert::Infallible},
+    std::convert::Infallible,
 };
 
 #[derive(Debug, Clone)]
-pub struct InMemoryPayloadQueries {
-    block_hashes: HashMap<PayloadId, B256>,
-}
+pub struct InMemoryPayloadQueries;
 
 impl Default for InMemoryPayloadQueries {
     fn default() -> Self {
@@ -22,13 +20,17 @@ impl Default for InMemoryPayloadQueries {
 
 impl InMemoryPayloadQueries {
     pub fn new() -> Self {
-        Self {
-            block_hashes: Default::default(),
-        }
+        Self
     }
 
-    pub fn add_block_hash(&mut self, id: PayloadId, block_hash: B256) {
-        self.block_hashes.insert(id, block_hash);
+    fn convert(storage: &SharedMemoryReader, block: ExtendedBlock) -> PayloadResponse {
+        let transactions = storage
+            .transaction_memory
+            .by_hashes(block.transaction_hashes())
+            .into_iter()
+            .map(|v| v.inner);
+
+        PayloadResponse::from_block_with_transactions(block, transactions)
     }
 }
 
@@ -41,15 +43,10 @@ impl PayloadQueries for InMemoryPayloadQueries {
         storage: &Self::Storage,
         block_hash: B256,
     ) -> Result<Option<PayloadResponse>, Self::Err> {
-        Ok(storage.block_memory.by_hash(block_hash).map(|block| {
-            let transactions = storage
-                .transaction_memory
-                .by_hashes(block.transaction_hashes())
-                .into_iter()
-                .map(|v| v.inner);
-
-            PayloadResponse::from_block_with_transactions(block, transactions)
-        }))
+        Ok(storage
+            .block_memory
+            .by_hash(block_hash)
+            .map(|block| Self::convert(storage, block)))
     }
 
     fn by_id(
@@ -57,10 +54,9 @@ impl PayloadQueries for InMemoryPayloadQueries {
         storage: &Self::Storage,
         id: PayloadId,
     ) -> Result<Option<PayloadResponse>, Self::Err> {
-        let Some(hash) = self.block_hashes.get(&id) else {
-            return Ok(None);
-        };
-
-        self.by_hash(storage, *hash)
+        Ok(storage
+            .block_memory
+            .by_payload_id(id)
+            .map(|block| Self::convert(storage, block)))
     }
 }

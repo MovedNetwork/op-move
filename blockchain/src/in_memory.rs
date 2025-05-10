@@ -46,8 +46,9 @@ pub mod shared_memory {
     pub fn new() -> (SharedMemoryReader, SharedMemory) {
         let (r1, w1) = evmap::new();
         let (r2, w2) = evmap::new();
-        let bw = BlockMemory::new(w1, w2);
-        let br = BlockMemoryReader::new(r1, r2);
+        let (r3, w3) = evmap::new();
+        let bw = BlockMemory::new(w1, w2, w3);
+        let br = BlockMemoryReader::new(r1, r2, r3);
         let (r1, w1) = evmap::new();
         let tw = TransactionMemory::new(w1);
         let tr = TransactionMemoryReader::new(r1);

@@ -34,7 +34,7 @@ pub mod tests {
         },
         moved_blockchain::{
             block::{
-                Block, BlockQueries, BlockRepository, BlockResponse, Eip1559GasFee,
+                Block, BlockQueries, BlockRepository, BlockResponse, Eip1559GasFee, Header,
                 InMemoryBlockQueries, InMemoryBlockRepository, MovedBlockHash,
             },
             in_memory::shared_memory,
@@ -65,7 +65,13 @@ pub mod tests {
         let head_hash = B256::new(hex!(
             "e56ec7ba741931e8c55b7f654a6e56ed61cf8b8279bf5e3ef6ac86a11eb33a9d"
         ));
-        let genesis_block = Block::default().with_hash(head_hash).with_value(U256::ZERO);
+        let genesis_header = Header {
+            state_root: genesis_config.initial_state_root,
+            ..Default::default()
+        };
+        let genesis_block = Block::new(genesis_header, Vec::new())
+            .with_hash(head_hash)
+            .with_value(U256::ZERO);
 
         let (memory_reader, mut memory) = shared_memory::new();
         let mut repository = InMemoryBlockRepository::new();

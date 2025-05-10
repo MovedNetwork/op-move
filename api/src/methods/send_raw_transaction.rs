@@ -70,8 +70,8 @@ pub mod tests {
 
     #[tokio::test]
     async fn test_execute() {
-        let app = create_app();
-        let (queue, state) = moved_app::create(app, 10);
+        let (_reader, app) = create_app();
+        let (queue, state) = moved_app::create(Box::new(app), 10);
         let state_handle = state.spawn();
 
         let request = example_request();

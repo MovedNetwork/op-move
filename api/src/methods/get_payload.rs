@@ -36,11 +36,11 @@ mod tests {
         moved_blockchain::{
             block::{
                 Block, BlockRepository, Eip1559GasFee, InMemoryBlockQueries,
-                InMemoryBlockRepository,
+                InMemoryBlockRepository, MovedBlockHash,
             },
-            in_memory::SharedMemory,
+            in_memory::shared_memory,
             payload::InMemoryPayloadQueries,
-            receipt::{InMemoryReceiptQueries, InMemoryReceiptRepository, ReceiptMemory},
+            receipt::{InMemoryReceiptQueries, InMemoryReceiptRepository, receipt_memory},
             state::InMemoryStateQueries,
             transaction::{InMemoryTransactionQueries, InMemoryTransactionRepository},
         },
@@ -83,11 +83,12 @@ mod tests {
         ));
         let genesis_block = Block::default().with_hash(head_hash).with_value(U256::ZERO);
 
-        let mut memory = SharedMemory::new();
+        let (memory_reader, mut memory) = shared_memory::new();
         let mut repository = InMemoryBlockRepository::new();
         repository.add(&mut memory, genesis_block).unwrap();
 
-        let mut state = InMemoryState::new();
+        let trie_db = InMemoryState::create_db();
+        let mut state = InMemoryState::new(trie_db.clone());
         let mut evm_storage = InMemoryStorageTrieRepository::new();
         let (changes, table_changes, evm_storage_changes) = moved_genesis_image::load();
         moved_genesis::apply(
@@ -98,11 +99,11 @@ mod tests {
             &mut state,
             &mut evm_storage,
         );
-        let initial_state_root = genesis_config.initial_state_root;
+        let (receipt_memory_reader, receipt_memory) = receipt_memory::new();
 
-        let app = Arc::new(RwLock::new(Application::<TestDependencies<_, _, _, _>> {
+        let app = Application::<TestDependencies<_, _, _, _>> {
             mem_pool: Default::default(),
-            genesis_config,
+            genesis_config: genesis_config.clone(),
             state,
             block_hash: head_hash,
             block_repository: repository,
@@ -112,19 +113,55 @@ mod tests {
             l2_fee: U256::ZERO,
             block_queries: InMemoryBlockQueries,
             storage: memory,
-            state_queries: InMemoryStateQueries::from_genesis(initial_state_root),
+            receipt_memory_reader: receipt_memory_reader.clone(),
+            storage_reader: memory_reader.clone(),
+            state_queries: InMemoryStateQueries::new(memory_reader.clone(), trie_db.clone()),
             transaction_repository: InMemoryTransactionRepository::new(),
             transaction_queries: InMemoryTransactionQueries::new(),
-            receipt_memory: ReceiptMemory::new(),
+            receipt_memory,
             receipt_repository: InMemoryReceiptRepository::new(),
             receipt_queries: InMemoryReceiptQueries::new(),
             payload_queries: InMemoryPayloadQueries::new(),
-            evm_storage,
+            evm_storage: evm_storage.clone(),
             on_tx: CommandActor::on_tx_noop(),
             on_tx_batch: CommandActor::on_tx_batch_noop(),
             on_payload: CommandActor::on_payload_in_memory(),
-        }));
-        let (queue, state) = moved_app::create(app.clone(), 10);
+        };
+        let reader = ApplicationReader::<
+            TestDependencies<
+                _,
+                InMemoryState,
+                _,
+                MovedBlockHash,
+                _,
+                (),
+                _,
+                _,
+                (),
+                _,
+                _,
+                _,
+                _,
+                _,
+                _,
+                (),
+                Eip1559GasFee,
+                U256,
+                U256,
+            >,
+        > {
+            genesis_config,
+            base_token: (),
+            block_queries: InMemoryBlockQueries,
+            storage: memory_reader.clone(),
+            state_queries: InMemoryStateQueries::new(memory_reader, trie_db),
+            transaction_queries: InMemoryTransactionQueries::new(),
+            receipt_memory: receipt_memory_reader,
+            receipt_queries: InMemoryReceiptQueries::new(),
+            payload_queries: InMemoryPayloadQueries::new(),
+            evm_storage,
+        };
+        let (queue, state) = moved_app::create(Box::new(app), 10);
         let state_handle = state.spawn();
 
         // Update the state with an execution payload
@@ -187,7 +224,7 @@ mod tests {
 
         drop(queue);
         state_handle.await.unwrap();
-        let actual_response = execute_v3(request, &app).await.unwrap();
+        let actual_response = execute_v3(request, &reader).await.unwrap();
 
         assert_eq!(actual_response, expected_response);
     }

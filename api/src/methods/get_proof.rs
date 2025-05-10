@@ -100,7 +100,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute() {
-        let app = create_app();
+        let (reader, _app) = create_app();
 
         let request: serde_json::Value = serde_json::json!({
             "jsonrpc": "2.0",
@@ -114,7 +114,7 @@ mod tests {
         });
 
         let response: ProofResponse =
-            serde_json::from_value(execute(request, &app).await.unwrap()).unwrap();
+            serde_json::from_value(execute(request, &reader).await.unwrap()).unwrap();
 
         assert_eq!(
             response.address,

@@ -28,8 +28,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute() {
-        let app = create_app();
-        let (queue, state) = moved_app::create(app.clone(), 10);
+        let (reader, app) = create_app();
+        let (queue, state) = moved_app::create(Box::new(app), 10);
         let state_handle = state.spawn();
 
         // 1. Send transaction
@@ -65,7 +65,8 @@ mod tests {
             .collect(),
         );
         let payload_response: GetPayloadResponseV3 =
-            serde_json::from_value(get_payload::execute_v3(request, &app).await.unwrap()).unwrap();
+            serde_json::from_value(get_payload::execute_v3(request, &reader).await.unwrap())
+                .unwrap();
         let block_hash = payload_response.execution_payload.block_hash;
 
         // 3. Get transaction receipt
@@ -77,7 +78,7 @@ mod tests {
             .collect(),
         );
         let receipt: TransactionReceipt =
-            serde_json::from_value(execute(request, &app).await.unwrap()).unwrap();
+            serde_json::from_value(execute(request, &reader).await.unwrap()).unwrap();
 
         // Confirm the receipt contains correct information about the transaction
         assert_eq!(receipt.inner.transaction_index, Some(2));

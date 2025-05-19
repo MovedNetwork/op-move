@@ -188,7 +188,8 @@ fn create_app_with_fake_queries(
     let head_hash = B256::new(hex!(
         "e56ec7ba741931e8c55b7f654a6e56ed61cf8b8279bf5e3ef6ac86a11eb33a9d"
     ));
-    let genesis_block = Block::default().with_hash(head_hash).with_value(U256::ZERO);
+    let mut genesis_block = Block::default().with_hash(head_hash).with_value(U256::ZERO);
+    genesis_block.block.header.base_fee_per_gas = Some(1_000);
 
     let (memory_reader, mut memory) = shared_memory::new();
     let mut repository = InMemoryBlockRepository::new();
@@ -380,7 +381,7 @@ fn create_transaction(nonce: u64) -> TxEnvelope {
 #[test]
 fn test_fetched_balances_are_updated_after_transfer_of_funds() {
     let to = Address::new(hex!("44223344556677889900ffeeaabbccddee111111"));
-    let initial_balance = U256::from(5);
+    let initial_balance = U256::from(10);
     let amount = U256::from(4);
     let (reader, mut app) =
         create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), initial_balance);
@@ -488,130 +489,6 @@ fn test_older_payload_can_be_fetched_again_successfully() {
     assert_eq!(expected_payload, actual_payload);
 }
 
-#[test_case(0, None => matches Err(Error::User(UserError::InvalidBlockCount)); "zero block count")]
-#[test_case(2, None => matches Err(Error::User(UserError::BlockRangeTooLong)); "block count too long")]
-#[test_case(1, Some(vec![0.0; 101]) => matches Err(Error::User(UserError::RewardPercentilesTooLong)); "too many percentiles")]
-#[test_case(1, Some(vec![50.0, 101.0]) => matches Err(Error::User(UserError::InvalidRewardPercentiles)); "percentile out of range")]
-#[test_case(1, Some(vec![-5.0]) => matches Err(Error::User(UserError::InvalidRewardPercentiles)); "negative percentile")]
-#[test_case(1, Some(vec![75.0, 25.0, 50.0]) => matches Err(Error::User(UserError::InvalidRewardPercentiles)); "unsorted percentiles")]
-#[test_case(1, Some(vec![25.0, 50.0, 75.0]) => matches Ok(_); "valid percentiles")]
-#[test_case(1, None => matches Ok(_); "no percentiles")]
-fn test_fee_history_validation(
-    block_count: u64,
-    percentiles: Option<Vec<f64>>,
-) -> Result<FeeHistory, Error> {
-    let app = create_app_with_fake_queries(AccountAddress::ONE, U256::from(1000));
-    app.fee_history(block_count, Latest, percentiles)
-}
-
-#[test_case(1, Latest, 5; "single block latest")]
-#[test_case(2, Latest, 4; "two blocks latest")]
-#[test_case(100, Latest, 0; "block count exceeds available")]
-#[test_case(2, Earliest, 0; "earliest block")]
-#[test_case(2, Number(3), 2; "specific block number")]
-#[test_case(1, Number(0), 0; "genesis block")]
-fn test_fee_history_block_ranges(
-    block_count: u64,
-    block_tag: BlockNumberOrTag,
-    expected_oldest: u64,
-) {
-    let mut app = create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), U256::from(1000000));
-
-    // as genesis is 0, latest block will be 5
-    for i in 1..=5 {
-        app.start_block_build(
-            Payload {
-                timestamp: U64::from(i),
-                gas_limit: U64::from(1_000_000),
-                ..Default::default()
-            },
-            U64::from(i),
-        );
-    }
-
-    let result = dbg!(app.fee_history(block_count, block_tag, None));
-    assert!(result.is_ok());
-
-    let fee_history = result.unwrap();
-    assert_eq!(fee_history.oldest_block, expected_oldest);
-}
-
-#[test_case(None, 1; "no percentiles")]
-#[test_case(Some(vec![50.0]), 1; "single percentile")]
-#[test_case(Some(vec![25.0, 50.0, 75.0]), 3; "multiple percentiles")]
-#[test_case(Some(vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0]), 9; "many percentiles")]
-fn test_fee_history_reward_lengths(percentiles: Option<Vec<f64>>, expected_reward_length: usize) {
-    let mut app = create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), U256::from(1000000));
-
-    // Add a transaction and build a block
-    let tx = create_transaction(0);
-    app.add_transaction(tx);
-    app.start_block_build(Default::default(), U64::from(1));
-
-    let result = app.fee_history(1, Latest, percentiles);
-    assert!(result.is_ok());
-
-    let fee_history = result.unwrap();
-
-    match &fee_history.reward {
-        Some(rewards) => assert_eq!(rewards.len(), expected_reward_length),
-        None => assert_eq!(expected_reward_length, 1), // None case for no percentiles
-    }
-}
-
-#[test_case(0, true; "empty blocks have zero gas ratio")]
-#[test_case(5, false; "blocks with transactions have non-zero gas ratio")]
-fn test_fee_history_empty_vs_full_blocks(num_txs: usize, expect_zero_ratio: bool) {
-    let mut app = create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), U256::from(10000000));
-
-    // Add transactions if specified
-    for i in 0..num_txs {
-        let tx = create_transaction(i as u64);
-        app.add_transaction(tx);
-    }
-
-    app.start_block_build(
-        Payload {
-            gas_limit: U64::from(1_000_000),
-            ..Default::default()
-        },
-        U64::from(1),
-    );
-
-    let result = app.fee_history(1, Latest, Some(vec![50.0]));
-    assert!(result.is_ok());
-
-    let fee_history = result.unwrap();
-
-    if expect_zero_ratio {
-        assert_eq!(fee_history.gas_used_ratio[0], 0.0);
-    } else {
-        assert!(fee_history.gas_used_ratio[0] > 0.0);
-    }
-}
-
-#[test]
-fn test_fee_history_eip1559_fields() {
-    let mut app = create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), U256::from(1000000));
-
-    app.start_block_build(Default::default(), U64::from(1));
-
-    let result = app.fee_history(1, Latest, None);
-    assert!(result.is_ok());
-
-    let fee_history = result.unwrap();
-
-    // Verify EIP-1559 fields
-    assert_eq!(fee_history.base_fee_per_gas.len(), 2); // Current + next block
-    assert_eq!(fee_history.gas_used_ratio.len(), 1);
-
-    // Verify EIP-4844 fields are zero (not supported)
-    assert_eq!(fee_history.base_fee_per_blob_gas.len(), 2);
-    assert!(fee_history.base_fee_per_blob_gas.iter().all(|&x| x == 0));
-    assert_eq!(fee_history.blob_gas_used_ratio.len(), 1);
-    assert!(fee_history.blob_gas_used_ratio.iter().all(|&x| x == 0.0));
-}
-
 #[test]
 fn test_txs_from_one_account_have_proper_nonce_ordering() {
     let initial_balance = U256::from(1000);
@@ -674,4 +551,115 @@ fn test_txs_from_one_account_have_proper_nonce_ordering() {
         10,
         payload.map(|p| p.execution_payload.transactions.len())
     );
+}
+
+#[test_case(0, None => matches Err(Error::User(UserError::InvalidBlockCount)); "zero block count")]
+#[test_case(5, None => matches Ok(_); "block count too long")]
+#[test_case(1, Some(vec![0.0; 101]) => matches Err(Error::User(UserError::RewardPercentilesTooLong)); "too many percentiles")]
+#[test_case(1, Some(vec![50.0, 101.0]) => matches Err(Error::User(UserError::InvalidRewardPercentiles)); "percentile out of range")]
+#[test_case(1, Some(vec![-5.0]) => matches Err(Error::User(UserError::InvalidRewardPercentiles)); "negative percentile")]
+#[test_case(1, Some(vec![75.0, 25.0, 50.0]) => matches Err(Error::User(UserError::InvalidRewardPercentiles)); "unsorted percentiles")]
+#[test_case(1, Some(vec![25.0, 50.0, 75.0]) => matches Ok(_); "valid percentiles")]
+#[test_case(1, None => matches Ok(_); "no percentiles")]
+fn test_fee_history_validation(
+    block_count: u64,
+    percentiles: Option<Vec<f64>>,
+) -> Result<FeeHistory, Error> {
+    let address = Address::new(hex!("11223344556677889900ffeeaabbccddee111111"));
+    let app = create_app_with_given_queries(1, MockStateQueries(address.to_move_address(), 0));
+    app.fee_history(block_count, Latest, percentiles)
+}
+
+#[test_case(1, Latest, 5; "single block latest")]
+#[test_case(2, Latest, 4; "two blocks latest")]
+#[test_case(100, Latest, 0; "block count exceeds available")]
+#[test_case(2, Earliest, 0; "earliest block")]
+#[test_case(2, Number(3), 2; "specific block number")]
+#[test_case(1, Number(0), 0; "genesis block")]
+fn test_fee_history_block_ranges(
+    block_count: u64,
+    block_tag: BlockNumberOrTag,
+    expected_oldest: u64,
+) {
+    let address = Address::new(hex!("11223344556677889900ffeeaabbccddee111111"));
+    let app = create_app_with_given_queries(5, MockStateQueries(address.to_move_address(), 0));
+
+    let result = app.fee_history(block_count, block_tag, None);
+    assert!(result.is_ok());
+
+    let fee_history = result.unwrap();
+    assert_eq!(fee_history.oldest_block, expected_oldest);
+}
+
+#[test_case(None, 1; "no percentiles")]
+#[test_case(Some(vec![50.0]), 1; "single percentile")]
+#[test_case(Some(vec![25.0, 50.0, 75.0]), 3; "triple percentiles")]
+#[test_case(Some(vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0]), 9; "many percentiles")]
+fn test_fee_history_reward_lengths(percentiles: Option<Vec<f64>>, expected_reward_length: usize) {
+    let address = Address::new(hex!("11223344556677889900ffeeaabbccddee111111"));
+    let app = create_app_with_given_queries(1, MockStateQueries(address.to_move_address(), 0));
+
+    let result = app.fee_history(1, Latest, percentiles);
+    assert!(result.is_ok());
+
+    let fee_history = result.unwrap();
+
+    match &fee_history.reward {
+        Some(rewards) => {
+            assert_eq!(rewards.len(), 1);
+            assert_eq!(rewards[0].len(), expected_reward_length);
+        }
+        None => assert_eq!(expected_reward_length, 1),
+    }
+}
+
+#[test]
+fn test_fee_history_eip1559_fields() {
+    let address = Address::new(hex!("11223344556677889900ffeeaabbccddee111111"));
+    let mut app = create_app_with_given_queries(0, MockStateQueries(address.to_move_address(), 1));
+
+    app.start_block_build(Default::default(), U64::from(1));
+
+    let result = app.fee_history(1, Latest, None);
+    assert!(result.is_ok());
+
+    let fee_history = result.unwrap();
+
+    // Verify EIP-1559 fields
+    assert_eq!(fee_history.base_fee_per_gas.len(), 2); // Current + next block
+    assert_eq!(fee_history.gas_used_ratio.len(), 1);
+
+    // Verify EIP-4844 fields are zero (not supported)
+    assert_eq!(fee_history.base_fee_per_blob_gas.len(), 2);
+    assert!(fee_history.base_fee_per_blob_gas.iter().all(|&x| x == 0));
+    assert_eq!(fee_history.blob_gas_used_ratio.len(), 1);
+    assert!(fee_history.blob_gas_used_ratio.iter().all(|&x| x == 0.0));
+}
+
+#[test_case(0, true; "empty blocks have zero gas ratio")]
+#[test_case(5, false; "blocks with transactions have non-zero gas ratio")]
+fn test_fee_history_empty_vs_full_blocks(num_txs: usize, expect_zero_ratio: bool) {
+    let mut app = create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), U256::from(1000));
+
+    for i in 0..num_txs {
+        let tx = create_transaction(i as u64);
+        app.add_transaction(tx);
+    }
+
+    let payload = Payload {
+        gas_limit: U64::from(1_000_000),
+        ..Default::default()
+    };
+    app.start_block_build(payload, U64::from(1));
+
+    let result = app.fee_history(1, Latest, Some(vec![50.0]));
+    assert!(result.is_ok());
+
+    let fee_history = result.unwrap();
+
+    if expect_zero_ratio {
+        assert_eq!(fee_history.gas_used_ratio[0], 0.0);
+    } else {
+        assert!(fee_history.gas_used_ratio[0] > 0.0);
+    }
 }

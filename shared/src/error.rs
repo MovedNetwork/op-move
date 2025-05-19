@@ -84,8 +84,6 @@ pub enum UserError {
     InvalidRewardPercentiles,
     #[error("Fee history reward percentiles vector was too long")]
     RewardPercentilesTooLong,
-    #[error("Fee history requested block range too long")]
-    BlockRangeTooLong,
 }
 
 /// The error caused by invalid transaction input parameter.

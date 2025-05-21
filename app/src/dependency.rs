@@ -1,10 +1,10 @@
+use crate::mempool::Mempool;
 #[cfg(any(feature = "test-doubles", test))]
 pub use test_doubles::TestDependencies;
 
 use {
     move_core_types::effects::ChangeSet, moved_blockchain::payload::PayloadId,
-    moved_execution::L1GasFeeInput, moved_genesis::config::GenesisConfig,
-    moved_shared::primitives::B256, op_alloy::consensus::OpTxEnvelope, std::collections::HashMap,
+    moved_genesis::config::GenesisConfig, moved_shared::primitives::B256,
 };
 
 pub struct ApplicationReader<D: Dependencies> {
@@ -58,7 +58,7 @@ impl<D: Dependencies> ApplicationReader<D> {
 
 pub struct Application<D: Dependencies> {
     pub genesis_config: GenesisConfig,
-    pub mem_pool: HashMap<B256, (OpTxEnvelope, L1GasFeeInput)>,
+    pub mem_pool: Mempool,
     pub gas_fee: D::BaseGasFee,
     pub base_token: D::BaseTokenAccounts,
     pub l1_fee: D::CreateL1GasFee,
@@ -87,7 +87,7 @@ impl<D: Dependencies> Application<D> {
     pub fn new(mut deps: D, genesis_config: &GenesisConfig) -> Self {
         Self {
             genesis_config: genesis_config.clone(),
-            mem_pool: Default::default(),
+            mem_pool: Mempool::default(),
             gas_fee: D::base_gas_fee(),
             base_token: D::base_token_accounts(genesis_config),
             l1_fee: D::create_l1_gas_fee(),

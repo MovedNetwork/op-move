@@ -487,7 +487,8 @@ fn test_older_payload_can_be_fetched_again_successfully() {
 #[test]
 fn test_txs_from_one_account_have_proper_nonce_ordering() {
     let initial_balance = U256::from(1000);
-    let mut app = create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), initial_balance);
+    let (reader, mut app) =
+        create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), initial_balance);
 
     let mut tx_hashes: Vec<B256> = Vec::with_capacity(10);
 
@@ -503,16 +504,14 @@ fn test_txs_from_one_account_have_proper_nonce_ordering() {
 
     for (i, tx_hash) in tx_hashes.iter().enumerate() {
         // Get receipt for this transaction
-        let receipt = app.transaction_receipt(*tx_hash);
+        let receipt = reader.transaction_receipt(*tx_hash);
 
-        assert!(
-            receipt.is_some(),
-            "Transaction with nonce {} and hash {:?} has no receipt",
-            i,
-            tx_hash
-        );
-
-        let receipt = receipt.unwrap();
+        let receipt = receipt.unwrap_or_else(|| {
+            panic!(
+                "Transaction with nonce {} and hash {:?} has no receipt",
+                i, tx_hash
+            )
+        });
 
         assert!(
             receipt.inner.inner.status(),
@@ -538,7 +537,7 @@ fn test_txs_from_one_account_have_proper_nonce_ordering() {
         );
     }
 
-    let payload = app.payload(payload_id);
+    let payload = reader.payload(payload_id);
     assert!(
         payload
             .as_ref()

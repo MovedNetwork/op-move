@@ -3,7 +3,7 @@ use {
         Application, Dependencies, ExecutionOutcome, Payload,
         block_hash::StorageBasedProvider,
         input::{WithExecutionOutcome, WithPayloadAttributes},
-        mempool::MempoolTransaction,
+        mempool::PendingTransaction,
     },
     alloy::{
         consensus::{Receipt, Transaction, TxEnvelope},
@@ -56,7 +56,7 @@ impl<D: Dependencies> Application<D> {
                     .ok()?;
                 let tx_nonce = tx.nonce();
                 let mempool_tx =
-                    MempoolTransaction::new(tx, tx_nonce, tx_hash, L1GasFeeInput::from(slice));
+                    PendingTransaction::new(tx, tx_nonce, tx_hash, L1GasFeeInput::from(slice));
 
                 Some(mempool_tx)
             })
@@ -159,7 +159,7 @@ impl<D: Dependencies> Application<D> {
         let nonce = tx.nonce();
         let inner = OpTxEnvelope::try_from_eth_envelope(tx)
             .unwrap_or_else(|_| unreachable!("EIP-4844 not supported"));
-        let mempool_tx = MempoolTransaction::new(inner, nonce, tx_hash, encoded);
+        let mempool_tx = PendingTransaction::new(inner, nonce, tx_hash, encoded);
         self.mem_pool.insert(mempool_tx);
     }
 
@@ -169,7 +169,7 @@ impl<D: Dependencies> Application<D> {
 
     fn execute_transactions(
         &mut self,
-        transactions: impl Iterator<Item = MempoolTransaction>,
+        transactions: impl Iterator<Item = PendingTransaction>,
         base_fee: U256,
         block_header: &HeaderForExecution,
     ) -> (ExecutionOutcome, Vec<ExtendedReceipt>) {

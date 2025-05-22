@@ -143,7 +143,7 @@ pub enum InvariantViolation {
     EntryFunctionValue(EntryFunctionValue),
     #[error("Script transaction invariant violation: {0}")]
     ScriptTransaction(ScriptTransaction),
-    #[error("Mempool admitted transactions cannot be unsupported type")]
+    #[error("Mempool admitted transactions cannot be deposited")]
     MempoolTransaction,
 }
 

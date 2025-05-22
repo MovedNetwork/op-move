@@ -2,7 +2,7 @@ use {
     crate::{block::ReadBlockMemory, in_memory::SharedMemoryReader},
     alloy::{
         primitives::keccak256,
-        rpc::types::{EIP1186AccountProofResponse, EIP1186StorageProof, TransactionRequest},
+        rpc::types::{EIP1186AccountProofResponse, EIP1186StorageProof},
     },
     eth_trie::{DB, EthTrie, Trie},
     move_core_types::account_address::AccountAddress,
@@ -10,27 +10,19 @@ use {
     move_vm_types::resolver::MoveResolver,
     moved_evm_ext::{
         ResolverBackedDB,
-        state::{self, BlockHashLookup, StorageTrieRepository},
+        state::{self, StorageTrieRepository},
     },
     moved_execution::{
-        BaseTokenAccounts, quick_get_eth_balance, quick_get_nonce,
-        simulate::{call_transaction, simulate_transaction},
+        quick_get_eth_balance, quick_get_nonce,
         transaction::{L2_HIGHEST_ADDRESS, L2_LOWEST_ADDRESS},
     },
-    moved_genesis::config::GenesisConfig,
-    moved_shared::{
-        error::Error,
-        primitives::{Address, B256, KeyHashable, ToEthAddress, U256},
-    },
-    moved_state::{
-        IN_MEMORY_EXPECT_MSG, evm_key_address, is_evm_storage_or_account_key, nodes::TreeKey,
-    },
-    std::{fmt::Debug, sync::Arc},
+    moved_shared::primitives::{Address, B256, KeyHashable, ToEthAddress, U256},
+    moved_state::{EthTrieResolver, IN_MEMORY_EXPECT_MSG, nodes::TreeKey},
+    std::sync::Arc,
 };
 
 pub type ProofResponse = EIP1186AccountProofResponse;
 pub type StorageProof = EIP1186StorageProof;
-pub type CallResponse = Vec<u8>;
 
 /// A non-negative integer for indicating the amount of base token on an account.
 pub type Balance = U256;

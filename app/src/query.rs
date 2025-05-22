@@ -9,22 +9,20 @@ use {
         rpc::types::{FeeHistory, TransactionRequest},
     },
     moved_blockchain::{
-        block::{BaseGasFee, BlockQueries, BlockResponse},
+        block::{BaseGasFee, BlockQueries, BlockResponse, Eip1559GasFee},
         payload::{PayloadId, PayloadQueries, PayloadResponse},
         receipt::{ReceiptQueries, TransactionReceipt},
-        state::{CallResponse, ProofResponse, StateQueries},
+        state::{ProofResponse, StateQueries},
         transaction::{TransactionQueries, TransactionResponse},
     },
+    moved_execution::simulate::{call_transaction, simulate_transaction},
     moved_shared::{
-        error::{Error, UserError},
+        error::{Error, Result, UserError},
         primitives::{Address, B256, ToMoveAddress, U256},
     },
 };
 
 const MAX_PERCENTILE_COUNT: usize = 100;
-const ZERO_HASH: [u8; 32] = [
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-];
 
 #[derive(Debug)]
 enum BlockNumberOrHash {
@@ -82,7 +80,8 @@ impl<D: Dependencies> ApplicationReader<D> {
         block_count: u64,
         block_number: BlockNumberOrTag,
         reward_percentiles: Option<Vec<f64>>,
-    ) -> Result<FeeHistory, Error> {
+    ) -> Result<FeeHistory> {
+        dbg!(self.block_number());
         if block_count < 1 {
             return Err(Error::User(UserError::InvalidBlockCount));
         }
@@ -92,10 +91,10 @@ impl<D: Dependencies> ApplicationReader<D> {
             if reward.len() > MAX_PERCENTILE_COUNT {
                 return Err(Error::User(UserError::RewardPercentilesTooLong));
             }
-            if reward.iter().any(|p| !(0.0..=100.0).contains(p)) {
+            if reward.windows(2).any(|w| w[0] > w[1]) {
                 return Err(Error::User(UserError::InvalidRewardPercentiles));
             }
-            if reward.windows(2).any(|w| w[0] > w[1]) {
+            if reward.first() < Some(&0.0) || reward.last() > Some(&100.0) {
                 return Err(Error::User(UserError::InvalidRewardPercentiles));
             }
         }
@@ -117,7 +116,7 @@ impl<D: Dependencies> ApplicationReader<D> {
         let mut base_fees = Vec::with_capacity(block_count as usize + 1);
         let mut gas_used_ratio = Vec::with_capacity(block_count as usize);
 
-        let total_reward: Option<Vec<Vec<u128>>>;
+        let mut total_reward: Option<Vec<Vec<u128>>>;
 
         match reward_percentiles {
             None => {
@@ -132,7 +131,7 @@ impl<D: Dependencies> ApplicationReader<D> {
                         current_block_id,
                         |_, _, _| (),
                     );
-                    if parent_hash == ZERO_HASH || current_block_num == 0 {
+                    if parent_hash.is_zero() || current_block_num == 0 {
                         break;
                     }
                     current_block_id = BlockNumberOrHash::Hash(parent_hash);
@@ -154,13 +153,15 @@ impl<D: Dependencies> ApplicationReader<D> {
                                 percentiles
                                     .iter()
                                     .map(|p| {
+                                        dbg!(p);
                                         let threshold =
                                             ((block_gas_used as f64) * p / 100.0).round() as u64;
+                                        dbg!(&threshold);
                                         price_and_cum_gas
                                             .iter()
-                                            .find(|(_, cum_gas)| cum_gas >= &threshold)
-                                            .or_else(|| price_and_cum_gas.last())
-                                            .map(|(p, _)| p)
+                                            .find(|(_, cum_gas)| dbg!(cum_gas) >= &threshold)
+                                            .or_else(|| dbg!(price_and_cum_gas.last()))
+                                            .map(|(p, _)| dbg!(p))
                                             .copied()
                                             .unwrap_or(0u128)
                                     })
@@ -168,7 +169,7 @@ impl<D: Dependencies> ApplicationReader<D> {
                             )
                         },
                     );
-                    if parent_hash == ZERO_HASH || current_block_num == 0 {
+                    if parent_hash.is_zero() || current_block_num == 0 {
                         break;
                     }
                     current_block_id = BlockNumberOrHash::Hash(parent_hash);
@@ -178,7 +179,15 @@ impl<D: Dependencies> ApplicationReader<D> {
             }
         }
 
-        // EIP-4844 txs not supported yet
+        // all the collected vectors need to be reversed as the iteration was in latest to
+        // earliest block order
+        base_fees.reverse();
+        gas_used_ratio.reverse();
+        if let Some(ref mut inner_reward) = total_reward {
+            inner_reward.reverse();
+        }
+
+        // EIP-4844 txs not planned for support
         let base_fee_per_blob_gas = vec![0u128; block_count as usize + 1];
         let blob_gas_used_ratio = vec![0f64; block_count as usize];
 
@@ -212,13 +221,16 @@ impl<D: Dependencies> ApplicationReader<D> {
             transaction,
             &self.state_queries.resolver_at(height),
             &self.evm_storage,
-            self.resolve_height(block_number)
-                .ok_or(UserError::InvalidBlockHeight)?,
-            transaction,
             &self.genesis_config,
             &self.base_token,
+            block_height,
             &block_hash_lookup,
-        )
+        );
+
+        outcome.map(|outcome| {
+            // Add 33% extra gas as a buffer.
+            outcome.gas_used + (outcome.gas_used / 3)
+        })
     }
 
     pub fn call(
@@ -232,9 +244,6 @@ impl<D: Dependencies> ApplicationReader<D> {
             transaction,
             &self.state_queries.resolver_at(height),
             &self.evm_storage,
-            self.resolve_height(block_number)
-                .ok_or(UserError::InvalidBlockHeight)?,
-            transaction,
             &self.genesis_config,
             &self.base_token,
             &block_hash_lookup,
@@ -333,6 +342,23 @@ impl<D: Dependencies> ApplicationReader<D> {
             ..
         } = curr_block.0.header.inner;
 
+        // For the last block, instead of querying block repo again, we resort to direct calculation
+        // so that we also account for the range ending with the latest block. This comes before
+        // the remaining calculation as we're iterating in reverse
+        if matches!(block_id, BlockNumberOrHash::Number(_)) {
+            // Reusing the parameters from the prod config
+            // TODO: pass a constant
+            let gas_fee = Eip1559GasFee::new(6, U256::from_limbs([250, 0, 0, 0]));
+            let next_block_base_fee = gas_fee
+                .base_fee_per_gas(
+                    gas_limit,
+                    block_gas_used,
+                    U256::from(base_fee_per_gas.unwrap_or_default()),
+                )
+                .saturating_to();
+            base_fees.push(next_block_base_fee);
+        }
+
         base_fees.push(base_fee_per_gas.unwrap_or_default().into());
 
         // to account for weird edge cases in devnet/testnet environments, as defaulting
@@ -364,20 +390,6 @@ impl<D: Dependencies> ApplicationReader<D> {
                 Some((*price, *cum_gas))
             })
             .collect::<Vec<_>>();
-
-        // For the last block, instead of querying block repo again, we resort to direct calculation
-        // so that we also account for the range ending with the latest block
-        if matches!(block_id, BlockNumberOrHash::Number(_)) {
-            let next_block_base_fee = self
-                .gas_fee
-                .base_fee_per_gas(
-                    gas_limit,
-                    block_gas_used,
-                    U256::from(base_fee_per_gas.unwrap_or_default()),
-                )
-                .saturating_to();
-            base_fees.push(next_block_base_fee);
-        }
 
         acc_total_reward(total_reward, block_gas_used, &price_and_cum_gas);
         parent_hash

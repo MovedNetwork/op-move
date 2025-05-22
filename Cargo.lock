@@ -7799,7 +7799,6 @@ dependencies = [
 name = "moved-storage-heed"
 version = "0.1.0"
 dependencies = [
- "alloy",
  "eth_trie",
  "heed",
  "move-binary-format 0.0.3 (git+https://github.com/aptos-labs/aptos-core?tag=aptos-node-v1.27.2)",
@@ -7809,7 +7808,6 @@ dependencies = [
  "moved-blockchain",
  "moved-evm-ext",
  "moved-execution",
- "moved-genesis",
  "moved-shared",
  "moved-state",
  "moved-trie",
@@ -7831,7 +7829,6 @@ dependencies = [
  "moved-blockchain",
  "moved-evm-ext",
  "moved-execution",
- "moved-genesis",
  "moved-shared",
  "moved-state",
  "moved-trie",

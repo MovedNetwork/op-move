@@ -235,9 +235,7 @@ impl<D: Dependencies> Application<D> {
             let outcome = match execute_transaction(input) {
                 Ok(outcome) => outcome,
                 Err(User(e)) => unreachable!("User errors are handled in execution {e:?}"),
-                Err(InvalidTransaction(_)) => {
-                    continue;
-                }
+                Err(InvalidTransaction(_)) => continue,
                 Err(InvariantViolation(e)) => panic!("ERROR: execution error {e:?}"),
             };
 

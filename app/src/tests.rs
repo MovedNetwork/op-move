@@ -483,3 +483,67 @@ fn test_older_payload_can_be_fetched_again_successfully() {
 
     assert_eq!(expected_payload, actual_payload);
 }
+
+#[test]
+fn test_txs_from_one_account_have_proper_nonce_ordering() {
+    let initial_balance = U256::from(1000);
+    let (reader, mut app) =
+        create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), initial_balance);
+
+    let mut tx_hashes: Vec<B256> = Vec::with_capacity(10);
+
+    for i in 0..10 {
+        let tx = create_transaction(i);
+        tx_hashes.push(tx.tx_hash().0.into());
+        app.add_transaction(tx);
+    }
+
+    let payload_id = U64::from(0x03421ee50df45cacu64);
+
+    app.start_block_build(Default::default(), payload_id);
+
+    for (i, tx_hash) in tx_hashes.iter().enumerate() {
+        // Get receipt for this transaction
+        let receipt = reader.transaction_receipt(*tx_hash);
+
+        let receipt = receipt.unwrap_or_else(|| {
+            panic!(
+                "Transaction with nonce {} and hash {:?} has no receipt",
+                i, tx_hash
+            )
+        });
+
+        assert!(
+            receipt.inner.inner.status(),
+            "Transaction with nonce {} and hash {:?} failed",
+            i,
+            tx_hash
+        );
+
+        assert!(
+            receipt
+                .inner
+                .transaction_index
+                .is_some_and(|idx| idx == i as u64),
+            "Transaction with nonce {} has incorrect index {:?}",
+            i,
+            receipt.inner.transaction_index
+        );
+
+        assert_eq!(
+            receipt.inner.from, EVM_ADDRESS,
+            "Transaction with nonce {} has unexpected sender",
+            i
+        );
+    }
+
+    let payload = reader.payload(payload_id);
+    assert!(
+        payload
+            .as_ref()
+            .is_some_and(|p| p.execution_payload.transactions.len() == 10),
+        "Expected {} transactions in block, but found {:?}",
+        10,
+        payload.map(|p| p.execution_payload.transactions.len())
+    );
+}

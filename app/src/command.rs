@@ -3,6 +3,7 @@ use {
         Application, Dependencies, ExecutionOutcome, Payload,
         block_hash::StorageBasedProvider,
         input::{WithExecutionOutcome, WithPayloadAttributes},
+        mempool::PendingTransaction,
     },
     alloy::{
         consensus::{Receipt, Transaction, TxEnvelope},
@@ -53,13 +54,16 @@ impl<D: Dependencies> Application<D> {
                         println!("WARN: Failed to RLP decode transaction in payload_attributes")
                     })
                     .ok()?;
+                let tx_nonce = tx.nonce();
+                let mempool_tx =
+                    PendingTransaction::new(tx, tx_nonce, tx_hash, L1GasFeeInput::from(slice));
 
-                Some((tx_hash, (tx, L1GasFeeInput::from(slice))))
+                Some(mempool_tx)
             })
             .chain(self.mem_pool.drain())
-            .filter(|(tx_hash, _)|
+            .filter(|tx|
                 // Do not include transactions we have already processed before
-                !self.receipt_repository.contains(&self.receipt_memory, *tx_hash).unwrap())
+                !self.receipt_repository.contains(&self.receipt_memory, tx.tx_hash).unwrap())
             .collect::<Vec<_>>();
         let parent = self
             .block_repository
@@ -79,12 +83,10 @@ impl<D: Dependencies> Application<D> {
         };
         let transactions: Vec<_> = transactions_with_metadata
             .iter()
-            .map(|(_, (tx, _))| tx.clone())
+            .map(|tx| tx.inner.clone())
             .collect();
         let (execution_outcome, receipts) = self.execute_transactions(
-            transactions_with_metadata
-                .into_iter()
-                .map(|(tx_hash, (tx, bytes))| (tx_hash, tx, bytes)),
+            transactions_with_metadata.into_iter(),
             base_fee,
             &header_for_execution,
         );
@@ -154,14 +156,11 @@ impl<D: Dependencies> Application<D> {
         let mut encoded = Vec::new();
         tx.encode(&mut encoded);
         let encoded = encoded.as_slice().into();
-        self.mem_pool.insert(
-            tx_hash,
-            (
-                OpTxEnvelope::try_from_eth_envelope(tx)
-                    .unwrap_or_else(|_| unreachable!("EIP-4844 not supported")),
-                encoded,
-            ),
-        );
+        let nonce = tx.nonce();
+        let inner = OpTxEnvelope::try_from_eth_envelope(tx)
+            .unwrap_or_else(|_| unreachable!("EIP-4844 not supported"));
+        let mempool_tx = PendingTransaction::new(inner, nonce, tx_hash, encoded);
+        self.mem_pool.insert(mempool_tx);
     }
 
     pub fn genesis_update(&mut self, block: ExtendedBlock) {
@@ -170,7 +169,7 @@ impl<D: Dependencies> Application<D> {
 
     fn execute_transactions(
         &mut self,
-        transactions: impl Iterator<Item = (B256, OpTxEnvelope, L1GasFeeInput)>,
+        transactions: impl Iterator<Item = PendingTransaction>,
         base_fee: U256,
         block_header: &HeaderForExecution,
     ) -> (ExecutionOutcome, Vec<ExtendedReceipt>) {
@@ -185,13 +184,14 @@ impl<D: Dependencies> Application<D> {
         // https://github.com/ethereum-optimism/specs/blob/9dbc6b0/specs/protocol/deposits.md#kinds-of-deposited-transactions
         let l1_fee = transactions
             .peek()
-            .and_then(|(_, v, _)| v.as_deposit())
+            .and_then(|tx| tx.inner.as_deposit())
             .map(|tx| self.l1_fee.for_deposit(tx.input.as_ref()));
         let l2_fee = self.l2_fee.with_default_gas_fee_multiplier();
 
         // TODO: parallel transaction processing?
-        for (tx_hash, tx, l1_cost_input) in transactions {
-            let Ok(normalized_tx): Result<NormalizedExtendedTxEnvelope, _> = tx.clone().try_into()
+        for pending_tx in transactions {
+            let Ok(normalized_tx): Result<NormalizedExtendedTxEnvelope, _> =
+                pending_tx.inner.clone().try_into()
             else {
                 continue;
             };
@@ -206,13 +206,13 @@ impl<D: Dependencies> Application<D> {
             let input = match &normalized_tx {
                 NormalizedExtendedTxEnvelope::Canonical(tx) => CanonicalExecutionInput {
                     tx,
-                    tx_hash: &tx_hash,
+                    tx_hash: &pending_tx.tx_hash,
                     state: self.state.resolver(),
                     storage_trie: &self.evm_storage,
                     genesis_config: &self.genesis_config,
                     l1_cost: l1_fee
                         .as_ref()
-                        .map(|v| v.l1_fee(l1_cost_input.clone()))
+                        .map(|v| v.l1_fee(pending_tx.l1_gas_fee_input.clone()))
                         .unwrap_or(U256::ZERO),
                     l2_fee: l2_fee.clone(),
                     l2_input: l2_gas_input,
@@ -223,7 +223,7 @@ impl<D: Dependencies> Application<D> {
                 .into(),
                 NormalizedExtendedTxEnvelope::DepositedTx(tx) => DepositExecutionInput {
                     tx,
-                    tx_hash: &tx_hash,
+                    tx_hash: &pending_tx.tx_hash,
                     state: self.state.resolver(),
                     storage_trie: &self.evm_storage,
                     genesis_config: &self.genesis_config,
@@ -239,19 +239,21 @@ impl<D: Dependencies> Application<D> {
                 Err(InvariantViolation(e)) => panic!("ERROR: execution error {e:?}"),
             };
 
-            let l1_block_info = l1_fee.as_ref().and_then(|x| x.l1_block_info(l1_cost_input));
+            let l1_block_info = l1_fee
+                .as_ref()
+                .and_then(|x| x.l1_block_info(pending_tx.l1_gas_fee_input.clone()));
 
             self.on_tx(outcome.changes.move_vm.clone());
 
             self.state
                 .apply(outcome.changes.move_vm)
                 .unwrap_or_else(|e| {
-                    panic!("ERROR: state update failed for transaction {tx:?}\n{e:?}")
+                    panic!("ERROR: state update failed for transaction {pending_tx:?}\n{e:?}")
                 });
             self.evm_storage
                 .apply(outcome.changes.evm)
                 .unwrap_or_else(|e| {
-                    panic!("ERROR: EVM storage update failed for transaction {tx:?}\n{e:?}")
+                    panic!("ERROR: EVM storage update failed for transaction {pending_tx:?}\n{e:?}")
                 });
 
             cumulative_gas_used = cumulative_gas_used.saturating_add(outcome.gas_used as u128);
@@ -271,7 +273,7 @@ impl<D: Dependencies> Application<D> {
                 logs: outcome.logs,
             };
 
-            let receipt = tx.wrap_receipt(receipt, bloom);
+            let receipt = pending_tx.inner.wrap_receipt(receipt, bloom);
 
             total_tip = total_tip.saturating_add(
                 U256::from(outcome.gas_used).saturating_mul(normalized_tx.tip_per_gas(base_fee)),
@@ -283,7 +285,7 @@ impl<D: Dependencies> Application<D> {
             };
 
             receipts.push(ExtendedReceipt {
-                transaction_hash: tx_hash,
+                transaction_hash: pending_tx.tx_hash,
                 to: to.copied(),
                 from,
                 receipt,

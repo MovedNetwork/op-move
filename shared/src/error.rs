@@ -117,6 +117,8 @@ pub enum InvalidTransactionCause {
     FailedToPayL1Fee,
     #[error("Failed to pay L2 fee")]
     FailedToPayL2Fee,
+    #[error("Failed to recover tx signer")]
+    FailedToRecoverSigner,
 }
 
 impl From<InvalidTransactionCause> for Error {
@@ -141,6 +143,8 @@ pub enum InvariantViolation {
     EntryFunctionValue(EntryFunctionValue),
     #[error("Script transaction invariant violation: {0}")]
     ScriptTransaction(ScriptTransaction),
+    #[error("Mempool admitted transactions cannot be deposited")]
+    MempoolTransaction,
 }
 
 #[derive(Debug, Error)]

@@ -41,7 +41,7 @@ impl InMemoryDependencies {
             memory: Some(memory),
             receipt_memory_reader,
             receipt_memory: Some(receipt_memory),
-            trie_db: moved_state::InMemoryState::create_db(),
+            trie_db: Arc::new(moved_state::InMemoryTrieDb::empty()),
         }
     }
 
@@ -137,7 +137,8 @@ impl moved_app::Dependencies for InMemoryDependencies {
     }
 
     fn state(&self) -> Self::State {
-        moved_state::InMemoryState::new(self.trie_db.clone())
+        moved_state::InMemoryState::try_new(self.trie_db.clone())
+            .expect("State root should exist and be fetched")
     }
 
     fn state_queries(&self, genesis_config: &GenesisConfig) -> Self::StateQueries {

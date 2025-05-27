@@ -47,9 +47,9 @@ pub mod tests {
         moved_execution::MovedBaseTokenAccounts,
         moved_genesis::config::{CHAIN_ID, GenesisConfig},
         moved_shared::primitives::{Address, B256, U64, U256},
-        moved_state::InMemoryState,
+        moved_state::{InMemoryState, InMemoryTrieDb},
         op_alloy::consensus::{OpTxEnvelope, TxDeposit},
-        std::convert::Infallible,
+        std::{convert::Infallible, sync::Arc},
         tokio::sync::mpsc::Sender,
     };
 
@@ -77,8 +77,8 @@ pub mod tests {
         let mut repository = InMemoryBlockRepository::new();
         repository.add(&mut memory, genesis_block).unwrap();
 
-        let trie_db = InMemoryState::create_db();
-        let mut state = InMemoryState::new(trie_db.clone());
+        let trie_db = Arc::new(InMemoryTrieDb::empty());
+        let mut state = InMemoryState::empty(trie_db.clone());
         let state_queries = InMemoryStateQueries::new(
             memory_reader.clone(),
             trie_db,

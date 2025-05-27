@@ -209,7 +209,7 @@ impl TestContext {
         let mut transaction = TestTransaction::new(tx, tx_hash);
         transaction.with_cost_and_token(l1_cost, base_token, l2_gas_limit, l2_gas_price);
         let outcome = self.execute_tx(&transaction)?;
-        self.state.apply(outcome.changes.move_vm.clone())?;
+        self.state.apply(outcome.changes.move_vm.clone()).unwrap();
         self.evm_storage.apply(outcome.changes.evm.clone()).unwrap();
         let l2_gas_fee = CreateMovedL2GasFee.with_default_gas_fee_multiplier();
         let used_gas_input = L2GasFeeInput::new(outcome.gas_used, outcome.l2_price);

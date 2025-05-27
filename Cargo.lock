@@ -7792,6 +7792,7 @@ dependencies = [
  "move-vm-types 0.1.0 (git+https://github.com/aptos-labs/aptos-core?tag=aptos-node-v1.27.2)",
  "moved-evm-ext",
  "moved-shared",
+ "moved-trie",
 ]
 
 [[package]]
@@ -7842,6 +7843,7 @@ name = "moved-trie"
 version = "0.1.0"
 dependencies = [
  "eth_trie",
+ "moved-shared",
 ]
 
 [[package]]

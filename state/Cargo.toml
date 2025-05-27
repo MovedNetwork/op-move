@@ -21,3 +21,4 @@ move-vm-types.workspace = true
 move-vm-test-utils.workspace = true
 moved-evm-ext.workspace = true
 moved-shared.workspace = true
+moved-trie.workspace = true

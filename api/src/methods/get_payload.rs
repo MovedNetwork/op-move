@@ -47,7 +47,8 @@ mod tests {
         moved_evm_ext::state::InMemoryStorageTrieRepository,
         moved_genesis::config::GenesisConfig,
         moved_shared::primitives::{B256, U256},
-        moved_state::InMemoryState,
+        moved_state::{InMemoryState, InMemoryTrieDb},
+        std::sync::Arc,
     };
 
     #[test]
@@ -87,8 +88,8 @@ mod tests {
         let mut repository = InMemoryBlockRepository::new();
         repository.add(&mut memory, genesis_block).unwrap();
 
-        let trie_db = InMemoryState::create_db();
-        let mut state = InMemoryState::new(trie_db.clone());
+        let trie_db = Arc::new(InMemoryTrieDb::empty());
+        let mut state = InMemoryState::empty(trie_db.clone());
         let mut evm_storage = InMemoryStorageTrieRepository::new();
         let (changes, table_changes, evm_storage_changes) = moved_genesis_image::load();
         moved_genesis::apply(

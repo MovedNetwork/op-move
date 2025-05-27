@@ -4,19 +4,10 @@ use {
         primitives::keccak256,
         rpc::types::{EIP1186AccountProofResponse, EIP1186StorageProof},
     },
-    aptos_types::state_store::{state_key::StateKey, state_value::StateValue},
-    bytes::Bytes,
-    eth_trie::{DB, EthTrie, Trie, TrieError},
-    move_binary_format::errors::PartialVMError,
-    move_core_types::{
-        account_address::AccountAddress,
-        language_storage::{ModuleId, StructTag},
-        metadata::Metadata,
-        value::MoveTypeLayout,
-        vm_status::StatusCode,
-    },
-    move_table_extension::{TableHandle, TableResolver},
-    move_vm_types::resolver::{ModuleResolver, MoveResolver, ResourceResolver},
+    eth_trie::{DB, EthTrie, Trie},
+    move_core_types::account_address::AccountAddress,
+    move_table_extension::TableResolver,
+    move_vm_types::resolver::MoveResolver,
     moved_evm_ext::{
         ResolverBackedDB,
         state::{self, StorageTrieRepository},
@@ -26,9 +17,7 @@ use {
         transaction::{L2_HIGHEST_ADDRESS, L2_LOWEST_ADDRESS},
     },
     moved_shared::primitives::{Address, B256, KeyHashable, ToEthAddress, U256},
-    moved_state::{
-        IN_MEMORY_EXPECT_MSG, evm_key_address, is_evm_storage_or_account_key, nodes::TreeKey,
-    },
+    moved_state::{EthTrieResolver, IN_MEMORY_EXPECT_MSG, nodes::TreeKey},
     std::{fmt::Debug, sync::Arc},
 };
 
@@ -253,85 +242,6 @@ impl<R: ReadStateRoot, D: DB> StateQueries for InMemoryStateQueries<R, D> {
     fn resolver_at(&self, height: BlockHeight) -> impl MoveResolver + TableResolver + '_ {
         self.resolver(height).unwrap()
     }
-}
-
-/// This is a [`MoveResolver`] that accesses blockchain state via [`EthTrie`].
-///
-/// If you pass it an [`EthTrie`] initialized at state root corresponding to certain older block
-/// height, it will read from the blockchain state version at that block.
-pub struct EthTrieResolver<D: DB> {
-    tree: EthTrie<D>,
-}
-
-impl<D: DB> EthTrieResolver<D> {
-    pub fn new(tree: EthTrie<D>) -> Self {
-        Self { tree }
-    }
-}
-
-impl<D: DB> ModuleResolver for EthTrieResolver<D> {
-    fn get_module_metadata(&self, _module_id: &ModuleId) -> Vec<Metadata> {
-        Vec::new()
-    }
-
-    fn get_module(&self, id: &ModuleId) -> Result<Option<Bytes>, PartialVMError> {
-        let state_key = StateKey::module(id.address(), id.name());
-        let key_hash = TreeKey::StateKey(state_key).key_hash();
-        let value = self.tree.get(key_hash.0.as_slice()).map_err(trie_err)?;
-
-        Ok(deserialize_state_value(value))
-    }
-}
-
-impl<D: DB> ResourceResolver for EthTrieResolver<D> {
-    fn get_resource_bytes_with_metadata_and_layout(
-        &self,
-        address: &AccountAddress,
-        struct_tag: &StructTag,
-        _metadata: &[Metadata],
-        _layout: Option<&MoveTypeLayout>,
-    ) -> Result<(Option<Bytes>, usize), PartialVMError> {
-        let tree_key = if let Some(address) = evm_key_address(struct_tag) {
-            TreeKey::Evm(address)
-        } else {
-            let state_key = StateKey::resource(address, struct_tag)
-                .inspect_err(|e| print!("{e:?}"))
-                .map_err(|_| PartialVMError::new(StatusCode::DATA_FORMAT_ERROR))?;
-            TreeKey::StateKey(state_key)
-        };
-        let key_hash = tree_key.key_hash();
-        let value = self.tree.get(key_hash.0.as_slice()).map_err(trie_err)?;
-        let value = if is_evm_storage_or_account_key(struct_tag) {
-            // In the case of EVM there is no additional serialization
-            value.map(Into::into)
-        } else {
-            deserialize_state_value(value)
-        };
-        let len = value.as_ref().map(|v| v.len()).unwrap_or_default();
-
-        Ok((value, len))
-    }
-}
-
-impl<D: DB> TableResolver for EthTrieResolver<D> {
-    fn resolve_table_entry_bytes_with_layout(
-        &self,
-        _handle: &TableHandle,
-        _key: &[u8],
-        _maybe_layout: Option<&MoveTypeLayout>,
-    ) -> Result<Option<Bytes>, PartialVMError> {
-        unimplemented!()
-    }
-}
-
-fn deserialize_state_value(bytes: Option<Vec<u8>>) -> Option<Bytes> {
-    let value: StateValue = bcs::from_bytes(&bytes?).expect("Bytes must be serialized StateValue");
-    let (_, inner) = value.unpack();
-    Some(inner)
-}
-
-fn trie_err(e: TrieError) -> PartialVMError {
-    PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(format!("{e:?}"))
 }
 
 #[cfg(any(feature = "test-doubles", test))]

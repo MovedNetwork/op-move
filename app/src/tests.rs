@@ -33,7 +33,8 @@ use {
         config::{CHAIN_ID, GenesisConfig},
     },
     moved_shared::primitives::{Address, B256, ToMoveAddress, U64, U256},
-    moved_state::{InMemoryState, ResolverBasedModuleBytesStorage, State},
+    moved_state::{InMemoryState, InMemoryTrieDb, ResolverBasedModuleBytesStorage, State},
+    std::sync::Arc,
     test_case::test_case,
 };
 
@@ -81,7 +82,7 @@ fn create_app_with_given_queries<SQ: StateQueries + Clone + Send + Sync + 'stati
         repository.add(&mut memory, block).unwrap();
     }
 
-    let mut state = InMemoryState::new(InMemoryState::create_db());
+    let mut state = InMemoryState::default();
     let mut evm_storage = InMemoryStorageTrieRepository::new();
     let (changes, tables, evm_storage_changes) = moved_genesis_image::load();
     moved_genesis::apply(
@@ -191,8 +192,8 @@ fn create_app_with_fake_queries(
     repository.add(&mut memory, genesis_block).unwrap();
 
     let evm_storage = InMemoryStorageTrieRepository::new();
-    let trie_db = InMemoryState::create_db();
-    let mut state = InMemoryState::new(trie_db.clone());
+    let trie_db = Arc::new(InMemoryTrieDb::empty());
+    let mut state = InMemoryState::empty(trie_db.clone());
     let (genesis_changes, table_changes, evm_storage_changes) = moved_genesis_image::load();
     state
         .apply_with_tables(genesis_changes.clone(), table_changes)

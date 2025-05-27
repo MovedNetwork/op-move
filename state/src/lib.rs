@@ -1,11 +1,20 @@
 pub mod nodes;
 
+mod in_memory;
+mod resolver;
+mod state;
+
+pub use {
+    in_memory::InMemoryState, moved_evm_ext::state::InMemoryDb as InMemoryTrieDb,
+    resolver::EthTrieResolver, state::EthTrieState,
+};
+
 use {
     alloy::hex::FromHex,
     aptos_types::state_store::{state_key::StateKey, state_value::StateValue},
     bytes::Bytes,
-    eth_trie::{DB, EthTrie, MemoryDB, Trie, TrieError},
-    move_binary_format::errors::{Location, PartialVMError, VMResult},
+    eth_trie::{DB, EthTrie, Trie, TrieError},
+    move_binary_format::errors::{Location, VMResult},
     move_core_types::{
         account_address::AccountAddress,
         effects::ChangeSet,
@@ -13,7 +22,6 @@ use {
         language_storage::{ModuleId, StructTag},
     },
     move_table_extension::{TableChangeSet, TableResolver},
-    move_vm_test_utils::InMemoryStorage,
     move_vm_types::{code::ModuleBytesStorage, resolver::MoveResolver},
     moved_evm_ext::{EVM_NATIVE_ADDRESS, EVM_NATIVE_MODULE, type_utils::ACCOUNT_INFO_PREFIX},
     moved_shared::primitives::{Address, B256, KeyHashable},
@@ -62,86 +70,6 @@ pub trait State {
 
     /// Retrieves the value of the root node of the merkle trie that holds the blockchain state.
     fn state_root(&self) -> B256;
-}
-
-pub struct InMemoryState {
-    resolver: InMemoryStorage,
-    db: Arc<InMemoryTrieDb>,
-    current_state_root: Option<B256>,
-}
-
-impl Default for InMemoryState {
-    fn default() -> Self {
-        Self::new(Self::create_db())
-    }
-}
-
-pub type InMemoryTrieDb = MemoryDB;
-
-impl InMemoryState {
-    // Per `eth-trie` docs: If "light" is true, the data is deleted from the database
-    // at the time of submission.
-    const IS_LIGHT: bool = false;
-
-    pub fn create_db() -> Arc<InMemoryTrieDb> {
-        Arc::new(MemoryDB::new(Self::IS_LIGHT))
-    }
-
-    pub fn new(db: Arc<InMemoryTrieDb>) -> Self {
-        Self {
-            resolver: InMemoryStorage::new(),
-            db,
-            current_state_root: None,
-        }
-    }
-
-    fn tree(&self) -> EthTrie<InMemoryTrieDb> {
-        let db = self.db.clone();
-        match self.current_state_root {
-            None => EthTrie::new(db),
-            Some(root) => EthTrie::from(db, root).expect(IN_MEMORY_EXPECT_MSG),
-        }
-    }
-}
-
-impl State for InMemoryState {
-    type Err = PartialVMError;
-
-    fn apply(&mut self, changes: ChangeSet) -> Result<(), Self::Err> {
-        self.current_state_root.replace(
-            self.tree()
-                .insert_change_set_into_merkle_trie(&changes)
-                .expect(IN_MEMORY_EXPECT_MSG),
-        );
-        self.resolver.apply(changes)?;
-        Ok(())
-    }
-
-    fn apply_with_tables(
-        &mut self,
-        changes: ChangeSet,
-        table_changes: TableChangeSet,
-    ) -> Result<(), Self::Err> {
-        self.current_state_root.replace(
-            self.tree()
-                .insert_change_set_into_merkle_trie(&changes)
-                .expect(IN_MEMORY_EXPECT_MSG),
-        );
-        self.resolver.apply_extended(changes, table_changes)?;
-        Ok(())
-    }
-
-    fn db(&self) -> Arc<impl DB> {
-        self.db.clone()
-    }
-
-    fn resolver(&self) -> &(impl MoveResolver + TableResolver) {
-        &self.resolver
-    }
-
-    fn state_root(&self) -> B256 {
-        self.current_state_root.unwrap_or_default()
-    }
 }
 
 pub trait InsertChangeSetIntoMerkleTrie {
@@ -362,7 +290,7 @@ mod tests {
 
     #[test]
     fn test_state_root_remains_the_same_when_update_does_not_change_trie() {
-        let state = InMemoryState::default();
+        let mut state = InMemoryState::default();
         let mut change_set = ChangeSet::new();
 
         let mut account_change_set = AccountChanges::new();
@@ -377,7 +305,7 @@ mod tests {
             .add_account_changeset(AccountAddress::new([9; 32]), account_change_set)
             .unwrap();
         state
-            .tree()
+            .trie_mut()
             .insert_change_set_into_merkle_trie(&change_set)
             .unwrap();
         let expected_state_root = state.state_root();
@@ -395,7 +323,7 @@ mod tests {
             .add_account_changeset(AccountAddress::new([9; 32]), account_change_set)
             .unwrap();
         state
-            .tree()
+            .trie_mut()
             .insert_change_set_into_merkle_trie(&change_set)
             .unwrap();
         let actual_state_root = state.state_root();

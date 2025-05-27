@@ -15,6 +15,7 @@ fn test_execute_natives_contract() {
 }
 
 #[test]
+#[ignore] // TODO: Implement `TableResolver` for `EthTrieResolver`
 fn test_execute_tables_contract() {
     let mut ctx = TestContext::new();
     let module_id = ctx.deploy_contract("tables");

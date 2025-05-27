@@ -13,6 +13,6 @@ pub use {
     all::COLUMN_FAMILIES,
     block::RocksDbBlockRepository,
     rocksdb::{self, DB as RocksDb},
-    state::{RocksDbState, RocksDbStateQueries},
+    state::RocksDbStateQueries,
     trie::{ROOT_KEY, RocksEthTrieDb},
 };

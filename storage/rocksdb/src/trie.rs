@@ -1,5 +1,6 @@
 use {
     eth_trie::{DB, EthTrie, TrieError},
+    moved_evm_ext::state::DbWithRoot,
     moved_shared::primitives::B256,
     rocksdb::{AsColumnFamilyRef, DB as RocksDb, WriteBatchWithTransaction},
     std::sync::Arc,
@@ -18,17 +19,6 @@ impl<'db> RocksEthTrieDb<'db> {
         Self { db }
     }
 
-    pub fn root(&self) -> Result<Option<B256>, rocksdb::Error> {
-        Ok(self
-            .db
-            .get_cf(self.root_cf(), ROOT_KEY)?
-            .map(|v| B256::new(v.try_into().unwrap())))
-    }
-
-    pub fn put_root(&self, root: B256) -> Result<(), rocksdb::Error> {
-        self.db.put_cf(self.root_cf(), ROOT_KEY, root.as_slice())
-    }
-
     fn cf(&self) -> &impl AsColumnFamilyRef {
         self.db
             .cf_handle(TRIE_COLUMN_FAMILY)
@@ -39,6 +29,19 @@ impl<'db> RocksEthTrieDb<'db> {
         self.db
             .cf_handle(ROOT_COLUMN_FAMILY)
             .expect("Column family should exist")
+    }
+}
+
+impl DbWithRoot for RocksEthTrieDb<'_> {
+    fn root(&self) -> Result<Option<B256>, rocksdb::Error> {
+        Ok(self
+            .db
+            .get_cf(self.root_cf(), ROOT_KEY)?
+            .map(|v| B256::new(v.try_into().unwrap())))
+    }
+
+    fn put_root(&self, root: B256) -> Result<(), rocksdb::Error> {
+        self.db.put_cf(self.root_cf(), ROOT_KEY, root.as_slice())
     }
 }
 

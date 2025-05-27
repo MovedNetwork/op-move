@@ -5,6 +5,7 @@ use {
     },
     eth_trie::{DB, EthTrie, TrieError},
     heed::RoTxn,
+    moved_evm_ext::state::DbWithRoot,
     moved_shared::primitives::B256,
     std::sync::Arc,
 };
@@ -27,8 +28,10 @@ impl<'db> HeedEthTrieDb<'db> {
     pub fn new(env: &'db heed::Env) -> Self {
         Self { env }
     }
+}
 
-    pub fn root(&self) -> Result<Option<B256>, heed::Error> {
+impl DbWithRoot for HeedEthTrieDb<'_> {
+    fn root(&self) -> Result<Option<B256>, heed::Error> {
         let transaction = self.env.read_txn()?;
 
         let db = self.env.trie_root_database(&transaction)?;
@@ -40,7 +43,7 @@ impl<'db> HeedEthTrieDb<'db> {
         Ok(root)
     }
 
-    pub fn put_root(&self, root: B256) -> Result<(), heed::Error> {
+    fn put_root(&self, root: B256) -> Result<(), heed::Error> {
         let mut transaction = self.env.write_txn()?;
 
         let db = self.env.trie_root_database(&transaction)?;

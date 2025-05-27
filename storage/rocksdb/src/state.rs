@@ -2,11 +2,10 @@ use {
     crate::{
         RocksDb, RocksEthTrieDb,
         generic::{FromKey, ToKey},
-        trie::FromOptRoot,
     },
-    eth_trie::{DB, EthTrie, TrieError},
-    move_core_types::{account_address::AccountAddress, effects::ChangeSet},
-    move_table_extension::{TableChangeSet, TableResolver},
+    eth_trie::EthTrie,
+    move_core_types::account_address::AccountAddress,
+    move_table_extension::TableResolver,
     move_vm_types::resolver::MoveResolver,
     moved_blockchain::state::{
         Balance, BlockHeight, EthTrieResolver, Nonce, ProofResponse, StateQueries,
@@ -18,7 +17,6 @@ use {
         transaction::{L2_HIGHEST_ADDRESS, L2_LOWEST_ADDRESS},
     },
     moved_shared::primitives::{B256, ToEthAddress, U256},
-    moved_state::{InsertChangeSetIntoMerkleTrie, State},
     rocksdb::{AsColumnFamilyRef, WriteBatchWithTransaction},
     std::sync::Arc,
 };
@@ -26,70 +24,6 @@ use {
 pub const COLUMN_FAMILY: &str = "state";
 pub const HEIGHT_COLUMN_FAMILY: &str = "state_height";
 pub const HEIGHT_KEY: &str = "state_height";
-
-/// A blockchain state implementation backed by [`rocksdb`] as its persistent storage engine.
-pub struct RocksDbState<'db> {
-    db: Arc<RocksEthTrieDb<'db>>,
-    resolver: EthTrieResolver<RocksEthTrieDb<'db>>,
-    state_root: Option<B256>,
-}
-
-impl<'db> RocksDbState<'db> {
-    pub fn new(db: Arc<RocksEthTrieDb<'db>>) -> Self {
-        let state_root = db
-            .root()
-            .expect("Database should be able to fetch state root");
-
-        Self {
-            resolver: EthTrieResolver::new(EthTrie::from_opt_root(db.clone(), state_root)),
-            state_root,
-            db,
-        }
-    }
-
-    fn persist_state_root(&self) -> Result<(), rocksdb::Error> {
-        self.state_root
-            .map(|root| self.db.put_root(root))
-            .unwrap_or(Ok(()))
-    }
-
-    fn tree(&self) -> EthTrie<RocksEthTrieDb<'db>> {
-        EthTrie::from_opt_root(self.db.clone(), self.state_root)
-    }
-}
-
-impl State for RocksDbState<'_> {
-    type Err = TrieError;
-
-    fn apply(&mut self, changes: ChangeSet) -> Result<(), Self::Err> {
-        let mut tree = self.tree();
-        let root = tree.insert_change_set_into_merkle_trie(&changes)?;
-        self.state_root.replace(root);
-        self.resolver = EthTrieResolver::new(tree);
-        self.persist_state_root().unwrap();
-        Ok(())
-    }
-
-    fn apply_with_tables(
-        &mut self,
-        changes: ChangeSet,
-        _table_changes: TableChangeSet,
-    ) -> Result<(), Self::Err> {
-        self.apply(changes)
-    }
-
-    fn db(&self) -> Arc<impl DB> {
-        self.db.clone()
-    }
-
-    fn resolver(&self) -> &(impl MoveResolver + TableResolver) {
-        &self.resolver
-    }
-
-    fn state_root(&self) -> B256 {
-        self.state_root.unwrap_or_default()
-    }
-}
 
 #[derive(Clone)]
 pub struct RocksDbStateQueries<'db> {

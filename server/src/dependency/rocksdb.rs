@@ -2,7 +2,7 @@ use {
     crate::dependency::shared::*,
     moved_app::{Application, ApplicationReader, CommandActor},
     moved_genesis::config::GenesisConfig,
-    moved_state::State,
+    moved_state::{EthTrieState, State},
 };
 
 pub type Dependency = RocksDbDependencies;
@@ -34,7 +34,7 @@ impl moved_app::Dependencies for RocksDbDependencies {
     type SharedStorage = &'static moved_storage_rocksdb::RocksDb;
     type ReceiptStorageReader = &'static moved_storage_rocksdb::RocksDb;
     type SharedStorageReader = &'static moved_storage_rocksdb::RocksDb;
-    type State = moved_storage_rocksdb::RocksDbState<'static>;
+    type State = EthTrieState<moved_storage_rocksdb::RocksEthTrieDb<'static>>;
     type StateQueries = moved_storage_rocksdb::RocksDbStateQueries<'static>;
     type StorageTrieRepository = moved_storage_rocksdb::evm::RocksDbStorageTrieRepository;
     type TransactionQueries = moved_storage_rocksdb::transaction::RocksDbTransactionQueries;
@@ -94,7 +94,7 @@ impl moved_app::Dependencies for RocksDbDependencies {
     }
 
     fn state(&self) -> Self::State {
-        moved_storage_rocksdb::RocksDbState::new(TRIE_DB.clone())
+        EthTrieState::try_new(TRIE_DB.clone()).unwrap()
     }
 
     fn state_queries(&self, genesis_config: &GenesisConfig) -> Self::StateQueries {

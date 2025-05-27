@@ -2,12 +2,12 @@ use {
     crate::{
         all::HeedDb,
         generic::{EncodableB256, EncodableU64},
-        trie::{FromOptRoot, HeedEthTrieDb},
+        trie::HeedEthTrieDb,
     },
-    eth_trie::{DB, EthTrie, TrieError},
+    eth_trie::EthTrie,
     heed::RoTxn,
-    move_core_types::{account_address::AccountAddress, effects::ChangeSet},
-    move_table_extension::{TableChangeSet, TableResolver},
+    move_core_types::account_address::AccountAddress,
+    move_table_extension::TableResolver,
     move_vm_types::resolver::MoveResolver,
     moved_blockchain::state::{
         Balance, BlockHeight, EthTrieResolver, Nonce, ProofResponse, StateQueries,
@@ -19,7 +19,6 @@ use {
         transaction::{L2_HIGHEST_ADDRESS, L2_LOWEST_ADDRESS},
     },
     moved_shared::primitives::{B256, ToEthAddress, U256},
-    moved_state::{InsertChangeSetIntoMerkleTrie, State},
     std::sync::Arc,
 };
 
@@ -33,70 +32,6 @@ pub type HeightDb = heed::Database<HeightKey, HeightValue>;
 pub const DB: &str = "state";
 pub const HEIGHT_DB: &str = "state_height";
 pub const HEIGHT_KEY: u64 = 0;
-
-/// A blockchain state implementation backed by [`heed`] as its persistent storage engine.
-pub struct HeedState<'db> {
-    db: Arc<HeedEthTrieDb<'db>>,
-    resolver: EthTrieResolver<HeedEthTrieDb<'db>>,
-    state_root: Option<B256>,
-}
-
-impl<'db> HeedState<'db> {
-    pub fn new(db: Arc<HeedEthTrieDb<'db>>) -> Self {
-        let state_root = db
-            .root()
-            .expect("Database should be able to fetch state root");
-
-        Self {
-            resolver: EthTrieResolver::new(EthTrie::from_opt_root(db.clone(), state_root)),
-            state_root,
-            db,
-        }
-    }
-
-    fn persist_state_root(&self) -> Result<(), heed::Error> {
-        self.state_root
-            .map(|root| self.db.put_root(root))
-            .unwrap_or(Ok(()))
-    }
-
-    fn tree(&self) -> EthTrie<HeedEthTrieDb<'db>> {
-        EthTrie::from_opt_root(self.db.clone(), self.state_root)
-    }
-}
-
-impl State for HeedState<'_> {
-    type Err = TrieError;
-
-    fn apply(&mut self, changes: ChangeSet) -> Result<(), Self::Err> {
-        let mut tree = self.tree();
-        let root = tree.insert_change_set_into_merkle_trie(&changes)?;
-        self.state_root.replace(root);
-        self.resolver = EthTrieResolver::new(tree);
-        self.persist_state_root().unwrap();
-        Ok(())
-    }
-
-    fn apply_with_tables(
-        &mut self,
-        changes: ChangeSet,
-        _table_changes: TableChangeSet,
-    ) -> Result<(), Self::Err> {
-        self.apply(changes)
-    }
-
-    fn db(&self) -> Arc<impl DB> {
-        self.db.clone()
-    }
-
-    fn resolver(&self) -> &(impl MoveResolver + TableResolver) {
-        &self.resolver
-    }
-
-    fn state_root(&self) -> B256 {
-        self.state_root.unwrap_or_default()
-    }
-}
 
 #[derive(Clone)]
 pub struct HeedStateQueries<'db> {

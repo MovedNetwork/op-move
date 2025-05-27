@@ -88,11 +88,18 @@ impl<D: DB> ResourceResolver for EthTrieResolver<D> {
 impl<D: DB> TableResolver for EthTrieResolver<D> {
     fn resolve_table_entry_bytes_with_layout(
         &self,
-        _handle: &TableHandle,
-        _key: &[u8],
+        handle: &TableHandle,
+        key: &[u8],
         _maybe_layout: Option<&MoveTypeLayout>,
     ) -> Result<Option<Bytes>, PartialVMError> {
-        unimplemented!()
+        let state_key =
+            StateKey::table_item(&aptos_types::state_store::table::TableHandle(handle.0), key);
+        let tree_key = TreeKey::StateKey(state_key);
+        let key_hash = tree_key.key_hash();
+        let value = self.tree.get(key_hash.0.as_slice()).map_err(trie_err)?;
+        let value = deserialize_state_value(value);
+
+        Ok(value)
     }
 }
 

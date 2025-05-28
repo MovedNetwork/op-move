@@ -149,7 +149,9 @@ mod tests {
         crate::methods::{forkchoice_updated, get_payload},
         alloy::primitives::hex,
         std::sync::Arc,
-        umi_app::{Application, CommandActor, TestDependencies},
+        umi_app::{
+            Application, BlockHashRingBuffer, CommandActor, SharedBlockHashCache, TestDependencies,
+        },
         umi_blockchain::{
             block::{
                 Block, BlockRepository, Eip1559GasFee, InMemoryBlockQueries,
@@ -161,7 +163,7 @@ mod tests {
             state::InMemoryStateQueries,
             transaction::{InMemoryTransactionQueries, InMemoryTransactionRepository},
         },
-        umi_evm_ext::state::InMemoryStorageTrieRepository,
+        umi_evm_ext::state::{BlockHashWriter, InMemoryStorageTrieRepository},
         umi_genesis::config::GenesisConfig,
         umi_shared::primitives::{Address, B2048, Bytes, U64, U256},
         umi_state::{InMemoryState, InMemoryTrieDb},
@@ -250,6 +252,7 @@ mod tests {
     #[tokio::test]
     async fn test_execute_v3() {
         let genesis_config = GenesisConfig::default();
+        let mut block_hash_cache = SharedBlockHashCache::default();
 
         // Set known block height
         let head_hash = B256::new(hex!(
@@ -260,6 +263,7 @@ mod tests {
         let (memory_reader, mut memory) = shared_memory::new();
         let mut repository = InMemoryBlockRepository::new();
         repository.add(&mut memory, genesis_block).unwrap();
+        block_hash_cache.push(0, head_hash);
 
         let trie_db = Arc::new(InMemoryTrieDb::empty());
         let mut state = InMemoryState::empty(trie_db.clone());
@@ -285,6 +289,8 @@ mod tests {
             block_hash: B256::from(hex!(
                 "c013e1ff1b8bca9f0d074618cc9e661983bc91d7677168b156765781aee775d3"
             )),
+
+            block_hash_writer: block_hash_cache.clone(),
             block_queries: InMemoryBlockQueries,
             block_repository: repository,
             on_payload: CommandActor::on_payload_in_memory(),
@@ -315,6 +321,8 @@ mod tests {
                 _,
                 UmiBlockHash,
                 _,
+                BlockHashRingBuffer,
+                _,
                 (),
                 _,
                 _,
@@ -333,6 +341,7 @@ mod tests {
         > {
             genesis_config,
             base_token: (),
+            block_hash_lookup: block_hash_cache,
             block_queries: InMemoryBlockQueries,
             storage: memory_reader.clone(),
             state_queries: InMemoryStateQueries::new(memory_reader, trie_db, genesis_state_root),

@@ -29,7 +29,7 @@ use {
         state::{BlockHeight, InMemoryStateQueries, MockStateQueries, StateQueries},
         transaction::{InMemoryTransactionQueries, InMemoryTransactionRepository},
     },
-    umi_evm_ext::state::{InMemoryStorageTrieRepository, StorageTrieRepository},
+    umi_evm_ext::state::{BlockHashWriter, InMemoryStorageTrieRepository, StorageTrieRepository},
     umi_execution::{UmiBaseTokenAccounts, create_vm_session, session_id::SessionId},
     umi_genesis::{
         CreateMoveVm, UmiVm,
@@ -70,6 +70,7 @@ fn create_app_with_given_queries<SQ: StateQueries + Clone + Send + Sync + 'stati
     Application<TestDependencies<SQ>>,
 ) {
     let genesis_config = GenesisConfig::default();
+    let mut block_hash_cache = SharedBlockHashCache::default();
 
     let head_hash = B256::new(hex!(
         "e56ec7ba741931e8c55b7f654a6e56ed61cf8b8279bf5e3ef6ac86a11eb33a9d"
@@ -84,6 +85,7 @@ fn create_app_with_given_queries<SQ: StateQueries + Clone + Send + Sync + 'stati
         block.block.header.number = i;
         block.hash = block.block.header.hash_slow();
         repository.add(&mut memory, block).unwrap();
+        block_hash_cache.push(i, head_hash);
     }
 
     let mut state = InMemoryState::default();
@@ -104,6 +106,7 @@ fn create_app_with_given_queries<SQ: StateQueries + Clone + Send + Sync + 'stati
             genesis_config: genesis_config.clone(),
             base_token: UmiBaseTokenAccounts::new(AccountAddress::ONE),
             block_queries: InMemoryBlockQueries,
+            block_hash_lookup: block_hash_cache.clone(),
             payload_queries: InMemoryPayloadQueries::new(),
             receipt_queries: InMemoryReceiptQueries::new(),
             receipt_memory: receipt_memory_reader.clone(),
@@ -116,6 +119,7 @@ fn create_app_with_given_queries<SQ: StateQueries + Clone + Send + Sync + 'stati
             mem_pool: Default::default(),
             genesis_config,
             base_token: UmiBaseTokenAccounts::new(AccountAddress::ONE),
+            block_hash_writer: block_hash_cache,
             block_hash: UmiBlockHash,
             block_queries: InMemoryBlockQueries,
             block_repository: repository,
@@ -186,6 +190,7 @@ fn create_app_with_fake_queries(
     Application<TestDependencies>,
 ) {
     let genesis_config = GenesisConfig::default();
+    let mut block_hash_cache = SharedBlockHashCache::default();
 
     let head_hash = B256::new(hex!(
         "e56ec7ba741931e8c55b7f654a6e56ed61cf8b8279bf5e3ef6ac86a11eb33a9d"
@@ -195,11 +200,13 @@ fn create_app_with_fake_queries(
     let (memory_reader, mut memory) = shared_memory::new();
     let mut repository = InMemoryBlockRepository::new();
     repository.add(&mut memory, genesis_block.clone()).unwrap();
+    block_hash_cache.push(0, head_hash);
 
     for i in 1..=height {
         let mut block = genesis_block.clone();
         block.block.header.number = i;
         block.hash = block.block.header.hash_slow();
+        block_hash_cache.push(i, block.hash);
         repository.add(&mut memory, block).unwrap();
     }
 
@@ -225,6 +232,7 @@ fn create_app_with_fake_queries(
         ApplicationReader {
             genesis_config: genesis_config.clone(),
             base_token: UmiBaseTokenAccounts::new(AccountAddress::ONE),
+            block_hash_lookup: block_hash_cache.clone(),
             block_queries: InMemoryBlockQueries,
             payload_queries: InMemoryPayloadQueries::new(),
             receipt_queries: InMemoryReceiptQueries::new(),
@@ -239,6 +247,7 @@ fn create_app_with_fake_queries(
             genesis_config,
             base_token: UmiBaseTokenAccounts::new(AccountAddress::ONE),
             block_hash: UmiBlockHash,
+            block_hash_writer: block_hash_cache,
             block_queries: InMemoryBlockQueries,
             block_repository: repository,
             on_payload: CommandActor::on_payload_in_memory(),
@@ -723,7 +732,6 @@ fn test_fee_history_percentile_calculations(
 
     let result = reader.fee_history(1, Latest, Some(percentiles));
     assert!(result.is_ok());
-    dbg!(&result);
 
     let fee_history = result.unwrap();
     if let Some(rewards) = &fee_history.reward {
@@ -765,7 +773,6 @@ fn test_fee_history_gas_ratio_progression(tx_counts: Vec<usize>, expect_increasi
     assert!(result.is_ok());
 
     let fee_history = result.unwrap();
-    dbg!(&fee_history);
     assert_eq!(fee_history.gas_used_ratio.len(), tx_counts.len());
 
     if expect_increasing {

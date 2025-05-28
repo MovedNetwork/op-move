@@ -33,7 +33,7 @@ pub mod tests {
         tokio::sync::mpsc::Sender,
         umi_app::{
             Application, ApplicationReader, Command, CommandActor, DependenciesThreadSafe, Payload,
-            TestDependencies,
+            SharedBlockHashCache, TestDependencies,
         },
         umi_blockchain::{
             block::{
@@ -46,7 +46,7 @@ pub mod tests {
             state::{InMemoryStateQueries, MockStateQueries},
             transaction::{InMemoryTransactionQueries, InMemoryTransactionRepository},
         },
-        umi_evm_ext::state::InMemoryStorageTrieRepository,
+        umi_evm_ext::state::{BlockHashWriter, InMemoryStorageTrieRepository},
         umi_execution::UmiBaseTokenAccounts,
         umi_genesis::config::{CHAIN_ID, GenesisConfig},
         umi_shared::primitives::{Address, B256, U64, U256},
@@ -61,6 +61,7 @@ pub mod tests {
         Application<TestDependencies>,
     ) {
         let genesis_config = GenesisConfig::default();
+        let mut block_hash_cache = SharedBlockHashCache::default();
 
         let head_hash = B256::new(hex!(
             "e56ec7ba741931e8c55b7f654a6e56ed61cf8b8279bf5e3ef6ac86a11eb33a9d"
@@ -76,6 +77,7 @@ pub mod tests {
         let (memory_reader, mut memory) = shared_memory::new();
         let mut repository = InMemoryBlockRepository::new();
         repository.add(&mut memory, genesis_block).unwrap();
+        block_hash_cache.push(0, head_hash);
 
         let trie_db = Arc::new(InMemoryTrieDb::empty());
         let mut state = InMemoryState::empty(trie_db.clone());
@@ -99,6 +101,7 @@ pub mod tests {
             ApplicationReader {
                 genesis_config: genesis_config.clone(),
                 base_token: UmiBaseTokenAccounts::new(AccountAddress::ONE),
+                block_hash_lookup: block_hash_cache.clone(),
                 block_queries: InMemoryBlockQueries,
                 payload_queries: InMemoryPayloadQueries::new(),
                 receipt_queries: InMemoryReceiptQueries::new(),
@@ -116,6 +119,7 @@ pub mod tests {
                 l1_fee: U256::ZERO,
                 l2_fee: U256::ZERO,
                 block_hash: UmiBlockHash,
+                block_hash_writer: block_hash_cache,
                 block_queries: InMemoryBlockQueries,
                 block_repository: repository,
                 on_payload: CommandActor::on_payload_in_memory(),
@@ -246,6 +250,8 @@ pub mod tests {
                     _,
                     UmiBlockHash,
                     _,
+                    SharedBlockHashCache,
+                    _,
                     (),
                     _,
                     _,
@@ -264,6 +270,7 @@ pub mod tests {
             > {
                 genesis_config: GenesisConfig::default(),
                 base_token: UmiBaseTokenAccounts::new(AccountAddress::ONE),
+                block_hash_lookup: (),
                 block_queries: StubLatest(height),
                 payload_queries: (),
                 receipt_queries: (),
@@ -273,7 +280,28 @@ pub mod tests {
                 evm_storage: (),
                 transaction_queries: (),
             },
-            Application::<TestDependencies<_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _>> {
+            Application::<
+                TestDependencies<
+                    _,
+                    _,
+                    _,
+                    _,
+                    SharedBlockHashCache,
+                    _,
+                    _,
+                    _,
+                    _,
+                    _,
+                    _,
+                    _,
+                    _,
+                    _,
+                    _,
+                    _,
+                    _,
+                    _,
+                >,
+            > {
                 genesis_config: GenesisConfig::default(),
                 mem_pool: Default::default(),
                 gas_fee: Eip1559GasFee::default(),
@@ -281,6 +309,7 @@ pub mod tests {
                 l1_fee: U256::ZERO,
                 l2_fee: U256::ZERO,
                 block_hash: UmiBlockHash,
+                block_hash_writer: SharedBlockHashCache::default(),
                 block_queries: StubLatest(height),
                 block_repository: (),
                 on_payload: CommandActor::on_payload_noop(),

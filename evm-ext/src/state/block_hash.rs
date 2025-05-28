@@ -6,6 +6,11 @@ pub trait BlockHashLookup {
     fn hash_by_number(&self, number: u64) -> Option<B256>;
 }
 
+/// A trait for 0x40 BLOCKHASH opcode retrieval
+pub trait BlockHashWriter: BlockHashLookup {
+    fn push(&mut self, height: u64, hash: B256);
+}
+
 impl BlockHashLookup for () {
     fn hash_by_number(&self, _number: u64) -> Option<B256> {
         None

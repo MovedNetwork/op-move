@@ -187,6 +187,13 @@ impl<D: Dependencies> GenesisStateExt for Application<D> {
             &mut self.state,
             &mut self.evm_storage,
         );
+    } else {
+        app.block_hash_writer.initialize_from_storage(
+            &app.storage_reader,
+            &app.block_queries,
+            app_reader.block_number(),
+        );
+    }
 
         let genesis_block = create_genesis_block(&self.block_hash, genesis_config);
         self.genesis_update(genesis_block);

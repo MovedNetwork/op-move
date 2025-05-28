@@ -1,7 +1,6 @@
 use {
     crate::{
         Application, Dependencies, ExecutionOutcome, Payload,
-        block_hash::StorageBasedProvider,
         input::{WithExecutionOutcome, WithPayloadAttributes},
         mempool::PendingTransaction,
     },
@@ -18,7 +17,10 @@ use {
         receipt::{ExtendedReceipt, ReceiptRepository},
         transaction::{ExtendedTransaction, TransactionRepository},
     },
-    umi_evm_ext::{HeaderForExecution, state::StorageTrieRepository},
+    umi_evm_ext::{
+        HeaderForExecution,
+        state::{BlockHashWriter, StorageTrieRepository},
+    },
     umi_execution::{
         CanonicalExecutionInput, CreateL1GasFee, CreateL2GasFee, DepositExecutionInput, L1GasFee,
         L1GasFeeInput, L2GasFeeInput, LogsBloom, execute_transaction,
@@ -146,6 +148,7 @@ impl<D: Dependencies> Application<D> {
             )
             .unwrap();
 
+        self.block_hash_writer.push(block_number, block_hash);
         self.block_repository.add(&mut self.storage, block).unwrap();
 
         (self.on_payload)(self, id, block_hash);
@@ -164,6 +167,7 @@ impl<D: Dependencies> Application<D> {
     }
 
     pub fn genesis_update(&mut self, block: ExtendedBlock) {
+        self.block_hash_writer.push(0, block.hash);
         self.block_repository.add(&mut self.storage, block).unwrap();
     }
 
@@ -201,8 +205,6 @@ impl<D: Dependencies> Application<D> {
                 normalized_tx.gas_limit(),
                 normalized_tx.effective_gas_price(base_fee),
             );
-            let block_hash_lookup =
-                StorageBasedProvider::new(&self.storage_reader, &self.block_queries);
             let input = match &normalized_tx {
                 NormalizedExtendedTxEnvelope::Canonical(tx) => CanonicalExecutionInput {
                     tx,
@@ -218,7 +220,7 @@ impl<D: Dependencies> Application<D> {
                     l2_input: l2_gas_input,
                     base_token: &self.base_token,
                     block_header: block_header.clone(),
-                    block_hash_lookup: &block_hash_lookup,
+                    block_hash_lookup: &self.block_hash_writer,
                 }
                 .into(),
                 NormalizedExtendedTxEnvelope::DepositedTx(tx) => DepositExecutionInput {
@@ -228,7 +230,7 @@ impl<D: Dependencies> Application<D> {
                     storage_trie: &self.evm_storage,
                     genesis_config: &self.genesis_config,
                     block_header: block_header.clone(),
-                    block_hash_lookup: &block_hash_lookup,
+                    block_hash_lookup: &self.block_hash_writer,
                 }
                 .into(),
             };

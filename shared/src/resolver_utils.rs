@@ -11,6 +11,54 @@ use {
     move_vm_types::resolver::{ModuleResolver, ResourceResolver},
 };
 
+/// Resolver derived from a pair of existing resolvers.
+/// It tries to look up the module/resource with the primary resolver first,
+/// trying the secondary if that lookup fails. Note: this means if the same
+/// key is present is both then the primary overshadows the secondary.
+pub struct PairedResolvers<'a, T, U> {
+    primary: &'a T,
+    secondary: &'a U,
+}
+
+impl<'a, T, U> PairedResolvers<'a, T, U> {
+    pub fn new(primary: &'a T, secondary: &'a U) -> Self {
+        Self { primary, secondary }
+    }
+}
+
+impl<T: ResourceResolver, U: ResourceResolver> ResourceResolver for PairedResolvers<'_, T, U> {
+    fn get_resource_bytes_with_metadata_and_layout(
+        &self,
+        address: &AccountAddress,
+        struct_tag: &StructTag,
+        metadata: &[Metadata],
+        layout: Option<&MoveTypeLayout>,
+    ) -> PartialVMResult<(Option<Bytes>, usize)> {
+        let primary_result = self
+            .primary
+            .get_resource_bytes_with_metadata_and_layout(address, struct_tag, metadata, layout);
+        match primary_result {
+            Ok((Some(bytes), size)) => Ok((Some(bytes), size)),
+            Ok((None, _)) | Err(_) => self
+                .secondary
+                .get_resource_bytes_with_metadata_and_layout(address, struct_tag, metadata, layout),
+        }
+    }
+}
+
+impl<T: ModuleResolver, U: ModuleResolver> ModuleResolver for PairedResolvers<'_, T, U> {
+    fn get_module_metadata(&self, _module_id: &ModuleId) -> Vec<Metadata> {
+        Vec::new()
+    }
+
+    fn get_module(&self, id: &ModuleId) -> PartialVMResult<Option<Bytes>> {
+        self.primary
+            .get_module(id)
+            .or_else(|_| self.secondary.get_module(id))
+    }
+}
+
+/// Resolver which looks up resources and modules based on a given change set.
 pub struct ChangesBasedResolver<'a> {
     changes: &'a ChangeSet,
 }

@@ -177,6 +177,12 @@ pub fn initialize_app(
             &mut app.state,
             &mut app.evm_storage,
         );
+    } else {
+        app.block_hash_writer.initialize_from_storage(
+            &app.storage_reader,
+            &app.block_queries,
+            app_reader.block_number(),
+        );
     }
 
     (app, app_reader)

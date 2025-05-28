@@ -13,4 +13,4 @@ mod queue;
 #[cfg(test)]
 mod tests;
 
-pub use {actor::*, dependency::*, factory::create, input::*, queue::CommandQueue};
+pub use {actor::*, block_hash::*, dependency::*, factory::create, input::*, queue::CommandQueue};

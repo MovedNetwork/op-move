@@ -1,7 +1,7 @@
 use {
     crate::dependency::shared::*,
     std::sync::Arc,
-    umi_app::{Application, ApplicationReader, CommandActor},
+    umi_app::{Application, ApplicationReader, CommandActor, SharedBlockHashCache},
     umi_genesis::config::GenesisConfig,
 };
 
@@ -28,6 +28,7 @@ pub struct InMemoryDependencies {
     receipt_memory_reader: umi_blockchain::receipt::ReceiptMemoryReader,
     receipt_memory: Option<umi_blockchain::receipt::ReceiptMemory>,
     trie_db: Arc<umi_state::InMemoryTrieDb>,
+    block_hash_cache: SharedBlockHashCache,
 }
 
 impl InMemoryDependencies {
@@ -42,6 +43,7 @@ impl InMemoryDependencies {
             receipt_memory_reader,
             receipt_memory: Some(receipt_memory),
             trie_db: Arc::new(umi_state::InMemoryTrieDb::empty()),
+            block_hash_cache: SharedBlockHashCache::default(),
         }
     }
 
@@ -55,6 +57,7 @@ impl InMemoryDependencies {
             receipt_memory_reader: self.receipt_memory_reader.clone(),
             receipt_memory: None,
             trie_db: self.trie_db.clone(),
+            block_hash_cache: self.block_hash_cache.clone(),
         }
     }
 }
@@ -68,6 +71,8 @@ impl Default for InMemoryDependencies {
 impl umi_app::Dependencies for InMemoryDependencies {
     type BlockQueries = umi_blockchain::block::InMemoryBlockQueries;
     type BlockRepository = umi_blockchain::block::InMemoryBlockRepository;
+    type BlockHashLookup = umi_app::SharedBlockHashCache;
+    type BlockHashWriter = umi_app::SharedBlockHashCache;
     type OnPayload = umi_app::OnPayload<Application<Self>>;
     type OnTx = umi_app::OnTx<Application<Self>>;
     type OnTxBatch = umi_app::OnTxBatch<Application<Self>>;
@@ -114,6 +119,14 @@ impl umi_app::Dependencies for InMemoryDependencies {
 
     fn receipt_repository() -> Self::ReceiptRepository {
         umi_blockchain::receipt::InMemoryReceiptRepository::new()
+    }
+
+    fn block_hash_lookup(&self) -> Self::BlockHashLookup {
+        self.block_hash_cache.clone()
+    }
+
+    fn block_hash_writer(&self) -> Self::BlockHashWriter {
+        self.block_hash_cache.clone()
     }
 
     fn receipt_memory(&mut self) -> Self::ReceiptStorage {

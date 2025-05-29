@@ -6,6 +6,7 @@ use {
         transaction::{Changes, TransactionExecutionOutcome},
     },
     alloy::primitives::U256,
+    aptos_framework::natives::event::NativeEventContext,
     aptos_table_natives::TableResolver,
     move_core_types::language_storage::ModuleId,
     move_vm_runtime::{
@@ -139,7 +140,8 @@ pub(super) fn execute_deposited_transaction<
     };
 
     let (mut changes, mut extensions) = session.finish_with_extensions(&code_storage)?;
-    let mut logs = extensions.logs();
+    let events = extensions.remove::<NativeEventContext>().into_events();
+    let mut logs = events.logs();
     logs.extend(evm_logs);
     let gas_used = total_gas_used(&gas_meter, input.genesis_config);
     let evm_changes = extract_evm_changes(&extensions);

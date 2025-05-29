@@ -185,14 +185,16 @@ impl<'a, I: Iterator<Item = &'a Log>> LogsBloom for I {
 }
 
 trait Logs {
-    fn logs(&mut self) -> Vec<Log>;
+    fn logs(self) -> Vec<Log>;
 }
 
-impl Logs for NativeContextExtensions<'_> {
-    fn logs(&mut self) -> Vec<Log> {
+impl<T> Logs for T
+where
+    T: IntoIterator<Item = (ContractEvent, Option<MoveTypeLayout>)>,
+{
+    fn logs(self) -> Vec<Log> {
         let mut result = Vec::new();
-        let events = self.remove::<NativeEventContext>().into_events();
-        for (event, _) in events {
+        for (event, _) in self.into_iter() {
             push_logs(&event, &mut result);
         }
         result

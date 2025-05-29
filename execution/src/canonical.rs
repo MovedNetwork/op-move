@@ -16,18 +16,21 @@ use {
         },
     },
     alloy::primitives::U256,
+    aptos_framework::natives::event::NativeEventContext,
     aptos_gas_algebra::FeePerGasUnit,
     aptos_gas_meter::{AptosGasMeter, StandardGasAlgebra, StandardGasMeter},
     aptos_table_natives::TableResolver,
-    aptos_types::{state_store::state_key::StateKey, write_set::WriteOpSize},
+    aptos_types::{
+        contract_event::ContractEvent, state_store::state_key::StateKey, write_set::WriteOpSize,
+    },
     move_core_types::{
         effects::{ChangeSet, Op},
         language_storage::ModuleId,
+        value::MoveTypeLayout,
     },
     move_vm_runtime::{
         AsUnsyncCodeStorage, ModuleStorage,
         module_traversal::{TraversalContext, TraversalStorage},
-        native_extensions::NativeContextExtensions,
         session::Session,
     },
     move_vm_types::{gas::UnmeteredGasMeter, resolver::MoveResolver},
@@ -282,8 +285,10 @@ pub(super) fn execute_canonical_transaction<
         )
     });
 
-    let (mut user_changes, extensions) = session.finish_with_extensions(&code_storage)?;
+    let (mut user_changes, mut extensions) = session.finish_with_extensions(&code_storage)?;
     let evm_changes = umi_evm_ext::extract_evm_changes(&extensions);
+    let user_events = extensions.remove::<NativeEventContext>().into_events();
+    extensions.add(NativeEventContext::default());
     user_changes
         .squash(evm_changes.accounts)
         .expect("EVM changes must merge with other session changes");
@@ -295,7 +300,7 @@ pub(super) fn execute_canonical_transaction<
     let vm_outcome = vm_outcome.and_then(|_| {
         charge_io_gas(
             &user_changes,
-            &extensions,
+            &user_events,
             &mut gas_meter,
             input.genesis_config,
             gas_unit_price,
@@ -328,7 +333,8 @@ pub(super) fn execute_canonical_transaction<
             })?;
 
         let (changes, mut extensions) = refund_session.finish_with_extensions(&code_storage)?;
-        let logs = extensions.logs();
+        let refund_events = extensions.remove::<NativeEventContext>().into_events();
+        let logs = user_events.into_iter().chain(refund_events).logs();
         (changes, logs, gas_used)
     };
 
@@ -361,7 +367,7 @@ pub(super) fn execute_canonical_transaction<
 
 fn charge_io_gas(
     changes: &ChangeSet,
-    extensions: &NativeContextExtensions,
+    user_events: &[(ContractEvent, Option<MoveTypeLayout>)],
     gas_meter: &mut StandardGasMeter<StandardGasAlgebra>,
     genesis_config: &GenesisConfig,
     gas_unit_price: FeePerGasUnit,
@@ -384,7 +390,9 @@ fn charge_io_gas(
         gas_meter.charge_io_gas_for_write(&key, &op_size)?;
     }
 
-    // TODO: io gas for events
+    for (event, _) in user_events {
+        gas_meter.charge_io_gas_for_event(event)?;
+    }
 
     Ok(())
 }

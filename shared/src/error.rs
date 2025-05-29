@@ -153,6 +153,8 @@ pub enum InvariantViolation {
     ScriptTransaction(ScriptTransaction),
     #[error("Mempool admitted transactions cannot be deposited")]
     MempoolTransaction,
+    #[error("State key must be created to charge gas for change set")]
+    StateKey,
 }
 
 #[derive(Debug, Error)]

@@ -16,10 +16,14 @@ use {
         },
     },
     alloy::primitives::U256,
+    aptos_gas_algebra::FeePerGasUnit,
     aptos_gas_meter::{AptosGasMeter, StandardGasAlgebra, StandardGasMeter},
     aptos_table_natives::TableResolver,
-    move_binary_format::errors::VMResult,
-    move_core_types::{effects::ChangeSet, language_storage::ModuleId},
+    aptos_types::{state_store::state_key::StateKey, write_set::WriteOpSize},
+    move_core_types::{
+        effects::{ChangeSet, Op},
+        language_storage::ModuleId,
+    },
     move_vm_runtime::{
         AsUnsyncCodeStorage, ModuleStorage,
         module_traversal::{TraversalContext, TraversalStorage},
@@ -287,8 +291,15 @@ pub(super) fn execute_canonical_transaction<
         .squash(deploy_changes)
         .expect("Module deploy changes must merge with other session changes");
 
+    let gas_unit_price = FeePerGasUnit::new(wei_to_octa(input.l2_input.effective_gas_price));
     let vm_outcome = vm_outcome.and_then(|_| {
-        charge_io_gas(&user_changes, &extensions, &mut gas_meter).map_err(Into::into)
+        charge_io_gas(
+            &user_changes,
+            &extensions,
+            &mut gas_meter,
+            input.genesis_config,
+            gas_unit_price,
+        )
     });
 
     let changes_resolver = ChangesBasedResolver::new(&user_changes);
@@ -354,7 +365,48 @@ fn charge_io_gas(
     changes: &ChangeSet,
     extensions: &NativeContextExtensions,
     gas_meter: &mut StandardGasMeter<StandardGasAlgebra>,
-) -> VMResult<()> {
-    // TODO
+    genesis_config: &GenesisConfig,
+    gas_unit_price: FeePerGasUnit,
+) -> umi_shared::error::Result<()> {
+    let invariant_violation =
+        |_| umi_shared::error::Error::InvariantViolation(InvariantViolation::StateKey);
+
+    for (address, struct_tag, op) in changes.resources() {
+        let op_size = to_op_size(op);
+        let key = StateKey::resource(&address, struct_tag).map_err(invariant_violation)?;
+        gas_meter.charge_io_gas_for_write(&key, &op_size)?;
+
+        // TODO: storage gas for ops. Need to charge based on change in size in case of modified.
+        // Aptos does this with the StateValueMetadata which we are currently not using.
+    }
+
+    for (address, id, op) in changes.modules() {
+        let op_size = to_op_size(op);
+        let key = StateKey::module(address, id);
+        gas_meter.charge_io_gas_for_write(&key, &op_size)?;
+    }
+
+    // TODO: io gas for events
+
     Ok(())
+}
+
+fn to_op_size<T: AsRef<[u8]>>(op: Op<&T>) -> WriteOpSize {
+    match op {
+        Op::New(bytes) => WriteOpSize::Creation {
+            write_len: bytes.as_ref().len() as u64,
+        },
+        Op::Modify(bytes) => WriteOpSize::Modification {
+            write_len: bytes.as_ref().len() as u64,
+        },
+        Op::Delete => WriteOpSize::Deletion,
+    }
+}
+
+// Ethereum's smallest base token unit is Wei (1 Wei = 10^{-18} ETH),
+// but Aptos' smallest base token unit is Octa (1 Octa = 10^{-8} APT).
+// This function scales down Wei to Octa for use in Aptos code.
+fn wei_to_octa(x: U256) -> u64 {
+    const FACTOR: U256 = U256::from_limbs([10_000_000_000, 0, 0, 0]);
+    x.wrapping_div(FACTOR).saturating_to()
 }

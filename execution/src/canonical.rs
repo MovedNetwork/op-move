@@ -302,37 +302,35 @@ pub(super) fn execute_canonical_transaction<
         )
     });
 
-    let changes_resolver = ChangesBasedResolver::new(&user_changes);
-    let refund_resolver = PairedResolvers::new(&changes_resolver, input.state);
-    let mut refund_session = vm.new_session_with_extensions(&refund_resolver, extensions);
+    let (changes, logs, gas_used) = {
+        let changes_resolver = ChangesBasedResolver::new(&user_changes);
+        let refund_resolver = PairedResolvers::new(&changes_resolver, input.state);
+        let mut refund_session = vm.new_session_with_extensions(&refund_resolver, extensions);
 
-    let gas_used = total_gas_used(&gas_meter, input.genesis_config);
-    let used_l2_input = L2GasFeeInput::new(gas_used, input.l2_input.effective_gas_price);
-    let used_l2_cost = input.l2_fee.l2_fee(used_l2_input);
+        let gas_used = total_gas_used(&gas_meter, input.genesis_config);
+        let used_l2_input = L2GasFeeInput::new(gas_used, input.l2_input.effective_gas_price);
+        let used_l2_cost = input.l2_fee.l2_fee(used_l2_input);
 
-    // Refunds should not be metered as they're supposed to always succeed
-    input
-        .base_token
-        .refund_gas_cost(
-            &sender_move_address,
-            l2_cost.saturating_sub(used_l2_cost),
-            &mut refund_session,
-            &mut traversal_context,
-            &code_storage,
-        )
-        .map_err(|_| {
-            umi_shared::error::Error::InvariantViolation(InvariantViolation::EthToken(
-                EthToken::RefundAlwaysSucceeds,
-            ))
-        })?;
+        // Refunds should not be metered as they're supposed to always succeed
+        input
+            .base_token
+            .refund_gas_cost(
+                &sender_move_address,
+                l2_cost.saturating_sub(used_l2_cost),
+                &mut refund_session,
+                &mut traversal_context,
+                &code_storage,
+            )
+            .map_err(|_| {
+                umi_shared::error::Error::InvariantViolation(InvariantViolation::EthToken(
+                    EthToken::RefundAlwaysSucceeds,
+                ))
+            })?;
 
-    let (changes, mut extensions) = refund_session.finish_with_extensions(&code_storage)?;
-    let logs = extensions.logs();
-
-    // Drop a bunch of borrows we no longer need to allow `user_changes` to be used again.
-    drop(extensions);
-    drop(refund_resolver);
-    drop(changes_resolver);
+        let (changes, mut extensions) = refund_session.finish_with_extensions(&code_storage)?;
+        let logs = extensions.logs();
+        (changes, logs, gas_used)
+    };
 
     user_changes
         .squash(changes)

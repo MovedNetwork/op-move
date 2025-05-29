@@ -1,6 +1,7 @@
 use {
     crate::dependency::shared::*,
     moved_app::{Application, ApplicationReader, CommandActor},
+    moved_blockchain::state::EthTrieStateQueries,
     moved_genesis::config::GenesisConfig,
     moved_state::{EthTrieState, State},
 };
@@ -35,7 +36,10 @@ impl moved_app::Dependencies for RocksDbDependencies {
     type ReceiptStorageReader = &'static moved_storage_rocksdb::RocksDb;
     type SharedStorageReader = &'static moved_storage_rocksdb::RocksDb;
     type State = EthTrieState<moved_storage_rocksdb::RocksEthTrieDb<'static>>;
-    type StateQueries = moved_storage_rocksdb::RocksDbStateQueries<'static>;
+    type StateQueries = EthTrieStateQueries<
+        moved_storage_rocksdb::RocksDbStateRootIndex<'static>,
+        moved_storage_rocksdb::RocksEthTrieDb<'static>,
+    >;
     type StorageTrieRepository = moved_storage_rocksdb::evm::RocksDbStorageTrieRepository;
     type TransactionQueries = moved_storage_rocksdb::transaction::RocksDbTransactionQueries;
     type TransactionRepository = moved_storage_rocksdb::transaction::RocksDbTransactionRepository;
@@ -98,8 +102,8 @@ impl moved_app::Dependencies for RocksDbDependencies {
     }
 
     fn state_queries(&self, genesis_config: &GenesisConfig) -> Self::StateQueries {
-        moved_storage_rocksdb::RocksDbStateQueries::new(
-            db(),
+        EthTrieStateQueries::new(
+            moved_storage_rocksdb::RocksDbStateRootIndex::new(db()),
             TRIE_DB.clone(),
             genesis_config.initial_state_root,
         )

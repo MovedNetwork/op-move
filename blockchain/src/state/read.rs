@@ -18,7 +18,7 @@ use {
     },
     moved_shared::primitives::{Address, B256, KeyHashable, ToEthAddress, U256},
     moved_state::{EthTrieResolver, IN_MEMORY_EXPECT_MSG, nodes::TreeKey},
-    std::{fmt::Debug, sync::Arc},
+    std::sync::Arc,
 };
 
 pub type ProofResponse = EIP1186AccountProofResponse;

@@ -76,6 +76,14 @@ pub enum UserError {
     L2ContractCallFailure,
     #[error("EVM contract creation failure")]
     EvmContractCreationFailure,
+    #[error("Invalid block height requested")]
+    InvalidBlockHeight,
+    #[error("Invalid block count requested")]
+    InvalidBlockCount,
+    #[error("Fee history reward percentiles were malformed")]
+    InvalidRewardPercentiles,
+    #[error("Fee history reward percentiles vector was too long")]
+    RewardPercentilesTooLong,
 }
 
 /// The error caused by invalid transaction input parameter.

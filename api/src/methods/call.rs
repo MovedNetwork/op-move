@@ -43,7 +43,7 @@ mod tests {
     fn test_parse_params(block: &str) {
         let request = serde_json::json!({
             "jsonrpc": "2.0",
-            "method": "eth_estimateGas",
+            "method": "eth_call",
             "params": [
                 {
                     "from": "0x0000000000000000000000000000000000000001",

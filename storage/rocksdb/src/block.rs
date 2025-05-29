@@ -3,12 +3,12 @@ use {
         generic::{FromKey, FromValue, ToKey, ToValue},
         transaction,
     },
-    moved_blockchain::{
+    rocksdb::{AsColumnFamilyRef, DB as RocksDb, IteratorMode, WriteBatchWithTransaction},
+    umi_blockchain::{
         block::{BlockQueries, BlockRepository, BlockResponse, ExtendedBlock},
         transaction::ExtendedTransaction,
     },
-    moved_shared::primitives::B256,
-    rocksdb::{AsColumnFamilyRef, DB as RocksDb, IteratorMode, WriteBatchWithTransaction},
+    umi_shared::primitives::B256,
 };
 
 pub const BLOCK_COLUMN_FAMILY: &str = "block";

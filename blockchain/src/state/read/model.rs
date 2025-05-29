@@ -7,14 +7,14 @@ use {
     move_core_types::account_address::AccountAddress,
     move_table_extension::TableResolver,
     move_vm_types::resolver::MoveResolver,
-    moved_evm_ext::{
+    std::error,
+    umi_evm_ext::{
         ResolverBackedDB,
         state::{self, StorageTrieRepository},
     },
-    moved_execution::{quick_get_eth_balance, quick_get_nonce},
-    moved_shared::primitives::{Address, B256, KeyHashable, U256},
-    moved_state::nodes::TreeKey,
-    std::error,
+    umi_execution::{quick_get_eth_balance, quick_get_nonce},
+    umi_shared::primitives::{Address, B256, KeyHashable, U256},
+    umi_state::nodes::TreeKey,
 };
 
 pub type ProofResponse = EIP1186AccountProofResponse;

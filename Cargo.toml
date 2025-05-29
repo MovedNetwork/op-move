@@ -66,18 +66,18 @@ move-table-extension = { git = "https://github.com/aptos-labs/aptos-core", tag =
 move-vm-runtime = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.27.2" }
 move-vm-test-utils = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.27.2", features = ["table-extension"] }
 move-vm-types = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.27.2" }
-moved-api = { path = "api" }
-moved-app = { path = "app" }
-moved-blockchain = { path = "blockchain" }
-moved-evm-ext = { path = "evm-ext" }
-moved-execution = { path = "execution" }
-moved-genesis = { path = "genesis" }
-moved-genesis-image = { path = "genesis-image" }
-moved-shared = { path = "shared" }
-moved-state = { path = "state" }
-moved-storage-rocksdb = { path = "storage/rocksdb" }
-moved-storage-heed = { path = "storage/heed" }
-moved-trie = { path = "trie" }
+umi-api = { path = "api" }
+umi-app = { path = "app" }
+umi-blockchain = { path = "blockchain" }
+umi-evm-ext = { path = "evm-ext" }
+umi-execution = { path = "execution" }
+umi-genesis = { path = "genesis" }
+umi-genesis-image = { path = "genesis-image" }
+umi-shared = { path = "shared" }
+umi-state = { path = "state" }
+umi-storage-rocksdb = { path = "storage/rocksdb" }
+umi-storage-heed = { path = "storage/heed" }
+umi-trie = { path = "trie" }
 once_cell = "1.19"
 op-alloy = { version = "0.12", features = ["full", "std", "k256", "serde"] }
 openssl = "0.10"
@@ -105,4 +105,4 @@ merlin = { git = "https://github.com/aptos-labs/merlin" }
 x25519-dalek = { git = "https://github.com/aptos-labs/x25519-dalek", branch = "zeroize_v1" }
 
 [patch."https://github.com/aptos-labs/aptos-core"]
-aptos-metrics-core = { git = "https://github.com/MovedNetwork/aptos-metrics-core.git" }
+aptos-metrics-core = { git = "https://github.com/UmiNetwork/aptos-metrics-core.git" }

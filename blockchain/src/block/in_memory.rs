@@ -1,7 +1,7 @@
 use {
     crate::{block::ExtendedBlock, payload::PayloadId},
-    moved_shared::primitives::B256,
     std::sync::Arc,
+    umi_shared::primitives::B256,
 };
 
 pub type WriteHashes = evmap::WriteHandle<B256, Arc<ExtendedBlock>>;

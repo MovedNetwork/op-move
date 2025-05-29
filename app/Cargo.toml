@@ -1,14 +1,14 @@
 [package]
-name = "moved-app"
-description = "Moved application layer for orchestration logic"
+name = "umi-app"
+description = "Umi application layer for orchestration logic"
 version.workspace = true
 edition.workspace = true
 
 [features]
 default = []
 test-doubles = [
-    "moved-blockchain/test-doubles",
-    "moved-execution/test-doubles",
+    "umi-blockchain/test-doubles",
+    "umi-execution/test-doubles",
 ]
 
 [dependencies]
@@ -17,19 +17,19 @@ alloy-trie.workspace = true
 move-core-types.workspace = true
 move-vm-runtime.workspace = true
 move-vm-types.workspace = true
-moved-blockchain.workspace = true
-moved-evm-ext.workspace = true
-moved-execution.workspace = true
-moved-genesis.workspace = true
-moved-shared.workspace = true
-moved-state.workspace = true
+umi-blockchain.workspace = true
+umi-evm-ext.workspace = true
+umi-execution.workspace = true
+umi-genesis.workspace = true
+umi-shared.workspace = true
+umi-state.workspace = true
 op-alloy.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]
-moved-execution.features = ["test-doubles"]
-moved-execution.workspace = true
-moved-blockchain.features = ["test-doubles"]
-moved-blockchain.workspace = true
-moved-genesis-image.workspace = true
+umi-execution.features = ["test-doubles"]
+umi-execution.workspace = true
+umi-blockchain.features = ["test-doubles"]
+umi-blockchain.workspace = true
+umi-genesis-image.workspace = true
 test-case.workspace = true

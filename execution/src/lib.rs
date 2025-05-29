@@ -1,9 +1,9 @@
 pub use {
     alloy::primitives::U256,
-    eth_token::{BaseTokenAccounts, MovedBaseTokenAccounts, mint_eth, quick_get_eth_balance},
+    eth_token::{BaseTokenAccounts, UmiBaseTokenAccounts, mint_eth, quick_get_eth_balance},
     gas::{
-        CreateEcotoneL1GasFee, CreateL1GasFee, CreateL2GasFee, CreateMovedL2GasFee, EcotoneGasFee,
-        L1GasFee, L1GasFeeInput, L2GasFee, L2GasFeeInput, MovedGasFee,
+        CreateEcotoneL1GasFee, CreateL1GasFee, CreateL2GasFee, CreateUmiL2GasFee, EcotoneGasFee,
+        L1GasFee, L1GasFeeInput, L2GasFee, L2GasFeeInput, UmiGasFee,
     },
     nonces::{check_nonce, quick_get_nonce},
 };
@@ -26,19 +26,19 @@ use {
         move_vm::MoveVM, native_extensions::NativeContextExtensions, session::Session,
     },
     move_vm_types::resolver::MoveResolver,
-    moved_evm_ext::{
+    op_alloy::consensus::TxDeposit,
+    session_id::SessionId,
+    std::ops::Deref,
+    transaction::{NormalizedEthTransaction, TransactionExecutionOutcome},
+    umi_evm_ext::{
         HeaderForExecution,
         events::{
             EVM_LOGS_EVENT_LAYOUT, EVM_LOGS_EVENT_TAG, EthTransferLog, evm_logs_event_to_log,
         },
         state::{BlockHashLookup, StorageTrieRepository},
     },
-    moved_genesis::config::GenesisConfig,
-    moved_shared::primitives::{B256, ToEthAddress},
-    op_alloy::consensus::TxDeposit,
-    session_id::SessionId,
-    std::ops::Deref,
-    transaction::{NormalizedEthTransaction, TransactionExecutionOutcome},
+    umi_genesis::config::GenesisConfig,
+    umi_shared::primitives::{B256, ToEthAddress},
 };
 
 pub mod session_id;
@@ -97,7 +97,7 @@ where
     native_extensions.add(NativeTableContext::new(txn_hash, state));
 
     // EVM native extension
-    native_extensions.add(moved_evm_ext::NativeEVMContext::new(
+    native_extensions.add(umi_evm_ext::NativeEVMContext::new(
         state,
         storage_trie,
         eth_transfers_log,
@@ -164,7 +164,7 @@ pub fn execute_transaction<
     H: BlockHashLookup,
 >(
     input: TransactionExecutionInput<S, ST, F, B, H>,
-) -> moved_shared::error::Result<TransactionExecutionOutcome> {
+) -> umi_shared::error::Result<TransactionExecutionOutcome> {
     match input {
         TransactionExecutionInput::Deposit(input) => execute_deposited_transaction(input),
         TransactionExecutionInput::Canonical(input) => execute_canonical_transaction(input),

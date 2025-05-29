@@ -7,8 +7,8 @@ use {
         language_storage::StructTag,
         value::{MoveStructLayout, MoveTypeLayout, MoveValue},
     },
-    moved_shared::primitives::ToEthAddress,
     std::{cell::RefCell, sync::LazyLock},
+    umi_shared::primitives::ToEthAddress,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]

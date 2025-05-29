@@ -8,15 +8,15 @@ use {
         },
         rpc::types::{FeeHistory, TransactionRequest},
     },
-    moved_blockchain::{
+    umi_blockchain::{
         block::{BaseGasFee, BlockQueries, BlockResponse, Eip1559GasFee},
         payload::{PayloadId, PayloadQueries, PayloadResponse},
         receipt::{ReceiptQueries, TransactionReceipt},
         state::{ProofResponse, StateQueries},
         transaction::{TransactionQueries, TransactionResponse},
     },
-    moved_execution::simulate::{call_transaction, simulate_transaction},
-    moved_shared::{
+    umi_execution::simulate::{call_transaction, simulate_transaction},
+    umi_shared::{
         error::{Error, Result, UserError},
         primitives::{Address, B256, ToMoveAddress, U256},
     },

@@ -11,24 +11,24 @@ use {
         primitives::{Bloom, keccak256},
         rlp::{Decodable, Encodable},
     },
-    moved_blockchain::{
+    op_alloy::consensus::OpTxEnvelope,
+    umi_blockchain::{
         block::{BaseGasFee, Block, BlockHash, BlockRepository, ExtendedBlock, Header},
         payload::{PayloadId, PayloadQueries},
         receipt::{ExtendedReceipt, ReceiptRepository},
         transaction::{ExtendedTransaction, TransactionRepository},
     },
-    moved_evm_ext::{HeaderForExecution, state::StorageTrieRepository},
-    moved_execution::{
+    umi_evm_ext::{HeaderForExecution, state::StorageTrieRepository},
+    umi_execution::{
         CanonicalExecutionInput, CreateL1GasFee, CreateL2GasFee, DepositExecutionInput, L1GasFee,
         L1GasFeeInput, L2GasFeeInput, LogsBloom, execute_transaction,
         transaction::{NormalizedExtendedTxEnvelope, WrapReceipt},
     },
-    moved_shared::{
+    umi_shared::{
         error::Error::{InvalidTransaction, InvariantViolation, User},
         primitives::{B256, ToEthAddress, U64, U256},
     },
-    moved_state::State,
-    op_alloy::consensus::OpTxEnvelope,
+    umi_state::State,
 };
 
 impl<D: Dependencies> Application<D> {

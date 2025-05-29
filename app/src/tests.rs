@@ -16,10 +16,12 @@ use {
         module_traversal::{TraversalContext, TraversalStorage},
     },
     move_vm_types::gas::UnmeteredGasMeter,
-    moved_blockchain::{
+    std::sync::Arc,
+    test_case::test_case,
+    umi_blockchain::{
         block::{
             Block, BlockHash, BlockRepository, Eip1559GasFee, Header, InMemoryBlockQueries,
-            InMemoryBlockRepository, MovedBlockHash,
+            InMemoryBlockRepository, UmiBlockHash,
         },
         in_memory::shared_memory,
         payload::InMemoryPayloadQueries,
@@ -27,19 +29,17 @@ use {
         state::{BlockHeight, InMemoryStateQueries, MockStateQueries, StateQueries},
         transaction::{InMemoryTransactionQueries, InMemoryTransactionRepository},
     },
-    moved_evm_ext::state::{InMemoryStorageTrieRepository, StorageTrieRepository},
-    moved_execution::{MovedBaseTokenAccounts, create_vm_session, session_id::SessionId},
-    moved_genesis::{
-        CreateMoveVm, MovedVm,
+    umi_evm_ext::state::{InMemoryStorageTrieRepository, StorageTrieRepository},
+    umi_execution::{UmiBaseTokenAccounts, create_vm_session, session_id::SessionId},
+    umi_genesis::{
+        CreateMoveVm, UmiVm,
         config::{CHAIN_ID, GenesisConfig},
     },
-    moved_shared::{
+    umi_shared::{
         error::{Error, UserError},
         primitives::{Address, B256, ToMoveAddress, U64, U256},
     },
-    moved_state::{InMemoryState, InMemoryTrieDb, ResolverBasedModuleBytesStorage, State},
-    std::sync::Arc,
-    test_case::test_case,
+    umi_state::{InMemoryState, InMemoryTrieDb, ResolverBasedModuleBytesStorage, State},
 };
 
 /// The address corresponding to this private key is 0x8fd379246834eac74B8419FfdA202CF8051F7A03
@@ -88,8 +88,8 @@ fn create_app_with_given_queries<SQ: StateQueries + Clone + Send + Sync + 'stati
 
     let mut state = InMemoryState::default();
     let mut evm_storage = InMemoryStorageTrieRepository::new();
-    let (changes, tables, evm_storage_changes) = moved_genesis_image::load();
-    moved_genesis::apply(
+    let (changes, tables, evm_storage_changes) = umi_genesis_image::load();
+    umi_genesis::apply(
         changes,
         tables,
         evm_storage_changes,
@@ -103,7 +103,7 @@ fn create_app_with_given_queries<SQ: StateQueries + Clone + Send + Sync + 'stati
     (
         ApplicationReader {
             genesis_config: genesis_config.clone(),
-            base_token: MovedBaseTokenAccounts::new(AccountAddress::ONE),
+            base_token: UmiBaseTokenAccounts::new(AccountAddress::ONE),
             block_queries: InMemoryBlockQueries,
             payload_queries: InMemoryPayloadQueries::new(),
             receipt_queries: InMemoryReceiptQueries::new(),
@@ -116,8 +116,8 @@ fn create_app_with_given_queries<SQ: StateQueries + Clone + Send + Sync + 'stati
         Application {
             mem_pool: Default::default(),
             genesis_config,
-            base_token: MovedBaseTokenAccounts::new(AccountAddress::ONE),
-            block_hash: MovedBlockHash,
+            base_token: UmiBaseTokenAccounts::new(AccountAddress::ONE),
+            block_hash: UmiBlockHash,
             block_queries: InMemoryBlockQueries,
             block_repository: repository,
             on_payload: CommandActor::on_payload_noop(),
@@ -148,10 +148,10 @@ fn mint_eth(
     addr: AccountAddress,
     amount: U256,
 ) -> ChangeSet {
-    let moved_vm = MovedVm::new(&Default::default());
+    let umi_vm = UmiVm::new(&Default::default());
     let module_bytes_storage = ResolverBasedModuleBytesStorage::new(state.resolver());
-    let code_storage = module_bytes_storage.as_unsync_code_storage(&moved_vm);
-    let vm = moved_vm.create_move_vm().unwrap();
+    let code_storage = module_bytes_storage.as_unsync_code_storage(&umi_vm);
+    let vm = umi_vm.create_move_vm().unwrap();
     let mut session = create_vm_session(
         &vm,
         state.resolver(),
@@ -164,7 +164,7 @@ fn mint_eth(
     let mut traversal_context = TraversalContext::new(&traversal_storage);
     let mut gas_meter = UnmeteredGasMeter;
 
-    moved_execution::mint_eth(
+    umi_execution::mint_eth(
         &addr,
         amount,
         &mut session,
@@ -206,7 +206,7 @@ fn create_app_with_fake_queries(
     let evm_storage = InMemoryStorageTrieRepository::new();
     let trie_db = Arc::new(InMemoryTrieDb::empty());
     let mut state = InMemoryState::empty(trie_db.clone());
-    let (genesis_changes, table_changes, evm_storage_changes) = moved_genesis_image::load();
+    let (genesis_changes, table_changes, evm_storage_changes) = umi_genesis_image::load();
 
     state
         .apply_with_tables(genesis_changes.clone(), table_changes)
@@ -226,7 +226,7 @@ fn create_app_with_fake_queries(
     (
         ApplicationReader {
             genesis_config: genesis_config.clone(),
-            base_token: MovedBaseTokenAccounts::new(AccountAddress::ONE),
+            base_token: UmiBaseTokenAccounts::new(AccountAddress::ONE),
             block_queries: InMemoryBlockQueries,
             payload_queries: InMemoryPayloadQueries::new(),
             receipt_queries: InMemoryReceiptQueries::new(),
@@ -239,8 +239,8 @@ fn create_app_with_fake_queries(
         Application::<TestDependencies> {
             mem_pool: Default::default(),
             genesis_config,
-            base_token: MovedBaseTokenAccounts::new(AccountAddress::ONE),
-            block_hash: MovedBlockHash,
+            base_token: UmiBaseTokenAccounts::new(AccountAddress::ONE),
+            block_hash: UmiBlockHash,
             block_queries: InMemoryBlockQueries,
             block_repository: repository,
             on_payload: CommandActor::on_payload_in_memory(),
@@ -312,7 +312,7 @@ fn test_build_block_hash() {
     .with_payload_attributes(payload_attributes)
     .with_execution_outcome(execution_outcome);
 
-    let hash = MovedBlockHash.block_hash(&header);
+    let hash = UmiBlockHash.block_hash(&header);
     assert_eq!(
         hash,
         B256::new(hex!(

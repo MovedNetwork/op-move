@@ -34,10 +34,10 @@ use {
     },
     move_vm_runtime::module_traversal::{TraversalContext, TraversalStorage},
     move_vm_types::{gas::UnmeteredGasMeter, resolver::ModuleResolver},
-    moved_shared::primitives::{B256, ToMoveAddress, ToMoveU256, U256},
-    moved_state::{InMemoryState, State},
     serde::de::DeserializeOwned,
     std::path::Path,
+    umi_shared::primitives::{B256, ToMoveAddress, ToMoveU256, U256},
+    umi_state::{InMemoryState, State},
 };
 
 mod counter;

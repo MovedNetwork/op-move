@@ -10,18 +10,18 @@ use {
     move_model::metadata::LanguageVersion,
     move_vm_runtime::AsUnsyncCodeStorage,
     move_vm_types::resolver::ResourceResolver,
-    moved_evm_ext::{
-        EVM_NATIVE_ADDRESS, EvmNativeOutcome, extract_evm_changes, extract_evm_result,
-        state::InMemoryStorageTrieRepository,
-    },
-    moved_genesis::{CreateMoveVm, MovedVm, config::CHAIN_ID},
-    moved_state::ResolverBasedModuleBytesStorage,
     op_alloy::consensus::OpTxEnvelope,
     regex::Regex,
     std::{
         collections::{BTreeMap, BTreeSet},
         fs::read_to_string,
     },
+    umi_evm_ext::{
+        EVM_NATIVE_ADDRESS, EvmNativeOutcome, extract_evm_changes, extract_evm_result,
+        state::InMemoryStorageTrieRepository,
+    },
+    umi_genesis::{CreateMoveVm, UmiVm, config::CHAIN_ID},
+    umi_state::ResolverBasedModuleBytesStorage,
 };
 
 /// Represents the base token state for a test transaction
@@ -29,8 +29,8 @@ use {
 pub enum TestBaseToken {
     /// No base token state
     Empty,
-    /// Contains moved base token accounts information
-    Moved(MovedBaseTokenAccounts),
+    /// Contains umi base token accounts information
+    Umi(UmiBaseTokenAccounts),
 }
 
 /// Represents a test transaction with associated metadata
@@ -72,18 +72,18 @@ impl TestTransaction {
     ///
     /// # Arguments
     /// * `l1_cost` - The L1 cost to set
-    /// * `base_token` - The moved base token accounts to set
+    /// * `base_token` - The umi base token accounts to set
     /// * `l2_gas_limit` - The L2 gas limit to set
     /// * `l2_gas_price` - The L2 gas price to set
     pub fn with_cost_and_token(
         &mut self,
         l1_cost: u64,
-        base_token: MovedBaseTokenAccounts,
+        base_token: UmiBaseTokenAccounts,
         l2_gas_limit: u64,
         l2_gas_price: U256,
     ) {
         self.l1_cost = l1_cost;
-        self.base_token = TestBaseToken::Moved(base_token);
+        self.base_token = TestBaseToken::Umi(base_token);
         self.l2_gas_limit = l2_gas_limit;
         self.l2_gas_price = l2_gas_price;
     }
@@ -109,8 +109,8 @@ impl TestContext {
         let genesis_config = GenesisConfig::default();
         let mut state = InMemoryState::default();
         let mut evm_storage = InMemoryStorageTrieRepository::new();
-        let (changes, tables, evm_storage_changes) = moved_genesis_image::load();
-        moved_genesis::apply(
+        let (changes, tables, evm_storage_changes) = umi_genesis_image::load();
+        umi_genesis::apply(
             changes,
             tables,
             evm_storage_changes,
@@ -195,7 +195,7 @@ impl TestContext {
         l1_cost: u64,
         l2_gas_limit: u64,
         l2_gas_price: U256,
-    ) -> moved_shared::error::Result<TransactionExecutionOutcome> {
+    ) -> umi_shared::error::Result<TransactionExecutionOutcome> {
         let (tx_hash, tx) = create_transaction_with_value(
             &mut self.signer,
             TxKind::Call(to),
@@ -205,13 +205,13 @@ impl TestContext {
 
         // Default base token is ETH token in address 0x1
         let treasury_address = AccountAddress::ONE;
-        let base_token = MovedBaseTokenAccounts::new(treasury_address);
+        let base_token = UmiBaseTokenAccounts::new(treasury_address);
         let mut transaction = TestTransaction::new(tx, tx_hash);
         transaction.with_cost_and_token(l1_cost, base_token, l2_gas_limit, l2_gas_price);
         let outcome = self.execute_tx(&transaction)?;
         self.state.apply(outcome.changes.move_vm.clone()).unwrap();
         self.evm_storage.apply(outcome.changes.evm.clone()).unwrap();
-        let l2_gas_fee = CreateMovedL2GasFee.with_default_gas_fee_multiplier();
+        let l2_gas_fee = CreateUmiL2GasFee.with_default_gas_fee_multiplier();
         let used_gas_input = L2GasFeeInput::new(outcome.gas_used, outcome.l2_price);
         let l2_cost = l2_gas_fee.l2_fee(used_gas_input);
 
@@ -265,7 +265,7 @@ impl TestContext {
         module_id: &ModuleId,
         function: &str,
         args: impl IntoIterator<Item = &'a MoveValue>,
-    ) -> moved_shared::error::Error {
+    ) -> umi_shared::error::Error {
         let args = args
             .into_iter()
             .map(|arg| bcs::to_bytes(arg).unwrap())
@@ -288,8 +288,8 @@ impl TestContext {
     pub(crate) fn execute_tx(
         &mut self,
         tx: &TestTransaction,
-    ) -> moved_shared::error::Result<TransactionExecutionOutcome> {
-        let l2_fee = CreateMovedL2GasFee.with_default_gas_fee_multiplier();
+    ) -> umi_shared::error::Result<TransactionExecutionOutcome> {
+        let l2_fee = CreateUmiL2GasFee.with_default_gas_fee_multiplier();
         let l2_gas_input = L2GasFeeInput::new(tx.l2_gas_limit, tx.l2_gas_price);
         let tx_hash = tx.tx_hash;
         let l1_cost = U256::from(tx.l1_cost);
@@ -321,7 +321,7 @@ impl TestContext {
                 }
                 .into(),
             }),
-            TestBaseToken::Moved(moved_base_token) => execute_transaction(match &tx.tx {
+            TestBaseToken::Umi(umi_base_token) => execute_transaction(match &tx.tx {
                 NormalizedExtendedTxEnvelope::Canonical(tx) => CanonicalExecutionInput {
                     tx,
                     tx_hash: &tx_hash,
@@ -331,7 +331,7 @@ impl TestContext {
                     l1_cost,
                     l2_fee,
                     l2_input: l2_gas_input,
-                    base_token: moved_base_token,
+                    base_token: umi_base_token,
                     block_header: Default::default(),
                     block_hash_lookup: &(),
                 }
@@ -455,10 +455,10 @@ impl TestContext {
         module_name: &str,
         fn_name: &str,
     ) -> (EvmNativeOutcome, ChangeSet, NativeContextExtensions<'a>) {
-        let moved_vm = MovedVm::new(&Default::default());
+        let umi_vm = UmiVm::new(&Default::default());
         let module_bytes_storage = ResolverBasedModuleBytesStorage::new(self.state.resolver());
-        let code_storage = module_bytes_storage.as_unsync_code_storage(&moved_vm);
-        let vm = moved_vm.create_move_vm().unwrap();
+        let code_storage = module_bytes_storage.as_unsync_code_storage(&umi_vm);
+        let vm = umi_vm.create_move_vm().unwrap();
         let session_id = SessionId::default();
         let mut session = create_vm_session(
             &vm,
@@ -502,10 +502,10 @@ impl TestContext {
         module_name: &str,
         fn_name: &str,
     ) -> VMError {
-        let moved_vm = MovedVm::new(&Default::default());
+        let umi_vm = UmiVm::new(&Default::default());
         let module_bytes_storage = ResolverBasedModuleBytesStorage::new(self.state.resolver());
-        let code_storage = module_bytes_storage.as_unsync_code_storage(&moved_vm);
-        let vm = moved_vm.create_move_vm().unwrap();
+        let code_storage = module_bytes_storage.as_unsync_code_storage(&umi_vm);
+        let vm = umi_vm.create_move_vm().unwrap();
         let session_id = SessionId::default();
         let mut session = create_vm_session(
             &vm,

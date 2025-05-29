@@ -1,5 +1,5 @@
 import '@nomicfoundation/hardhat-toolbox';
-import 'hardhat-moved';
+import 'hardhat-umi';
 import { HardhatUserConfig } from 'hardhat/config';
 
 require('dotenv').config();

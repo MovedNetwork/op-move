@@ -2,7 +2,7 @@ use {
     super::*,
     alloy::{network::AnyNetwork, primitives::U256, providers, sol, sol_types::SolValue},
     move_binary_format::errors::VMError,
-    moved_evm_ext::EvmNativeOutcome,
+    umi_evm_ext::EvmNativeOutcome,
 };
 
 #[test]

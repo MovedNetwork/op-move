@@ -1,4 +1,4 @@
-use {moved_storage_rocksdb::COLUMN_FAMILIES, rocksdb::Options};
+use {rocksdb::Options, umi_storage_rocksdb::COLUMN_FAMILIES};
 
 pub fn create_db() -> rocksdb::DB {
     let path = concat!(

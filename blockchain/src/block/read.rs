@@ -1,8 +1,8 @@
 use {
     crate::{block::write::ExtendedBlock, transaction::ExtendedTransaction},
     alloy::{eips::eip4895::Withdrawals, network::primitives::BlockTransactions},
-    moved_shared::primitives::B256,
     std::fmt::Debug,
+    umi_shared::primitives::B256,
 };
 
 pub trait BlockQueries: Debug {
@@ -75,8 +75,8 @@ pub mod in_memory {
             in_memory::SharedMemoryReader,
             transaction::ReadTransactionMemory,
         },
-        moved_shared::primitives::B256,
         std::convert::Infallible,
+        umi_shared::primitives::B256,
     };
 
     /// Block query implementation that works with in memory backing store [`BlockMemory`].

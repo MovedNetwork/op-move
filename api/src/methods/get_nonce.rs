@@ -1,7 +1,7 @@
 use {
     crate::{json_utils, jsonrpc::JsonRpcError},
     alloy::{eips::BlockNumberOrTag, primitives::Address},
-    moved_app::{ApplicationReader, Dependencies},
+    umi_app::{ApplicationReader, Dependencies},
 };
 
 pub async fn execute(
@@ -48,8 +48,8 @@ fn parse_params(request: serde_json::Value) -> Result<(Address, BlockNumberOrTag
 mod tests {
     use {
         super::*, crate::methods::tests::create_app_with_mock_state_queries, alloy::hex,
-        move_core_types::account_address::AccountAddress, moved_shared::primitives::U64,
-        std::str::FromStr, test_case::test_case,
+        move_core_types::account_address::AccountAddress, std::str::FromStr, test_case::test_case,
+        umi_shared::primitives::U64,
     };
 
     #[test_case("0x1")]

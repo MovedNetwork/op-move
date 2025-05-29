@@ -1,6 +1,6 @@
 //! This module is concerned about calculating fees charged for gas usage.
 
-use {moved_shared::primitives::U256, std::cmp::Ordering};
+use {std::cmp::Ordering, umi_shared::primitives::U256};
 
 /// Determines amount of fees charged per gas used in transaction execution.
 ///

@@ -1,13 +1,13 @@
 use {
     alloy::primitives::{Address, B256},
     move_core_types::account_address::AccountAddress,
-    moved_execution::L1GasFeeInput,
-    moved_shared::{
+    op_alloy::consensus::OpTxEnvelope,
+    std::collections::{BTreeMap, HashMap},
+    umi_execution::L1GasFeeInput,
+    umi_shared::{
         error::{Error, InvalidTransactionCause},
         primitives::ToMoveAddress,
     },
-    op_alloy::consensus::OpTxEnvelope,
-    std::collections::{BTreeMap, HashMap},
 };
 
 type Nonce = u64;
@@ -81,7 +81,7 @@ impl Mempool {
             )),
             // External API only allows canonical transactions in
             OpTxEnvelope::Deposit(_) => Err(Error::InvariantViolation(
-                moved_shared::error::InvariantViolation::MempoolTransaction,
+                umi_shared::error::InvariantViolation::MempoolTransaction,
             )),
         }
     }

@@ -2,8 +2,6 @@ use {
     alloy::{primitives::keccak256, rlp},
     auto_impl::auto_impl,
     eth_trie::{DB, EthTrie, MemDBError, MemoryDB, RootWithTrieDiff, Trie, TrieError},
-    moved_shared::primitives::{Address, B256, U256},
-    moved_trie::StagingEthTrieDb,
     std::{
         collections::HashMap,
         fmt::Debug,
@@ -12,6 +10,8 @@ use {
         sync::{Arc, RwLock},
     },
     thiserror::Error,
+    umi_shared::primitives::{Address, B256, U256},
+    umi_trie::StagingEthTrieDb,
 };
 
 /// [`result::Result`] with its `Err` variant set to [`Error`].

@@ -1,12 +1,12 @@
 use {
     crate::tests::test_context::{handle_request, TestContext},
     alloy::hex,
-    moved_api::schema::{
+    umi_api::schema::{
         BlobsBundleV1, ExecutionPayloadV3, ForkchoiceUpdatedResponseV1, GetPayloadResponseV3,
         PayloadId, PayloadStatusV1, Status,
     },
-    moved_execution::U256,
-    moved_shared::primitives::{Address, Bytes, B2048, B256, U64},
+    umi_execution::U256,
+    umi_shared::primitives::{Address, Bytes, B2048, B256, U64},
 };
 
 #[tokio::test]

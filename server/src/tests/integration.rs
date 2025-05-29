@@ -16,8 +16,6 @@ use {
     aptos_types::transaction::{EntryFunction, Module},
     move_binary_format::CompiledModule,
     move_core_types::{ident_str, language_storage::ModuleId, value::MoveValue},
-    moved_execution::transaction::{ScriptOrDeployment, TransactionData},
-    moved_shared::primitives::ToMoveAddress,
     openssl::rand::rand_bytes,
     serde_json::Value,
     std::{
@@ -29,6 +27,8 @@ use {
         time::{Duration, Instant},
     },
     tokio::{fs, runtime::Runtime},
+    umi_execution::transaction::{ScriptOrDeployment, TransactionData},
+    umi_shared::primitives::ToMoveAddress,
 };
 
 const GETH_START_IN_SECS: u64 = 1; // 1 seconds to kick off L1 geth in dev mode
@@ -161,7 +161,7 @@ async fn check_factory_deployer() -> Result<()> {
 }
 
 fn generate_config() {
-    let genesis_file = "optimism/packages/contracts-bedrock/deploy-config/moved.json";
+    let genesis_file = "optimism/packages/contracts-bedrock/deploy-config/umi.json";
     let output = Command::new("./config.sh")
         .current_dir("src/tests")
         .env("DEPLOY_CONFIG_PATH", genesis_file)
@@ -176,8 +176,8 @@ fn deploy_l1_contracts() {
     rand_bytes(&mut salt).unwrap();
     let child_process = Command::new("forge")
         .current_dir("src/tests/optimism/packages/contracts-bedrock")
-        .env("DEPLOYMENT_CONTEXT", "moved")
-        .env("DEPLOY_CONFIG_PATH", "deploy-config/moved.json")
+        .env("DEPLOYMENT_CONTEXT", "umi")
+        .env("DEPLOY_CONFIG_PATH", "deploy-config/umi.json")
         .env("IMPL_SALT", hex::encode(salt))
         .args([
             "script",
@@ -202,7 +202,7 @@ fn state_dump() {
         // Include contract address path in env var only for the genesis script.
         // Globally setting this will make the L1 contracts deployment fail.
         .env("CONTRACT_ADDRESSES_PATH", "deployments/1337-deploy.json")
-        .env("DEPLOY_CONFIG_PATH", "deploy-config/moved.json")
+        .env("DEPLOY_CONFIG_PATH", "deploy-config/umi.json")
         .args([
             "script",
             "scripts/L2Genesis.s.sol:L2Genesis",
@@ -222,7 +222,7 @@ fn generate_genesis() {
             "genesis",
             "l2",
             "--deploy-config",
-            "deploy-config/moved.json",
+            "deploy-config/umi.json",
             "--l1-deployments",
             "deployments/1337-deploy.json",
             "--l2-allocs",
@@ -578,7 +578,7 @@ fn cleanup_files() {
     std::fs::remove_dir_all(format!("{}/broadcast", base)).ok();
     std::fs::remove_dir_all(format!("{}/cache", base)).ok();
     std::fs::remove_dir_all(format!("{}/forge-artifacts", base)).ok();
-    std::fs::remove_file(format!("{}/deploy-config/moved.json", base)).ok();
+    std::fs::remove_file(format!("{}/deploy-config/umi.json", base)).ok();
     std::fs::remove_file(format!("{}/deployments/1337-deploy.json", base)).ok();
     std::fs::remove_file(format!("{}/deployments/31337-deploy.json", base)).ok();
     std::fs::remove_file(format!("{}/state-dump-42069.json", base)).ok();

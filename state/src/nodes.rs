@@ -1,7 +1,7 @@
 use {
     aptos_types::state_store::{state_key::StateKey, state_value::StateValue},
-    moved_shared::primitives::{Address, KeyHash, KeyHashable},
     std::borrow::Cow,
+    umi_shared::primitives::{Address, KeyHash, KeyHashable},
 };
 
 /// Type representing the keys used in the state trie.

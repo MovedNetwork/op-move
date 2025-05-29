@@ -12,7 +12,7 @@ JWT_FILE="${WORKDIR}/deployments/jwt.txt"
 L1_DEPLOYMENT="${SHARED}/1337-deploy.json"
 L1_RPC_URL="http://geth:58138"
 L2_ALLOCS="${WORKDIR}/state-dump-42069.json"
-DEPLOY_CONFIG="${WORKDIR}/deploy-config/moved.json"
+DEPLOY_CONFIG="${WORKDIR}/deploy-config/umi.json"
 DATA_DIR="${WORKDIR}/../../datadir"
 TIMEOUT_SECS=1500
 

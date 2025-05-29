@@ -1,6 +1,6 @@
 use {
     crate::{json_utils::parse_params_2, jsonrpc::JsonRpcError},
-    moved_app::{ApplicationReader, Dependencies},
+    umi_app::{ApplicationReader, Dependencies},
 };
 
 pub async fn execute(
@@ -24,9 +24,9 @@ mod tests {
         crate::methods::tests::create_app_with_mock_state_queries,
         alloy::{eips::BlockNumberOrTag, hex},
         move_core_types::account_address::AccountAddress,
-        moved_shared::primitives::{Address, U64},
         std::str::FromStr,
         test_case::test_case,
+        umi_shared::primitives::{Address, U64},
     };
 
     #[test_case("0x1")]

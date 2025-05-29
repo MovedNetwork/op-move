@@ -17,7 +17,6 @@ use {
     move_core_types::{account_address::AccountAddress, ident_str, identifier::IdentStr},
     move_vm_runtime::native_functions::NativeFunctionTable,
     move_vm_types::{loaded_data::runtime_types::Type, values::Value},
-    moved_shared::primitives::{ToEthAddress, ToMoveAddress, ToU256},
     revm::{
         Database, ExecuteEvm, Journal, JournalEntry, MainBuilder, MainContext,
         context::{BlockEnv, CfgEnv, Context, Evm, TxEnv, result::ResultAndState},
@@ -32,6 +31,7 @@ use {
     },
     smallvec::SmallVec,
     std::collections::VecDeque,
+    umi_shared::primitives::{ToEthAddress, ToMoveAddress, ToU256},
 };
 
 pub const EVM_DEPOSIT_FN_NAME: &IdentStr = ident_str!("system_deposit_evm_call");

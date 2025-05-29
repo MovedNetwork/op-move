@@ -28,14 +28,17 @@ pub mod tests {
             signers::local::PrivateKeySigner,
         },
         move_core_types::account_address::AccountAddress,
-        moved_app::{
+        op_alloy::consensus::{OpTxEnvelope, TxDeposit},
+        std::{convert::Infallible, sync::Arc},
+        tokio::sync::mpsc::Sender,
+        umi_app::{
             Application, ApplicationReader, Command, CommandActor, DependenciesThreadSafe, Payload,
             TestDependencies,
         },
-        moved_blockchain::{
+        umi_blockchain::{
             block::{
                 Block, BlockQueries, BlockRepository, BlockResponse, Eip1559GasFee, Header,
-                InMemoryBlockQueries, InMemoryBlockRepository, MovedBlockHash,
+                InMemoryBlockQueries, InMemoryBlockRepository, UmiBlockHash,
             },
             in_memory::shared_memory,
             payload::InMemoryPayloadQueries,
@@ -43,14 +46,11 @@ pub mod tests {
             state::{InMemoryStateQueries, MockStateQueries},
             transaction::{InMemoryTransactionQueries, InMemoryTransactionRepository},
         },
-        moved_evm_ext::state::InMemoryStorageTrieRepository,
-        moved_execution::MovedBaseTokenAccounts,
-        moved_genesis::config::{CHAIN_ID, GenesisConfig},
-        moved_shared::primitives::{Address, B256, U64, U256},
-        moved_state::{InMemoryState, InMemoryTrieDb},
-        op_alloy::consensus::{OpTxEnvelope, TxDeposit},
-        std::{convert::Infallible, sync::Arc},
-        tokio::sync::mpsc::Sender,
+        umi_evm_ext::state::InMemoryStorageTrieRepository,
+        umi_execution::UmiBaseTokenAccounts,
+        umi_genesis::config::{CHAIN_ID, GenesisConfig},
+        umi_shared::primitives::{Address, B256, U64, U256},
+        umi_state::{InMemoryState, InMemoryTrieDb},
     };
 
     /// The address corresponding to this private key is 0x8fd379246834eac74B8419FfdA202CF8051F7A03
@@ -85,8 +85,8 @@ pub mod tests {
             genesis_config.initial_state_root,
         );
         let mut evm_storage = InMemoryStorageTrieRepository::new();
-        let (changes, table_changes, evm_storage_changes) = moved_genesis_image::load();
-        moved_genesis::apply(
+        let (changes, table_changes, evm_storage_changes) = umi_genesis_image::load();
+        umi_genesis::apply(
             changes.clone(),
             table_changes,
             evm_storage_changes,
@@ -99,7 +99,7 @@ pub mod tests {
         (
             ApplicationReader {
                 genesis_config: genesis_config.clone(),
-                base_token: MovedBaseTokenAccounts::new(AccountAddress::ONE),
+                base_token: UmiBaseTokenAccounts::new(AccountAddress::ONE),
                 block_queries: InMemoryBlockQueries,
                 payload_queries: InMemoryPayloadQueries::new(),
                 receipt_queries: InMemoryReceiptQueries::new(),
@@ -113,10 +113,10 @@ pub mod tests {
                 mem_pool: Default::default(),
                 genesis_config,
                 gas_fee: Eip1559GasFee::default(),
-                base_token: MovedBaseTokenAccounts::new(AccountAddress::ONE),
+                base_token: UmiBaseTokenAccounts::new(AccountAddress::ONE),
                 l1_fee: U256::ZERO,
                 l2_fee: U256::ZERO,
-                block_hash: MovedBlockHash,
+                block_hash: UmiBlockHash,
                 block_queries: InMemoryBlockQueries,
                 block_repository: repository,
                 on_payload: CommandActor::on_payload_in_memory(),
@@ -244,7 +244,7 @@ pub mod tests {
                     _,
                     InMemoryState,
                     _,
-                    MovedBlockHash,
+                    UmiBlockHash,
                     _,
                     (),
                     _,
@@ -263,7 +263,7 @@ pub mod tests {
                 >,
             > {
                 genesis_config: GenesisConfig::default(),
-                base_token: MovedBaseTokenAccounts::new(AccountAddress::ONE),
+                base_token: UmiBaseTokenAccounts::new(AccountAddress::ONE),
                 block_queries: StubLatest(height),
                 payload_queries: (),
                 receipt_queries: (),
@@ -277,10 +277,10 @@ pub mod tests {
                 genesis_config: GenesisConfig::default(),
                 mem_pool: Default::default(),
                 gas_fee: Eip1559GasFee::default(),
-                base_token: MovedBaseTokenAccounts::new(AccountAddress::ONE),
+                base_token: UmiBaseTokenAccounts::new(AccountAddress::ONE),
                 l1_fee: U256::ZERO,
                 l2_fee: U256::ZERO,
-                block_hash: MovedBlockHash,
+                block_hash: UmiBlockHash,
                 block_queries: StubLatest(height),
                 block_repository: (),
                 on_payload: CommandActor::on_payload_noop(),

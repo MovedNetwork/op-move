@@ -1,8 +1,8 @@
 use {
     crate::{json_utils, jsonrpc::JsonRpcError},
     alloy::{consensus::transaction::TxEnvelope, rlp::Decodable},
-    moved_app::{Command, CommandQueue},
-    moved_shared::primitives::{B256, Bytes},
+    umi_app::{Command, CommandQueue},
+    umi_shared::primitives::{B256, Bytes},
 };
 
 pub async fn execute(
@@ -71,9 +71,9 @@ pub mod tests {
     #[tokio::test]
     async fn test_execute() {
         let (_reader, mut app) = create_app();
-        let (queue, state) = moved_app::create(&mut app, 10);
+        let (queue, state) = umi_app::create(&mut app, 10);
 
-        moved_app::run(state, async move {
+        umi_app::run(state, async move {
             let request = example_request();
 
             let expected_response: serde_json::Value = serde_json::from_str(

@@ -4,9 +4,9 @@ use {
         byteorder::BigEndian,
         types::{Bytes, U64},
     },
-    moved_shared::primitives::{Address, B256},
     serde::{Deserialize, Serialize},
     std::{borrow::Cow, fmt::Debug},
+    umi_shared::primitives::{Address, B256},
 };
 
 #[derive(Debug)]

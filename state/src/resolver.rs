@@ -13,7 +13,7 @@ use {
     },
     move_table_extension::{TableHandle, TableResolver},
     move_vm_types::resolver::{ModuleResolver, ResourceResolver},
-    moved_shared::primitives::KeyHashable,
+    umi_shared::primitives::KeyHashable,
 };
 
 /// This is a [`MoveResolver`] that accesses blockchain state via [`EthTrie`].

@@ -1,5 +1,5 @@
 [package]
-name = "moved-execution"
+name = "umi-execution"
 description = "Execution of smart contracts written in the Move language"
 version.workspace = true
 edition.workspace = true
@@ -24,10 +24,10 @@ move-core-types.workspace = true
 move-table-extension.workspace = true
 move-vm-runtime.workspace = true
 move-vm-types.workspace = true
-moved-evm-ext.workspace = true
-moved-genesis.workspace = true
-moved-shared.workspace = true
-moved-state.workspace = true
+umi-evm-ext.workspace = true
+umi-genesis.workspace = true
+umi-shared.workspace = true
+umi-state.workspace = true
 op-alloy.workspace = true
 regex.workspace = true
 revm.workspace = true
@@ -38,4 +38,4 @@ anyhow.workspace = true
 move-compiler.workspace = true
 move-compiler-v2.workspace = true
 move-model.workspace = true
-moved-genesis-image.workspace = true
+umi-genesis-image.workspace = true

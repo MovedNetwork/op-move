@@ -1,16 +1,16 @@
 [package]
-description = "Moved execution Ethereum JSON-RPC API"
+description = "Umi execution Ethereum JSON-RPC API"
 edition.workspace = true
-name = "moved-api"
+name = "umi-api"
 version.workspace = true
 
 [dependencies]
 alloy.workspace = true
-moved-app.workspace = true
-moved-blockchain.workspace = true
-moved-evm-ext.workspace = true
-moved-execution.workspace = true
-moved-shared.workspace = true
+umi-app.workspace = true
+umi-blockchain.workspace = true
+umi-evm-ext.workspace = true
+umi-execution.workspace = true
+umi-shared.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
@@ -18,14 +18,14 @@ tokio.workspace = true
 [dev-dependencies]
 alloy.workspace = true
 move-core-types.workspace = true
-moved-app.features = ["test-doubles"]
-moved-app.workspace = true
-moved-evm-ext.features = ["test-doubles"]
-moved-evm-ext.workspace = true
-moved-blockchain.features = ["test-doubles"]
-moved-blockchain.workspace = true
-moved-genesis.workspace = true
-moved-genesis-image.workspace = true
-moved-state.workspace = true
+umi-app.features = ["test-doubles"]
+umi-app.workspace = true
+umi-evm-ext.features = ["test-doubles"]
+umi-evm-ext.workspace = true
+umi-blockchain.features = ["test-doubles"]
+umi-blockchain.workspace = true
+umi-genesis.workspace = true
+umi-genesis-image.workspace = true
+umi-state.workspace = true
 op-alloy.workspace = true
 test-case.workspace = true

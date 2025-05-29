@@ -15,10 +15,10 @@ use {
         resolver::MoveResolver,
         value_serde::ValueSerDeContext,
     },
-    moved_evm_ext::state::StorageTrieRepository,
-    moved_genesis::{CreateMoveVm, FRAMEWORK_ADDRESS, MovedVm},
-    moved_shared::error::{Error, InvalidTransactionCause, NonceChecking},
-    moved_state::ResolverBasedModuleBytesStorage,
+    umi_evm_ext::state::StorageTrieRepository,
+    umi_genesis::{CreateMoveVm, FRAMEWORK_ADDRESS, UmiVm},
+    umi_shared::error::{Error, InvalidTransactionCause, NonceChecking},
+    umi_state::ResolverBasedModuleBytesStorage,
 };
 
 const ACCOUNT_MODULE_NAME: &IdentStr = ident_str!("account");
@@ -33,10 +33,10 @@ pub fn quick_get_nonce(
     state: &(impl MoveResolver + TableResolver),
     storage_trie: &impl StorageTrieRepository,
 ) -> u64 {
-    let moved_vm = MovedVm::new(&Default::default());
+    let umi_vm = UmiVm::new(&Default::default());
     let module_storage_bytes = ResolverBasedModuleBytesStorage::new(state);
-    let code_storage = module_storage_bytes.as_unsync_code_storage(&moved_vm);
-    let vm = moved_vm.create_move_vm().expect("Must create MoveVM");
+    let code_storage = module_storage_bytes.as_unsync_code_storage(&umi_vm);
+    let vm = umi_vm.create_move_vm().expect("Must create MoveVM");
     // Noop block hash lookup is safe here because the EVM is not used for
     // querying account nonces.
     let mut session =

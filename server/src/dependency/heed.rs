@@ -1,10 +1,10 @@
 use {
     crate::dependency::shared::*,
-    moved_app::{Application, ApplicationReader, CommandActor},
-    moved_blockchain::state::EthTrieStateQueries,
-    moved_genesis::config::GenesisConfig,
-    moved_state::{EthTrieState, State},
-    moved_storage_heed::{
+    umi_app::{Application, ApplicationReader, CommandActor},
+    umi_blockchain::state::EthTrieStateQueries,
+    umi_genesis::config::GenesisConfig,
+    umi_state::{EthTrieState, State},
+    umi_storage_heed::{
         block, evm, evm_storage_trie, heed::EnvOpenOptions, payload, receipt, state, transaction,
         trie,
     },
@@ -26,19 +26,19 @@ pub fn create(
 
 pub struct HeedDependencies;
 
-impl moved_app::Dependencies for HeedDependencies {
+impl umi_app::Dependencies for HeedDependencies {
     type BlockQueries = block::HeedBlockQueries;
     type BlockRepository = block::HeedBlockRepository;
-    type OnPayload = moved_app::OnPayload<Application<Self>>;
-    type OnTx = moved_app::OnTx<Application<Self>>;
-    type OnTxBatch = moved_app::OnTxBatch<Application<Self>>;
+    type OnPayload = umi_app::OnPayload<Application<Self>>;
+    type OnTx = umi_app::OnTx<Application<Self>>;
+    type OnTxBatch = umi_app::OnTxBatch<Application<Self>>;
     type PayloadQueries = payload::HeedPayloadQueries;
     type ReceiptQueries = receipt::HeedReceiptQueries;
     type ReceiptRepository = receipt::HeedReceiptRepository;
-    type ReceiptStorage = &'static moved_storage_heed::Env;
-    type SharedStorage = &'static moved_storage_heed::Env;
-    type ReceiptStorageReader = &'static moved_storage_heed::Env;
-    type SharedStorageReader = &'static moved_storage_heed::Env;
+    type ReceiptStorage = &'static umi_storage_heed::Env;
+    type SharedStorage = &'static umi_storage_heed::Env;
+    type ReceiptStorageReader = &'static umi_storage_heed::Env;
+    type SharedStorageReader = &'static umi_storage_heed::Env;
     type State = EthTrieState<trie::HeedEthTrieDb<'static>>;
     type StateQueries =
         EthTrieStateQueries<state::HeedStateRootIndex<'static>, trie::HeedEthTrieDb<'static>>;
@@ -127,7 +127,7 @@ impl moved_app::Dependencies for HeedDependencies {
 }
 
 lazy_static::lazy_static! {
-    static ref Database: moved_storage_heed::Env = {
+    static ref Database: umi_storage_heed::Env = {
         create_db()
     };
     static ref TRIE_DB: std::sync::Arc<trie::HeedEthTrieDb<'static>> = {
@@ -135,12 +135,12 @@ lazy_static::lazy_static! {
     };
 }
 
-fn db() -> &'static moved_storage_heed::Env {
+fn db() -> &'static umi_storage_heed::Env {
     &Database
 }
 
-fn create_db() -> moved_storage_heed::Env {
-    assert_eq!(moved_storage_heed::DATABASES.len(), 11);
+fn create_db() -> umi_storage_heed::Env {
+    assert_eq!(umi_storage_heed::DATABASES.len(), 11);
 
     let path = "db";
 
@@ -152,7 +152,7 @@ fn create_db() -> moved_storage_heed::Env {
     let env = unsafe {
         EnvOpenOptions::new()
             .max_readers(20)
-            .max_dbs(moved_storage_heed::DATABASES.len() as u32)
+            .max_dbs(umi_storage_heed::DATABASES.len() as u32)
             .map_size(1024 * 1024 * 1024 * 1024) // 1 TiB
             .open(path)
             .expect("Database dir should be accessible")

@@ -4,8 +4,8 @@ use {
         jsonrpc::{JsonRpcError, JsonRpcResponse},
         method_name::MethodName,
     },
-    moved_app::{ApplicationReader, CommandQueue, Dependencies},
-    moved_blockchain::payload::NewPayloadId,
+    umi_app::{ApplicationReader, CommandQueue, Dependencies},
+    umi_blockchain::payload::NewPayloadId,
 };
 
 pub async fn handle(

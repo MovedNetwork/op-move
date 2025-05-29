@@ -4,8 +4,8 @@ use {
     aptos_gas_schedule::{InitialGasSchedule, NativeGasParameters, VMGasParameters},
     aptos_vm_types::storage::StorageGasParameters,
     move_core_types::{account_address::AccountAddress, gas_algebra::GasQuantity},
-    moved_shared::primitives::B256,
     std::path::Path,
+    umi_shared::primitives::B256,
 };
 
 pub const CHAIN_ID: u64 = 404;

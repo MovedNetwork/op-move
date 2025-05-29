@@ -12,15 +12,15 @@ use {
     move_core_types::{
         account_address::AccountAddress, effects::ChangeSet, language_storage::ModuleId,
     },
-    moved_shared::{
-        error::{Error, InvalidTransactionCause, UserError},
-        primitives::ToMoveAddress,
-    },
     op_alloy::consensus::{
         OpDepositReceipt, OpDepositReceiptWithBloom, OpReceiptEnvelope, OpTxEnvelope, TxDeposit,
     },
     serde::{Deserialize, Serialize},
     std::borrow::Cow,
+    umi_shared::{
+        error::{Error, InvalidTransactionCause, UserError},
+        primitives::ToMoveAddress,
+    },
 };
 
 pub const L2_LOWEST_ADDRESS: Address = address!("4200000000000000000000000000000000000000");
@@ -114,7 +114,7 @@ impl NormalizedExtendedTxEnvelope {
 }
 
 type MoveChanges = ChangeSet;
-type EvmChanges = moved_evm_ext::state::StorageTriesChanges;
+type EvmChanges = umi_evm_ext::state::StorageTriesChanges;
 
 #[derive(Debug, Clone)]
 pub struct Changes {
@@ -300,7 +300,7 @@ pub enum TransactionData {
 }
 
 impl TransactionData {
-    pub fn parse_from(tx: &NormalizedEthTransaction) -> moved_shared::error::Result<Self> {
+    pub fn parse_from(tx: &NormalizedEthTransaction) -> umi_shared::error::Result<Self> {
         match tx.to {
             TxKind::Call(to) => {
                 if to.ge(&L2_LOWEST_ADDRESS) && to.le(&L2_HIGHEST_ADDRESS) {

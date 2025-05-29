@@ -4,7 +4,7 @@ use {
         jsonrpc::JsonRpcError,
         schema::{GetPayloadResponseV3, PayloadId},
     },
-    moved_app::{ApplicationReader, Dependencies},
+    umi_app::{ApplicationReader, Dependencies},
 };
 
 pub async fn execute_v3(
@@ -32,11 +32,12 @@ mod tests {
         super::*,
         crate::methods::forkchoice_updated,
         alloy::primitives::hex,
-        moved_app::{Application, CommandActor, TestDependencies},
-        moved_blockchain::{
+        std::sync::Arc,
+        umi_app::{Application, CommandActor, TestDependencies},
+        umi_blockchain::{
             block::{
                 Block, BlockRepository, Eip1559GasFee, InMemoryBlockQueries,
-                InMemoryBlockRepository, MovedBlockHash,
+                InMemoryBlockRepository, UmiBlockHash,
             },
             in_memory::shared_memory,
             payload::InMemoryPayloadQueries,
@@ -44,11 +45,10 @@ mod tests {
             state::InMemoryStateQueries,
             transaction::{InMemoryTransactionQueries, InMemoryTransactionRepository},
         },
-        moved_evm_ext::state::InMemoryStorageTrieRepository,
-        moved_genesis::config::GenesisConfig,
-        moved_shared::primitives::{B256, U256},
-        moved_state::{InMemoryState, InMemoryTrieDb},
-        std::sync::Arc,
+        umi_evm_ext::state::InMemoryStorageTrieRepository,
+        umi_genesis::config::GenesisConfig,
+        umi_shared::primitives::{B256, U256},
+        umi_state::{InMemoryState, InMemoryTrieDb},
     };
 
     #[test]
@@ -91,8 +91,8 @@ mod tests {
         let trie_db = Arc::new(InMemoryTrieDb::empty());
         let mut state = InMemoryState::empty(trie_db.clone());
         let mut evm_storage = InMemoryStorageTrieRepository::new();
-        let (changes, table_changes, evm_storage_changes) = moved_genesis_image::load();
-        moved_genesis::apply(
+        let (changes, table_changes, evm_storage_changes) = umi_genesis_image::load();
+        umi_genesis::apply(
             changes.clone(),
             table_changes,
             evm_storage_changes,
@@ -138,7 +138,7 @@ mod tests {
                 _,
                 InMemoryState,
                 _,
-                MovedBlockHash,
+                UmiBlockHash,
                 _,
                 (),
                 _,
@@ -167,9 +167,9 @@ mod tests {
             payload_queries: InMemoryPayloadQueries::new(),
             evm_storage,
         };
-        let (queue, state) = moved_app::create(&mut app, 10);
+        let (queue, state) = umi_app::create(&mut app, 10);
 
-        moved_app::run(state, async move {
+        umi_app::run(state, async move {
             // Update the state with an execution payload
             forkchoice_updated::execute_v3(
                 forkchoice_updated::tests::example_request(),

@@ -3,8 +3,8 @@ use crate::mempool::Mempool;
 pub use test_doubles::TestDependencies;
 
 use {
-    move_core_types::effects::ChangeSet, moved_blockchain::payload::PayloadId,
-    moved_genesis::config::GenesisConfig, moved_shared::primitives::B256,
+    move_core_types::effects::ChangeSet, umi_blockchain::payload::PayloadId,
+    umi_genesis::config::GenesisConfig, umi_shared::primitives::B256,
 };
 
 pub struct ApplicationReader<D: Dependencies> {
@@ -178,11 +178,11 @@ impl<
 }
 
 pub trait Dependencies {
-    type BaseTokenAccounts: moved_execution::BaseTokenAccounts + Clone;
-    type BlockHash: moved_blockchain::block::BlockHash;
-    type BlockQueries: moved_blockchain::block::BlockQueries<Storage = Self::SharedStorageReader>
+    type BaseTokenAccounts: umi_execution::BaseTokenAccounts + Clone;
+    type BlockHash: umi_blockchain::block::BlockHash;
+    type BlockQueries: umi_blockchain::block::BlockQueries<Storage = Self::SharedStorageReader>
         + Clone;
-    type BlockRepository: moved_blockchain::block::BlockRepository<Storage = Self::SharedStorage>;
+    type BlockRepository: umi_blockchain::block::BlockRepository<Storage = Self::SharedStorage>;
 
     /// A function invoked on an execution of a new payload.
     type OnPayload: Fn(&mut Application<Self>, PayloadId, B256) + 'static + ?Sized;
@@ -193,24 +193,24 @@ pub trait Dependencies {
     /// A function invoked on a completion of new transaction execution batch.
     type OnTxBatch: Fn(&mut Application<Self>) + 'static + ?Sized;
 
-    type PayloadQueries: moved_blockchain::payload::PayloadQueries<Storage = Self::SharedStorageReader>
+    type PayloadQueries: umi_blockchain::payload::PayloadQueries<Storage = Self::SharedStorageReader>
         + Clone;
-    type ReceiptQueries: moved_blockchain::receipt::ReceiptQueries<Storage = Self::ReceiptStorageReader>
+    type ReceiptQueries: umi_blockchain::receipt::ReceiptQueries<Storage = Self::ReceiptStorageReader>
         + Clone;
-    type ReceiptRepository: moved_blockchain::receipt::ReceiptRepository<Storage = Self::ReceiptStorage>;
+    type ReceiptRepository: umi_blockchain::receipt::ReceiptRepository<Storage = Self::ReceiptStorage>;
     type ReceiptStorage;
     type SharedStorage;
     type ReceiptStorageReader: Clone;
     type SharedStorageReader: Clone;
-    type State: moved_state::State;
-    type StateQueries: moved_blockchain::state::StateQueries + Clone;
-    type StorageTrieRepository: moved_evm_ext::state::StorageTrieRepository + Clone;
-    type TransactionQueries: moved_blockchain::transaction::TransactionQueries<Storage = Self::SharedStorageReader>
+    type State: umi_state::State;
+    type StateQueries: umi_blockchain::state::StateQueries + Clone;
+    type StorageTrieRepository: umi_evm_ext::state::StorageTrieRepository + Clone;
+    type TransactionQueries: umi_blockchain::transaction::TransactionQueries<Storage = Self::SharedStorageReader>
         + Clone;
-    type TransactionRepository: moved_blockchain::transaction::TransactionRepository<Storage = Self::SharedStorage>;
-    type BaseGasFee: moved_blockchain::block::BaseGasFee;
-    type CreateL1GasFee: moved_execution::CreateL1GasFee;
-    type CreateL2GasFee: moved_execution::CreateL2GasFee;
+    type TransactionRepository: umi_blockchain::transaction::TransactionRepository<Storage = Self::SharedStorage>;
+    type BaseGasFee: umi_blockchain::block::BaseGasFee;
+    type CreateL1GasFee: umi_execution::CreateL1GasFee;
+    type CreateL2GasFee: umi_execution::CreateL2GasFee;
 
     fn base_token_accounts(genesis_config: &GenesisConfig) -> Self::BaseTokenAccounts;
 
@@ -261,30 +261,30 @@ pub trait Dependencies {
 mod test_doubles {
     use {
         crate::{Application, Dependencies},
-        moved_blockchain::state::StateQueries,
-        moved_genesis::config::GenesisConfig,
-        moved_shared::primitives::U256,
-        moved_state::State,
+        umi_blockchain::state::StateQueries,
+        umi_genesis::config::GenesisConfig,
+        umi_shared::primitives::U256,
+        umi_state::State,
     };
 
     pub struct TestDependencies<
-        SQ = moved_blockchain::state::InMemoryStateQueries,
-        S = moved_state::InMemoryState,
-        BT = moved_execution::MovedBaseTokenAccounts,
-        BH = moved_blockchain::block::MovedBlockHash,
-        BQ = moved_blockchain::block::InMemoryBlockQueries,
-        BR = moved_blockchain::block::InMemoryBlockRepository,
-        PQ = moved_blockchain::payload::InMemoryPayloadQueries,
-        RQ = moved_blockchain::receipt::InMemoryReceiptQueries,
-        RR = moved_blockchain::receipt::InMemoryReceiptRepository,
-        R = moved_blockchain::receipt::ReceiptMemory,
-        B = moved_blockchain::in_memory::SharedMemory,
-        RMR = moved_blockchain::receipt::ReceiptMemoryReader,
-        BMR = moved_blockchain::in_memory::SharedMemoryReader,
-        ST = moved_evm_ext::state::InMemoryStorageTrieRepository,
-        TQ = moved_blockchain::transaction::InMemoryTransactionQueries,
-        TR = moved_blockchain::transaction::InMemoryTransactionRepository,
-        BF = moved_blockchain::block::Eip1559GasFee,
+        SQ = umi_blockchain::state::InMemoryStateQueries,
+        S = umi_state::InMemoryState,
+        BT = umi_execution::UmiBaseTokenAccounts,
+        BH = umi_blockchain::block::UmiBlockHash,
+        BQ = umi_blockchain::block::InMemoryBlockQueries,
+        BR = umi_blockchain::block::InMemoryBlockRepository,
+        PQ = umi_blockchain::payload::InMemoryPayloadQueries,
+        RQ = umi_blockchain::receipt::InMemoryReceiptQueries,
+        RR = umi_blockchain::receipt::InMemoryReceiptRepository,
+        R = umi_blockchain::receipt::ReceiptMemory,
+        B = umi_blockchain::in_memory::SharedMemory,
+        RMR = umi_blockchain::receipt::ReceiptMemoryReader,
+        BMR = umi_blockchain::in_memory::SharedMemoryReader,
+        ST = umi_evm_ext::state::InMemoryStorageTrieRepository,
+        TQ = umi_blockchain::transaction::InMemoryTransactionQueries,
+        TR = umi_blockchain::transaction::InMemoryTransactionRepository,
+        BF = umi_blockchain::block::Eip1559GasFee,
         F1 = U256,
         F2 = U256,
     >(
@@ -312,23 +312,23 @@ mod test_doubles {
     impl<
         SQ: StateQueries + Clone + Send + 'static,
         S: State + Send + 'static,
-        BT: moved_execution::BaseTokenAccounts + Clone + Send + 'static,
-        BH: moved_blockchain::block::BlockHash + Send + 'static,
-        BQ: moved_blockchain::block::BlockQueries<Storage = BMR> + Clone + Send + 'static,
-        BR: moved_blockchain::block::BlockRepository<Storage = B> + Send + 'static,
-        PQ: moved_blockchain::payload::PayloadQueries<Storage = BMR> + Clone + Send + 'static,
-        RQ: moved_blockchain::receipt::ReceiptQueries<Storage = RMR> + Clone + Send + 'static,
-        RR: moved_blockchain::receipt::ReceiptRepository<Storage = R> + Send + 'static,
+        BT: umi_execution::BaseTokenAccounts + Clone + Send + 'static,
+        BH: umi_blockchain::block::BlockHash + Send + 'static,
+        BQ: umi_blockchain::block::BlockQueries<Storage = BMR> + Clone + Send + 'static,
+        BR: umi_blockchain::block::BlockRepository<Storage = B> + Send + 'static,
+        PQ: umi_blockchain::payload::PayloadQueries<Storage = BMR> + Clone + Send + 'static,
+        RQ: umi_blockchain::receipt::ReceiptQueries<Storage = RMR> + Clone + Send + 'static,
+        RR: umi_blockchain::receipt::ReceiptRepository<Storage = R> + Send + 'static,
         R: Send + 'static,
         B: Send + 'static,
         RMR: Clone + Send + 'static,
         BMR: Clone + Send + 'static,
-        ST: moved_evm_ext::state::StorageTrieRepository + Clone + Send + 'static,
-        TQ: moved_blockchain::transaction::TransactionQueries<Storage = BMR> + Clone + Send + 'static,
-        TR: moved_blockchain::transaction::TransactionRepository<Storage = B> + Send + 'static,
-        BF: moved_blockchain::block::BaseGasFee + Send + 'static,
-        F1: moved_execution::CreateL1GasFee + Send + 'static,
-        F2: moved_execution::CreateL2GasFee + Send + 'static,
+        ST: umi_evm_ext::state::StorageTrieRepository + Clone + Send + 'static,
+        TQ: umi_blockchain::transaction::TransactionQueries<Storage = BMR> + Clone + Send + 'static,
+        TR: umi_blockchain::transaction::TransactionRepository<Storage = B> + Send + 'static,
+        BF: umi_blockchain::block::BaseGasFee + Send + 'static,
+        F1: umi_execution::CreateL1GasFee + Send + 'static,
+        F2: umi_execution::CreateL2GasFee + Send + 'static,
     > Dependencies
         for TestDependencies<
             SQ,

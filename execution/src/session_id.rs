@@ -3,10 +3,10 @@ use {
     alloy::primitives::U256,
     aptos_types::transaction::EntryFunction,
     aptos_vm::move_vm_ext::UserTransactionContext,
-    moved_evm_ext::HeaderForExecution,
-    moved_genesis::config::{CHAIN_ID, GenesisConfig},
-    moved_shared::primitives::{B256, ToMoveAddress},
     op_alloy::consensus::TxDeposit,
+    umi_evm_ext::HeaderForExecution,
+    umi_genesis::config::{CHAIN_ID, GenesisConfig},
+    umi_shared::primitives::{B256, ToMoveAddress},
 };
 
 /// This struct represents a unique identifier for the current session of the MoveVM.

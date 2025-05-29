@@ -8,8 +8,8 @@ use {
         signers::local::PrivateKeySigner,
         sol_types::{SolCall, SolEventInterface},
     },
-    moved_blockchain::receipt::TransactionReceipt,
-    moved_execution::transaction::{ScriptOrDeployment, TransactionData},
+    umi_blockchain::receipt::TransactionReceipt,
+    umi_execution::transaction::{ScriptOrDeployment, TransactionData},
 };
 
 mod evm_contract {

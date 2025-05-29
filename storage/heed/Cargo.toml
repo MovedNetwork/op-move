@@ -1,6 +1,6 @@
 [package]
-name = "moved-storage-heed"
-description = "Moved node integration with LMDB persistent storage engine via Heed bindings"
+name = "umi-storage-heed"
+description = "Umi node integration with LMDB persistent storage engine via Heed bindings"
 version.workspace = true
 edition.workspace = true
 
@@ -11,11 +11,11 @@ move-binary-format.workspace = true
 move-core-types.workspace = true
 move-table-extension.workspace = true
 move-vm-types.workspace = true
-moved-blockchain.workspace = true
-moved-evm-ext.workspace = true
-moved-execution.workspace = true
-moved-shared.workspace = true
-moved-state.workspace = true
-moved-trie.workspace = true
+umi-blockchain.workspace = true
+umi-evm-ext.workspace = true
+umi-execution.workspace = true
+umi-shared.workspace = true
+umi-state.workspace = true
+umi-trie.workspace = true
 serde.workspace = true
 serde_json.workspace = true

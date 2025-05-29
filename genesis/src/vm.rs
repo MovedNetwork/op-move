@@ -9,11 +9,11 @@ use {
     },
 };
 
-pub struct MovedVm {
+pub struct UmiVm {
     env: RuntimeEnvironment,
 }
 
-impl MovedVm {
+impl UmiVm {
     pub fn new(config: &GenesisConfig) -> Self {
         let mut builder = SafeNativeBuilder::new(
             config.gas_costs.version,
@@ -24,7 +24,7 @@ impl MovedVm {
             None,
         );
         let mut natives = aptos_natives_with_builder(&mut builder, false);
-        moved_evm_ext::append_evm_natives(&mut natives, &builder);
+        umi_evm_ext::append_evm_natives(&mut natives, &builder);
         let config = VMConfig {
             paranoid_type_checks: true,
             use_loader_v2: true,
@@ -35,19 +35,19 @@ impl MovedVm {
     }
 }
 
-impl WithRuntimeEnvironment for MovedVm {
+impl WithRuntimeEnvironment for UmiVm {
     fn runtime_environment(&self) -> &RuntimeEnvironment {
         &self.env
     }
 }
 
-impl WithRuntimeEnvironment for &'_ MovedVm {
+impl WithRuntimeEnvironment for &'_ UmiVm {
     fn runtime_environment(&self) -> &RuntimeEnvironment {
         &self.env
     }
 }
 
-impl CreateMoveVm for MovedVm {
+impl CreateMoveVm for UmiVm {
     fn create_move_vm(&self) -> Result<MoveVM, VMError> {
         let vm = MoveVM::new_with_runtime_environment(&self.env);
         Ok(vm)

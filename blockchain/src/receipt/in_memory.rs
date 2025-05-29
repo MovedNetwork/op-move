@@ -2,12 +2,12 @@ use {
     crate::receipt::{
         ExtendedReceipt, ReceiptQueries, TransactionReceipt, write::ReceiptRepository,
     },
-    moved_shared::primitives::B256,
     std::{
         convert::Infallible,
         hash::{Hash, Hasher},
         sync::Arc,
     },
+    umi_shared::primitives::B256,
 };
 
 pub type ReadHandle = evmap::ReadHandle<B256, Arc<ExtendedReceipt>>;

@@ -1,6 +1,6 @@
 use {
-    alloy::primitives::B256, moved_blockchain::block::BlockQueries,
-    moved_evm_ext::state::BlockHashLookup,
+    alloy::primitives::B256, umi_blockchain::block::BlockQueries,
+    umi_evm_ext::state::BlockHashLookup,
 };
 
 pub struct StorageBasedProvider<'a, S, B> {

@@ -21,14 +21,14 @@ use {
         value::MoveTypeLayout,
     },
     move_vm_types::resolver::{ModuleResolver, ResourceResolver},
-    moved_evm_ext::{
-        Changes, HeaderForExecution, NativeEVMContext, evm_transact_with_native,
-        extract_evm_changes_from_native,
-        state::{InMemoryStorageTrieRepository, StorageTrieRepository},
-    },
     std::{
         fs::{read_dir, read_to_string},
         path::Path,
+    },
+    umi_evm_ext::{
+        Changes, HeaderForExecution, NativeEVMContext, evm_transact_with_native,
+        extract_evm_changes_from_native,
+        state::{InMemoryStorageTrieRepository, StorageTrieRepository},
     },
 };
 
@@ -287,7 +287,7 @@ fn test_deploy_bridged_tokens() {
     let config = crate::config::GenesisConfig::default();
     let n_bridged_tokens = config.token_list.len();
     assert!(n_bridged_tokens > 0);
-    let state = moved_state::InMemoryState::default();
+    let state = umi_state::InMemoryState::default();
     let storage = InMemoryStorageTrieRepository::new();
     let l2_changes = crate::l2_contracts::init_state(config.l2_contract_genesis, &state, &storage);
     let new_l2_changes = deploy_bridged_tokens(l2_changes.clone(), config.token_list).unwrap();

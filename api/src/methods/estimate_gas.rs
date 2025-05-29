@@ -1,7 +1,7 @@
 use {
     crate::{json_utils, json_utils::transaction_error, jsonrpc::JsonRpcError},
     alloy::{eips::BlockNumberOrTag, rpc::types::TransactionRequest},
-    moved_app::{ApplicationReader, Dependencies},
+    umi_app::{ApplicationReader, Dependencies},
 };
 
 const BASE_FEE: u64 = 21_000;
@@ -55,11 +55,11 @@ mod tests {
         super::*,
         crate::methods::tests::{create_app, deposit_eth},
         alloy::primitives::Address,
-        moved_app::CommandActor,
-        moved_shared::primitives::U64,
         std::str::FromStr,
         test_case::test_case,
         tokio::sync::mpsc,
+        umi_app::CommandActor,
+        umi_shared::primitives::U64,
     };
 
     #[test]
@@ -117,7 +117,7 @@ mod tests {
         let (reader, mut app) = create_app();
         let state_actor = CommandActor::new(rx, &mut app);
 
-        moved_app::run(state_actor, async move {
+        umi_app::run(state_actor, async move {
             deposit_eth("0x8fd379246834eac74b8419ffda202cf8051f7a03", &state_channel).await;
 
             let request: serde_json::Value = serde_json::json!({

@@ -5,7 +5,7 @@ fn test_move_event_converts_to_eth_log_successfully() {
     let data = vec![0u8, 1, 2, 3];
     let type_tag = TypeTag::Struct(Box::new(StructTag {
         address: hex!("0000111122223333444455556666777788889999aaaabbbbccccddddeeeeffff").into(),
-        module: Identifier::new("moved").unwrap(),
+        module: Identifier::new("umi").unwrap(),
         name: Identifier::new("test").unwrap(),
         type_args: vec![],
     }));
@@ -19,7 +19,7 @@ fn test_move_event_converts_to_eth_log_successfully() {
     let expected_log = Log::new_unchecked(
         address!("6666777788889999aaaabbbbccccddddeeeeffff"),
         vec![keccak256(
-            "0000111122223333444455556666777788889999aaaabbbbccccddddeeeeffff::moved::test",
+            "0000111122223333444455556666777788889999aaaabbbbccccddddeeeeffff::umi::test",
         )],
         Bytes::from([0u8, 1, 2, 3]),
     );

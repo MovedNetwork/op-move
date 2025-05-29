@@ -4,11 +4,11 @@ use {
         criterion_group, measurement::WallTime, BatchSize, BenchmarkGroup, BenchmarkId, Criterion,
         Throughput,
     },
-    moved_app::{Application, DependenciesThreadSafe},
-    moved_genesis::config::GenesisConfig,
-    moved_server::initialize_app,
     std::process::Termination,
     tokio::runtime::Runtime,
+    umi_app::{Application, DependenciesThreadSafe},
+    umi_genesis::config::GenesisConfig,
+    umi_server::initialize_app,
 };
 
 fn build_1000_blocks(
@@ -24,9 +24,9 @@ fn build_1000_blocks(
             b.iter_batched(
                 input::blocks_1000,
                 |input| {
-                    let (queue, actor) = moved_app::create(app, buffer_size);
+                    let (queue, actor) = umi_app::create(app, buffer_size);
 
-                    runtime.block_on(moved_app::run(actor, async {
+                    runtime.block_on(umi_app::run(actor, async {
                         for msg in input {
                             queue.send(msg).await;
                         }

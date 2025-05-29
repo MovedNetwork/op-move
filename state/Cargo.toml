@@ -1,5 +1,5 @@
 [package]
-name = "moved-state"
+name = "umi-state"
 description = "Defines the domain of blockchain state"
 version.workspace = true
 edition.workspace = true
@@ -19,6 +19,6 @@ move-core-types.workspace = true
 move-table-extension.workspace = true
 move-vm-types.workspace = true
 move-vm-test-utils.workspace = true
-moved-evm-ext.workspace = true
-moved-shared.workspace = true
-moved-trie.workspace = true
+umi-evm-ext.workspace = true
+umi-shared.workspace = true
+umi-trie.workspace = true

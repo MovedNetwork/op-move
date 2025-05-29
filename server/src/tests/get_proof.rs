@@ -1,9 +1,9 @@
 use {
     crate::tests::test_context::{handle_request, TestContext},
     eth_trie::{EthTrie, MemoryDB, Trie},
-    moved_blockchain::state::ProofResponse,
-    moved_evm_ext::state,
     std::sync::Arc,
+    umi_blockchain::state::ProofResponse,
+    umi_evm_ext::state,
 };
 
 #[tokio::test]

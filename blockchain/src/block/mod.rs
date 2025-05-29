@@ -12,7 +12,7 @@ mod write;
 
 pub use {
     gas::{BaseGasFee, Eip1559GasFee},
-    hash::{BlockHash, MovedBlockHash},
+    hash::{BlockHash, UmiBlockHash},
     in_memory::{
         BlockMemory, BlockMemoryReader, ReadBlockMemory, ReadHashes, ReadHeights, ReadPayloadIds,
         WriteHashes, WriteHeights, WritePayloadIds,

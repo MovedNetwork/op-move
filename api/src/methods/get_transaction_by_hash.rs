@@ -1,6 +1,6 @@
 use {
     crate::{json_utils::parse_params_1, jsonrpc::JsonRpcError, schema::GetTransactionResponse},
-    moved_app::{ApplicationReader, Dependencies},
+    umi_app::{ApplicationReader, Dependencies},
 };
 
 pub async fn execute(
@@ -31,9 +31,9 @@ mod tests {
     #[tokio::test]
     async fn test_execute() {
         let (reader, mut app) = create_app();
-        let (queue, state) = moved_app::create(&mut app, 10);
+        let (queue, state) = umi_app::create(&mut app, 10);
 
-        moved_app::run(state, async move {
+        umi_app::run(state, async move {
             // 1. Send transaction
             let tx_hash = send_raw_transaction::execute(
                 send_raw_transaction::tests::example_request(),

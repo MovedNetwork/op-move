@@ -1,3 +1,3 @@
 mod read;
 
-pub use {moved_state::EthTrieResolver, read::*};
+pub use {read::*, umi_state::EthTrieResolver};

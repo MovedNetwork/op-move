@@ -1,7 +1,7 @@
 use {
     eth_trie::{DB, EthTrie, TrieError},
-    moved_shared::primitives::B256,
     std::sync::Arc,
+    umi_shared::primitives::B256,
 };
 
 pub trait TryFromOptRoot<D> {

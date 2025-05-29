@@ -4,7 +4,7 @@ use {
         jsonrpc::JsonRpcError,
     },
     alloy::eips::BlockNumberOrTag,
-    moved_app::{ApplicationReader, Dependencies},
+    umi_app::{ApplicationReader, Dependencies},
 };
 
 pub async fn execute(
@@ -72,8 +72,8 @@ fn parse_block_count(value: &serde_json::Value) -> Result<u64, JsonRpcError> {
 #[cfg(test)]
 mod tests {
     use {
-        super::*, crate::methods::tests::create_app, moved_shared::primitives::U64,
-        std::str::FromStr, test_case::test_case,
+        super::*, crate::methods::tests::create_app, std::str::FromStr, test_case::test_case,
+        umi_shared::primitives::U64,
     };
 
     #[test_case("0x1")]

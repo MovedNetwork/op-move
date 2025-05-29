@@ -4,15 +4,15 @@ pub use {
         SerdeAccountChanges, SerdeAllChanges, SerdeChanges, SerdeOp, SerdeTableChange,
         SerdeTableChangeSet, SerdeTableInfo,
     },
-    vm::MovedVm,
+    vm::UmiVm,
 };
 
 use {
     self::config::GenesisConfig,
     move_core_types::effects::ChangeSet,
     move_table_extension::TableChangeSet,
-    moved_evm_ext::state::{StorageTrieRepository, StorageTriesChanges},
-    moved_state::{InMemoryState, State},
+    umi_evm_ext::state::{StorageTrieRepository, StorageTriesChanges},
+    umi_state::{InMemoryState, State},
 };
 
 pub mod config;
@@ -25,7 +25,7 @@ mod serde;
 mod vm;
 
 pub fn build(
-    vm: &MovedVm,
+    vm: &UmiVm,
     config: &GenesisConfig,
     storage_trie: &impl StorageTrieRepository,
 ) -> (ChangeSet, TableChangeSet, StorageTriesChanges) {
@@ -82,7 +82,7 @@ pub fn apply(
 }
 
 pub fn build_and_apply(
-    vm: &MovedVm,
+    vm: &UmiVm,
     config: &GenesisConfig,
     state: &mut impl State,
     storage_trie: &mut impl StorageTrieRepository,

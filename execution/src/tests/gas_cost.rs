@@ -109,8 +109,8 @@ fn test_very_low_gas_limit_makes_tx_invalid() {
     assert!(
         matches!(
             err,
-            moved_shared::error::Error::InvalidTransaction(
-                moved_shared::error::InvalidTransactionCause::InsufficientIntrinsicGas
+            umi_shared::error::Error::InvalidTransaction(
+                umi_shared::error::InvalidTransactionCause::InsufficientIntrinsicGas
             )
         ),
         "Unexpected err {err:?}"

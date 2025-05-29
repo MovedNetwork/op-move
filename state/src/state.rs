@@ -4,10 +4,10 @@ use {
     move_core_types::effects::ChangeSet,
     move_table_extension::{TableChangeSet, TableResolver},
     move_vm_types::resolver::MoveResolver,
-    moved_evm_ext::state::DbWithRoot,
-    moved_shared::primitives::B256,
-    moved_trie::TryFromOptRoot,
     std::sync::Arc,
+    umi_evm_ext::state::DbWithRoot,
+    umi_shared::primitives::B256,
+    umi_trie::TryFromOptRoot,
 };
 
 /// A blockchain state implementation backed by [`eth_trie`].

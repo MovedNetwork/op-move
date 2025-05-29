@@ -1,13 +1,13 @@
 use {
     crate::{Application, Dependencies, DependenciesThreadSafe, input::Command},
     move_core_types::effects::ChangeSet,
-    moved_blockchain::{
+    std::{fmt::Debug, ops::DerefMut},
+    tokio::sync::mpsc::Receiver,
+    umi_blockchain::{
         payload::{InMemoryPayloadQueries, PayloadId},
         state::InMemoryStateQueries,
     },
-    moved_shared::primitives::B256,
-    std::{fmt::Debug, ops::DerefMut},
-    tokio::sync::mpsc::Receiver,
+    umi_shared::primitives::B256,
 };
 
 /// A function invoked on a completion of new transaction execution batch.

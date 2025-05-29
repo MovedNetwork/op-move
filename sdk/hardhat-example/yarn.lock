@@ -2402,7 +2402,7 @@ hardhat-gas-reporter@^1.0.8:
     eth-gas-reporter "^0.2.25"
     sha1 "^1.1.1"
 
-"hardhat-moved@file:../hardhat-moved":
+"hardhat-umi@file:../hardhat-umi":
   version "0.0.1"
   dependencies:
     "@benfen/bcs" "^0.1.0"

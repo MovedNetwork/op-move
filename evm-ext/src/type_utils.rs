@@ -9,12 +9,12 @@ use {
         value_serde::ValueSerDeContext,
         values::{Struct, Value, Vector},
     },
-    moved_shared::primitives::{ToEthAddress, ToMoveAddress, ToMoveU256},
     revm::{
         context::result::ExecutionResult,
         primitives::{Address, B256, KECCAK_EMPTY, Log},
         state::AccountInfo,
     },
+    umi_shared::primitives::{ToEthAddress, ToMoveAddress, ToMoveU256},
 };
 
 pub const ACCOUNT_INFO_PREFIX: &str = "Account_";

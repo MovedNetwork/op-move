@@ -1,11 +1,11 @@
 use {
     move_core_types::effects::ChangeSet,
     move_table_extension::TableChangeSet,
-    moved_evm_ext::state::{InMemoryStorageTrieRepository, StorageTrieRepository},
-    moved_genesis::{
-        MovedVm, SerdeAllChanges, SerdeChanges, SerdeTableChangeSet, build, config::GenesisConfig,
-    },
     std::io::Write,
+    umi_evm_ext::state::{InMemoryStorageTrieRepository, StorageTrieRepository},
+    umi_genesis::{
+        SerdeAllChanges, SerdeChanges, SerdeTableChangeSet, UmiVm, build, config::GenesisConfig,
+    },
 };
 
 fn main() {
@@ -14,13 +14,13 @@ fn main() {
     println!("cargo::rerun-if-changed=../genesis/");
     let storage_trie = InMemoryStorageTrieRepository::new();
     let genesis_config = GenesisConfig::default();
-    let vm = MovedVm::new(&genesis_config);
+    let vm = UmiVm::new(&genesis_config);
 
     save(&vm, &genesis_config, &storage_trie);
 }
 
 pub fn save(
-    vm: &MovedVm,
+    vm: &UmiVm,
     config: &GenesisConfig,
     storage_trie: &impl StorageTrieRepository,
 ) -> (ChangeSet, TableChangeSet) {

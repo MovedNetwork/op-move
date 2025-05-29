@@ -4,11 +4,11 @@ use {
         in_memory::SharedMemoryReader,
         state::{BlockHeight, EthTrieStateQueries, read::model::HeightToStateRootIndex},
     },
-    moved_shared::primitives::B256,
     std::convert::Infallible,
+    umi_shared::primitives::B256,
 };
 
-pub type InMemoryStateQueries<R = SharedMemoryReader, D = moved_state::InMemoryTrieDb> =
+pub type InMemoryStateQueries<R = SharedMemoryReader, D = umi_state::InMemoryTrieDb> =
     EthTrieStateQueries<R, D>;
 
 impl HeightToStateRootIndex for SharedMemoryReader {

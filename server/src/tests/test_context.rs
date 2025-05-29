@@ -5,12 +5,12 @@ use {
         eips::Encodable2718,
         primitives::{hex, B256},
     },
-    moved_api::schema::{ForkchoiceUpdatedResponseV1, GetBlockResponse, GetPayloadResponseV3},
-    moved_app::{ApplicationReader, CommandQueue, Dependencies},
-    moved_blockchain::{payload::StatePayloadId, receipt::TransactionReceipt},
-    moved_genesis::config::GenesisConfig,
     serde::de::DeserializeOwned,
     std::future::Future,
+    umi_api::schema::{ForkchoiceUpdatedResponseV1, GetBlockResponse, GetPayloadResponseV3},
+    umi_app::{ApplicationReader, CommandQueue, Dependencies},
+    umi_blockchain::{payload::StatePayloadId, receipt::TransactionReceipt},
+    umi_genesis::config::GenesisConfig,
 };
 
 const DEPOSIT_TX: &[u8] = &hex!("7ef8f8a032595a51f0561028c684fbeeb46c7221a34be9a2eedda60a93069dd77320407e94deaddeaddeaddeaddeaddeaddeaddeaddead00019442000000000000000000000000000000000000158080830f424080b8a4440a5e2000000000000000000000000000000000000000006807cdc800000000000000220000000000000000000000000000000000000000000000000000000000a68a3a000000000000000000000000000000000000000000000000000000000000000198663a8bf712c08273a02876877759b43dc4df514214cc2f6008870b9a8503380000000000000000000000008c67a7b8624044f8f672e9ec374dfa596f01afb9");
@@ -37,7 +37,7 @@ impl TestContext {
         let timestamp = genesis_block.block.header.timestamp;
         app.genesis_update(genesis_block);
 
-        let (queue, state) = moved_app::create(&mut app, 10);
+        let (queue, state) = umi_app::create(&mut app, 10);
 
         let ctx = Self {
             genesis_config,
@@ -47,7 +47,7 @@ impl TestContext {
             timestamp,
         };
 
-        moved_app::run(state, future(ctx)).await
+        umi_app::run(state, future(ctx)).await
     }
 
     pub async fn produce_block(&mut self) -> anyhow::Result<B256> {
@@ -165,7 +165,7 @@ pub async fn handle_request<T: DeserializeOwned>(
     queue: &CommandQueue,
     app: ApplicationReader<impl Dependencies>,
 ) -> anyhow::Result<T> {
-    let response = moved_api::request::handle(
+    let response = umi_api::request::handle(
         request.clone(),
         queue.clone(),
         |_| true,

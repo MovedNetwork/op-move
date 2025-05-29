@@ -4,8 +4,8 @@ use {
         generic::{EncodableB256, EncodableU64},
     },
     heed::RoTxn,
-    moved_blockchain::state::HeightToStateRootIndex,
-    moved_shared::primitives::B256,
+    umi_blockchain::state::HeightToStateRootIndex,
+    umi_shared::primitives::B256,
 };
 
 pub type Key = EncodableU64;

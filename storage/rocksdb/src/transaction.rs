@@ -1,10 +1,10 @@
 use {
     crate::generic::{FromValue, ToValue},
-    moved_blockchain::transaction::{
+    rocksdb::{AsColumnFamilyRef, DB as RocksDb, WriteBatchWithTransaction},
+    umi_blockchain::transaction::{
         ExtendedTransaction, TransactionQueries, TransactionRepository, TransactionResponse,
     },
-    moved_shared::primitives::B256,
-    rocksdb::{AsColumnFamilyRef, DB as RocksDb, WriteBatchWithTransaction},
+    umi_shared::primitives::B256,
 };
 
 pub const COLUMN_FAMILY: &str = "transaction";
@@ -68,11 +68,11 @@ mod tests {
             signers::local::PrivateKeySigner,
         },
         hex_literal::hex,
-        moved_shared::primitives::U256,
         op_alloy::{
             consensus::{OpTxEnvelope, TxDeposit},
             network::TxSignerSync,
         },
+        umi_shared::primitives::U256,
     };
 
     const PRIVATE_KEY: [u8; 32] = [0xaa; 32];

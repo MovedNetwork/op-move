@@ -6,9 +6,9 @@ use {
         CODE_REQUEST_PUBLISH_BASE, CODE_REQUEST_PUBLISH_PER_BYTE,
     },
     move_core_types::{account_address::AccountAddress, ident_str},
-    moved_genesis::config::GenesisConfig,
-    moved_shared::primitives::U256,
     op_alloy::rpc_types::L1BlockInfo,
+    umi_genesis::config::GenesisConfig,
+    umi_shared::primitives::U256,
 };
 
 pub fn new_gas_meter(
@@ -43,7 +43,7 @@ pub fn charge_new_module_processing<G: AptosGasMeter>(
     genesis_config: &GenesisConfig,
     address: &AccountAddress,
     module_size: u64,
-) -> Result<(), moved_shared::error::Error> {
+) -> Result<(), umi_shared::error::Error> {
     let module_size = NumBytes::new(module_size);
 
     // Charge for requesting to publish a module
@@ -56,14 +56,14 @@ pub fn charge_new_module_processing<G: AptosGasMeter>(
     gas_meter
         .algebra_mut()
         .charge_execution(publish_request_cost)
-        .map_err(moved_shared::error::Error::from)?;
+        .map_err(umi_shared::error::Error::from)?;
 
     // Charge for loading that module into memory
     // Note: the name does not matter because it is not used in the
     // standard gas meter implementation.
     gas_meter
         .charge_dependency(true, address, ident_str!("does_not_matter"), module_size)
-        .map_err(moved_shared::error::Error::from)?;
+        .map_err(umi_shared::error::Error::from)?;
 
     Ok(())
 }
@@ -209,14 +209,14 @@ impl L1GasFee for EcotoneGasFee {
 }
 
 /// This struct holds additional parameters and behavior as
-/// defined by Moved network for L2 gas calculation that are
+/// defined by Umi network for L2 gas calculation that are
 /// independent of transaction-defined limits or block state.
 #[derive(Debug, Clone)]
-pub struct MovedGasFee {
+pub struct UmiGasFee {
     gas_fee_multiplier: U256,
 }
 
-impl L2GasFee for MovedGasFee {
+impl L2GasFee for UmiGasFee {
     fn l2_fee(&self, input: L2GasFeeInput) -> U256 {
         input
             .effective_gas_price
@@ -252,7 +252,7 @@ impl CreateL1GasFee for CreateEcotoneL1GasFee {
     }
 }
 
-pub struct CreateMovedL2GasFee;
+pub struct CreateUmiL2GasFee;
 
 /// Creates algorithm for calculating cost of publishing a transaction to layer-2 blockchain.
 pub trait CreateL2GasFee {
@@ -266,9 +266,9 @@ pub trait CreateL2GasFee {
     }
 }
 
-impl CreateL2GasFee for CreateMovedL2GasFee {
+impl CreateL2GasFee for CreateUmiL2GasFee {
     fn with_gas_fee_multiplier(&self, gas_fee_multiplier: U256) -> impl L2GasFee + 'static + Clone {
-        MovedGasFee { gas_fee_multiplier }
+        UmiGasFee { gas_fee_multiplier }
     }
 }
 

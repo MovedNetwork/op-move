@@ -65,7 +65,7 @@ mod tests {
         super::*,
         crate::block::{Block, ExtendedBlock, Header, ReadBlockMemory},
         alloy::hex,
-        moved_shared::primitives::B256,
+        umi_shared::primitives::B256,
     };
 
     #[test]

@@ -5,8 +5,8 @@ use {
     },
     eth_trie::DB,
     heed::RoTxn,
-    moved_evm_ext::state::DbWithRoot,
-    moved_shared::primitives::{Address, B256},
+    umi_evm_ext::state::DbWithRoot,
+    umi_shared::primitives::{Address, B256},
 };
 
 pub type Key = EncodableBytes;

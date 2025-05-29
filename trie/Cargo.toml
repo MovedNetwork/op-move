@@ -1,9 +1,9 @@
 [package]
-name = "moved-trie"
+name = "umi-trie"
 description = "Ethereum trie extensions"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
 eth_trie.workspace = true
-moved-shared.workspace = true
+umi-shared.workspace = true

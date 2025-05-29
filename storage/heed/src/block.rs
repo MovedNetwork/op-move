@@ -5,8 +5,8 @@ use {
         transaction::HeedTransactionExt,
     },
     heed::RoTxn,
-    moved_blockchain::block::{BlockQueries, BlockRepository, BlockResponse, ExtendedBlock},
-    moved_shared::primitives::B256,
+    umi_blockchain::block::{BlockQueries, BlockRepository, BlockResponse, ExtendedBlock},
+    umi_shared::primitives::B256,
 };
 
 pub type Key = EncodableB256;

@@ -40,7 +40,7 @@ static TARGET_ROOT: Lazy<PathBuf> = Lazy::new(|| {
         .expect("Workspace root directory should exist")
         .join("target")
 });
-static MOVED_FRAMEWORK_DIR: Lazy<PathBuf> =
+static UMI_FRAMEWORK_DIR: Lazy<PathBuf> =
     Lazy::new(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("framework"));
 static APTOS_DIR: Lazy<PathBuf> = Lazy::new(|| TARGET_ROOT.join("aptos-core"));
 static APTOS_FRAMEWORK_DIR: Lazy<PathBuf> =
@@ -52,10 +52,10 @@ static APTOS_PACKAGE_PATHS: Lazy<Vec<PathBuf>> = Lazy::new(|| {
         APTOS_FRAMEWORK_DIR.join("aptos-framework"),
         APTOS_FRAMEWORK_DIR.join("aptos-token"),
         APTOS_FRAMEWORK_DIR.join("aptos-token-objects"),
-        MOVED_FRAMEWORK_DIR.join("eth-token"),
-        MOVED_FRAMEWORK_DIR.join("evm"),
-        MOVED_FRAMEWORK_DIR.join("l2"),
-        MOVED_FRAMEWORK_DIR.join("erc20"),
+        UMI_FRAMEWORK_DIR.join("eth-token"),
+        UMI_FRAMEWORK_DIR.join("evm"),
+        UMI_FRAMEWORK_DIR.join("l2"),
+        UMI_FRAMEWORK_DIR.join("erc20"),
     ]
 });
 static APTOS_ADDRESS_MAPPING: Lazy<BTreeMap<&str, &str>> = Lazy::new(|| {
@@ -263,7 +263,7 @@ fn build_packages_with_move_config(config: MoveBuildConfig) -> anyhow::Result<()
 
 fn copy_aptos_file(name: &str) -> Result<u64, std::io::Error> {
     copy(
-        MOVED_FRAMEWORK_DIR
+        UMI_FRAMEWORK_DIR
             .join("aptos-framework")
             .join("sources")
             .join(name),

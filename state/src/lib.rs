@@ -5,8 +5,8 @@ mod resolver;
 mod state;
 
 pub use {
-    in_memory::InMemoryState, moved_evm_ext::state::InMemoryDb as InMemoryTrieDb,
-    resolver::EthTrieResolver, state::EthTrieState,
+    in_memory::InMemoryState, resolver::EthTrieResolver, state::EthTrieState,
+    umi_evm_ext::state::InMemoryDb as InMemoryTrieDb,
 };
 
 use {
@@ -23,10 +23,10 @@ use {
     },
     move_table_extension::{TableChangeSet, TableResolver},
     move_vm_types::{code::ModuleBytesStorage, resolver::MoveResolver},
-    moved_evm_ext::{EVM_NATIVE_ADDRESS, EVM_NATIVE_MODULE, type_utils::ACCOUNT_INFO_PREFIX},
-    moved_shared::primitives::{Address, B256, KeyHashable},
     nodes::{TreeKey, TreeValue},
     std::{collections::HashMap, fmt::Debug, sync::Arc},
+    umi_evm_ext::{EVM_NATIVE_ADDRESS, EVM_NATIVE_MODULE, type_utils::ACCOUNT_INFO_PREFIX},
+    umi_shared::primitives::{Address, B256, KeyHashable},
 };
 
 // TODO: Should change `State` interface to return `Result`.

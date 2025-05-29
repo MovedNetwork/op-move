@@ -1,8 +1,8 @@
 use {
     super::*,
     move_vm_runtime::{AsFunctionValueExtension, AsUnsyncCodeStorage},
-    moved_genesis::{CreateMoveVm, MovedVm},
-    moved_state::ResolverBasedModuleBytesStorage,
+    umi_genesis::{CreateMoveVm, UmiVm},
+    umi_state::ResolverBasedModuleBytesStorage,
 };
 
 #[test]
@@ -19,10 +19,10 @@ fn test_execute_tables_contract() {
     let mut ctx = TestContext::new();
     let module_id = ctx.deploy_contract("tables");
 
-    let moved_vm = MovedVm::new(&ctx.genesis_config);
+    let umi_vm = UmiVm::new(&ctx.genesis_config);
     let module_bytes_storage = ResolverBasedModuleBytesStorage::new(ctx.state.resolver());
-    let code_storage = module_bytes_storage.as_unsync_code_storage(&moved_vm);
-    let vm = moved_vm.create_move_vm().unwrap();
+    let code_storage = module_bytes_storage.as_unsync_code_storage(&umi_vm);
+    let vm = umi_vm.create_move_vm().unwrap();
     let traversal_storage = TraversalStorage::new();
 
     let mut session = create_vm_session(

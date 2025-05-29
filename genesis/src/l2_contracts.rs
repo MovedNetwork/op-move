@@ -1,7 +1,7 @@
 use {
     alloy::genesis::Genesis,
-    moved_evm_ext::{Changes, state::StorageTrieRepository},
-    moved_state::State,
+    umi_evm_ext::{Changes, state::StorageTrieRepository},
+    umi_state::State,
 };
 
 pub fn init_state(
@@ -9,5 +9,5 @@ pub fn init_state(
     state: &impl State,
     storage_trie: &impl StorageTrieRepository,
 ) -> Changes {
-    moved_evm_ext::genesis_state_changes(genesis, state.resolver(), storage_trie)
+    umi_evm_ext::genesis_state_changes(genesis, state.resolver(), storage_trie)
 }

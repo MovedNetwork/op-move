@@ -54,7 +54,7 @@ pub trait PairIteratorExt<T, I: Iterator<Item = T>> {
     /// Basic usage:
     ///
     /// ```
-    /// # use moved_shared::iter::{PairIteratorExt, PairOrSingle::{self, Pair, Single}};
+    /// # use umi_shared::iter::{PairIteratorExt, PairOrSingle::{self, Pair, Single}};
     /// let mut iter = [1, 2].into_iter().pair();
     ///
     /// assert_eq!(iter.next(), Some(Pair(1, 2)));
@@ -64,7 +64,7 @@ pub trait PairIteratorExt<T, I: Iterator<Item = T>> {
     /// Using an iterator with odd amount of items:
     ///
     /// ```
-    /// # use moved_shared::iter::{PairIteratorExt, PairOrSingle::{self, Pair, Single}};
+    /// # use umi_shared::iter::{PairIteratorExt, PairOrSingle::{self, Pair, Single}};
     /// let mut iter = [1, 2, 3, 4, 5].into_iter().pair();
     ///
     /// assert_eq!(iter.next(), Some(Pair(1, 2)));

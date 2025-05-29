@@ -1,6 +1,6 @@
 use {
     crate::transaction::ExtendedTransaction, alloy::consensus::transaction::Recovered,
-    moved_shared::primitives::B256, std::fmt::Debug,
+    std::fmt::Debug, umi_shared::primitives::B256,
 };
 
 pub trait TransactionQueries {
@@ -48,8 +48,8 @@ pub mod in_memory {
                 TransactionQueries, TransactionResponse, in_memory::ReadTransactionMemory,
             },
         },
-        moved_shared::primitives::B256,
         std::convert::Infallible,
+        umi_shared::primitives::B256,
     };
 
     #[derive(Debug, Clone, Default)]

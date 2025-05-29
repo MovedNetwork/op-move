@@ -1,9 +1,9 @@
 use {
     crate::dependency::shared::*,
-    moved_app::{Application, ApplicationReader, CommandActor},
-    moved_blockchain::state::EthTrieStateQueries,
-    moved_genesis::config::GenesisConfig,
-    moved_state::{EthTrieState, State},
+    umi_app::{Application, ApplicationReader, CommandActor},
+    umi_blockchain::state::EthTrieStateQueries,
+    umi_genesis::config::GenesisConfig,
+    umi_state::{EthTrieState, State},
 };
 
 pub type Dependency = RocksDbDependencies;
@@ -22,34 +22,34 @@ pub fn create(
 
 pub struct RocksDbDependencies;
 
-impl moved_app::Dependencies for RocksDbDependencies {
-    type BlockQueries = moved_storage_rocksdb::block::RocksDbBlockQueries;
-    type BlockRepository = moved_storage_rocksdb::block::RocksDbBlockRepository;
-    type OnPayload = moved_app::OnPayload<Application<Self>>;
-    type OnTx = moved_app::OnTx<Application<Self>>;
-    type OnTxBatch = moved_app::OnTxBatch<Application<Self>>;
-    type PayloadQueries = moved_storage_rocksdb::payload::RocksDbPayloadQueries;
-    type ReceiptQueries = moved_storage_rocksdb::receipt::RocksDbReceiptQueries;
-    type ReceiptRepository = moved_storage_rocksdb::receipt::RocksDbReceiptRepository;
-    type ReceiptStorage = &'static moved_storage_rocksdb::RocksDb;
-    type SharedStorage = &'static moved_storage_rocksdb::RocksDb;
-    type ReceiptStorageReader = &'static moved_storage_rocksdb::RocksDb;
-    type SharedStorageReader = &'static moved_storage_rocksdb::RocksDb;
-    type State = EthTrieState<moved_storage_rocksdb::RocksEthTrieDb<'static>>;
+impl umi_app::Dependencies for RocksDbDependencies {
+    type BlockQueries = umi_storage_rocksdb::block::RocksDbBlockQueries;
+    type BlockRepository = umi_storage_rocksdb::block::RocksDbBlockRepository;
+    type OnPayload = umi_app::OnPayload<Application<Self>>;
+    type OnTx = umi_app::OnTx<Application<Self>>;
+    type OnTxBatch = umi_app::OnTxBatch<Application<Self>>;
+    type PayloadQueries = umi_storage_rocksdb::payload::RocksDbPayloadQueries;
+    type ReceiptQueries = umi_storage_rocksdb::receipt::RocksDbReceiptQueries;
+    type ReceiptRepository = umi_storage_rocksdb::receipt::RocksDbReceiptRepository;
+    type ReceiptStorage = &'static umi_storage_rocksdb::RocksDb;
+    type SharedStorage = &'static umi_storage_rocksdb::RocksDb;
+    type ReceiptStorageReader = &'static umi_storage_rocksdb::RocksDb;
+    type SharedStorageReader = &'static umi_storage_rocksdb::RocksDb;
+    type State = EthTrieState<umi_storage_rocksdb::RocksEthTrieDb<'static>>;
     type StateQueries = EthTrieStateQueries<
-        moved_storage_rocksdb::RocksDbStateRootIndex<'static>,
-        moved_storage_rocksdb::RocksEthTrieDb<'static>,
+        umi_storage_rocksdb::RocksDbStateRootIndex<'static>,
+        umi_storage_rocksdb::RocksEthTrieDb<'static>,
     >;
-    type StorageTrieRepository = moved_storage_rocksdb::evm::RocksDbStorageTrieRepository;
-    type TransactionQueries = moved_storage_rocksdb::transaction::RocksDbTransactionQueries;
-    type TransactionRepository = moved_storage_rocksdb::transaction::RocksDbTransactionRepository;
+    type StorageTrieRepository = umi_storage_rocksdb::evm::RocksDbStorageTrieRepository;
+    type TransactionQueries = umi_storage_rocksdb::transaction::RocksDbTransactionQueries;
+    type TransactionRepository = umi_storage_rocksdb::transaction::RocksDbTransactionRepository;
 
     fn block_queries() -> Self::BlockQueries {
-        moved_storage_rocksdb::block::RocksDbBlockQueries
+        umi_storage_rocksdb::block::RocksDbBlockQueries
     }
 
     fn block_repository() -> Self::BlockRepository {
-        moved_storage_rocksdb::block::RocksDbBlockRepository
+        umi_storage_rocksdb::block::RocksDbBlockRepository
     }
 
     fn on_payload() -> &'static Self::OnPayload {
@@ -70,15 +70,15 @@ impl moved_app::Dependencies for RocksDbDependencies {
     }
 
     fn payload_queries() -> Self::PayloadQueries {
-        moved_storage_rocksdb::payload::RocksDbPayloadQueries::new(db())
+        umi_storage_rocksdb::payload::RocksDbPayloadQueries::new(db())
     }
 
     fn receipt_queries() -> Self::ReceiptQueries {
-        moved_storage_rocksdb::receipt::RocksDbReceiptQueries
+        umi_storage_rocksdb::receipt::RocksDbReceiptQueries
     }
 
     fn receipt_repository() -> Self::ReceiptRepository {
-        moved_storage_rocksdb::receipt::RocksDbReceiptRepository
+        umi_storage_rocksdb::receipt::RocksDbReceiptRepository
     }
 
     fn receipt_memory(&mut self) -> Self::ReceiptStorage {
@@ -103,53 +103,53 @@ impl moved_app::Dependencies for RocksDbDependencies {
 
     fn state_queries(&self, genesis_config: &GenesisConfig) -> Self::StateQueries {
         EthTrieStateQueries::new(
-            moved_storage_rocksdb::RocksDbStateRootIndex::new(db()),
+            umi_storage_rocksdb::RocksDbStateRootIndex::new(db()),
             TRIE_DB.clone(),
             genesis_config.initial_state_root,
         )
     }
 
     fn storage_trie_repository() -> Self::StorageTrieRepository {
-        moved_storage_rocksdb::evm::RocksDbStorageTrieRepository::new(db())
+        umi_storage_rocksdb::evm::RocksDbStorageTrieRepository::new(db())
     }
 
     fn transaction_queries() -> Self::TransactionQueries {
-        moved_storage_rocksdb::transaction::RocksDbTransactionQueries
+        umi_storage_rocksdb::transaction::RocksDbTransactionQueries
     }
 
     fn transaction_repository() -> Self::TransactionRepository {
-        moved_storage_rocksdb::transaction::RocksDbTransactionRepository
+        umi_storage_rocksdb::transaction::RocksDbTransactionRepository
     }
 
     impl_shared!();
 }
 
 lazy_static::lazy_static! {
-    static ref Database: moved_storage_rocksdb::RocksDb = {
+    static ref Database: umi_storage_rocksdb::RocksDb = {
         create_db()
     };
-    static ref TRIE_DB: std::sync::Arc<moved_storage_rocksdb::RocksEthTrieDb<'static>> = {
+    static ref TRIE_DB: std::sync::Arc<umi_storage_rocksdb::RocksEthTrieDb<'static>> = {
         std::sync::Arc::new(
-            moved_storage_rocksdb::RocksEthTrieDb::new(db()),
+            umi_storage_rocksdb::RocksEthTrieDb::new(db()),
         )
     };
 }
 
-fn db() -> &'static moved_storage_rocksdb::RocksDb {
+fn db() -> &'static umi_storage_rocksdb::RocksDb {
     &Database
 }
 
-fn create_db() -> moved_storage_rocksdb::RocksDb {
+fn create_db() -> umi_storage_rocksdb::RocksDb {
     let path = "db";
 
     if std::env::var("PURGE").as_ref().map(String::as_str) == Ok("1") {
         let _ = std::fs::remove_dir_all(path);
     }
 
-    let mut options = moved_storage_rocksdb::rocksdb::Options::default();
+    let mut options = umi_storage_rocksdb::rocksdb::Options::default();
     options.create_if_missing(true);
     options.create_missing_column_families(true);
 
-    moved_storage_rocksdb::RocksDb::open_cf(&options, path, moved_storage_rocksdb::COLUMN_FAMILIES)
+    umi_storage_rocksdb::RocksDb::open_cf(&options, path, umi_storage_rocksdb::COLUMN_FAMILIES)
         .expect("Database should open in db dir")
 }

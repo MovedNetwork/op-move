@@ -5,8 +5,8 @@ use {
         payload::{PayloadId, PayloadQueries, PayloadResponse},
         transaction::ReadTransactionMemory,
     },
-    moved_shared::primitives::B256,
     std::convert::Infallible,
+    umi_shared::primitives::B256,
 };
 
 #[derive(Debug, Clone)]

@@ -7,11 +7,11 @@ use {
     move_core_types::account_address::AccountAddress,
     move_table_extension::TableResolver,
     move_vm_types::resolver::MoveResolver,
-    moved_evm_ext::state::StorageTrieRepository,
-    moved_execution::transaction::{L2_HIGHEST_ADDRESS, L2_LOWEST_ADDRESS},
-    moved_shared::primitives::{B256, ToEthAddress, U256},
-    moved_state::EthTrieResolver,
     std::sync::Arc,
+    umi_evm_ext::state::StorageTrieRepository,
+    umi_execution::transaction::{L2_HIGHEST_ADDRESS, L2_LOWEST_ADDRESS},
+    umi_shared::primitives::{B256, ToEthAddress, U256},
+    umi_state::EthTrieResolver,
 };
 
 #[derive(Debug)]

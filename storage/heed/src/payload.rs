@@ -6,8 +6,8 @@ use {
         transaction::HeedTransactionExt,
     },
     heed::RoTxn,
-    moved_blockchain::payload::{PayloadId, PayloadQueries, PayloadResponse},
-    moved_shared::primitives::{B256, ToU64},
+    umi_blockchain::payload::{PayloadId, PayloadQueries, PayloadResponse},
+    umi_shared::primitives::{B256, ToU64},
 };
 
 pub type Key = EncodableU64;

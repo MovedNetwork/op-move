@@ -1,7 +1,7 @@
 use {
-    moved_shared::primitives::{Address, B256, U256},
     op_alloy::{consensus::OpReceiptEnvelope, rpc_types::L1BlockInfo},
     std::fmt::Debug,
+    umi_shared::primitives::{Address, B256, U256},
 };
 
 pub trait ReceiptRepository {

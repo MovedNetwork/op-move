@@ -25,20 +25,20 @@ use {
         session::Session,
     },
     move_vm_types::{gas::UnmeteredGasMeter, resolver::MoveResolver},
-    moved_evm_ext::{
+    umi_evm_ext::{
         EVM_NATIVE_ADDRESS, EVM_NATIVE_MODULE,
         events::EthTransfersLogger,
         state::{BlockHashLookup, StorageTrieRepository},
     },
-    moved_genesis::{CreateMoveVm, MovedVm, config::GenesisConfig},
-    moved_shared::{
+    umi_genesis::{CreateMoveVm, UmiVm, config::GenesisConfig},
+    umi_shared::{
         error::{
             Error::{InvalidTransaction, User},
             EthToken, InvalidTransactionCause, InvariantViolation,
         },
         primitives::ToMoveAddress,
     },
-    moved_state::ResolverBasedModuleBytesStorage,
+    umi_state::ResolverBasedModuleBytesStorage,
 };
 
 pub struct CanonicalVerificationInput<'input, 'r, 'l, B, MS> {
@@ -55,7 +55,7 @@ pub struct CanonicalVerificationInput<'input, 'r, 'l, B, MS> {
 
 pub(super) fn verify_transaction<B: BaseTokenAccounts, MS: ModuleStorage>(
     input: &mut CanonicalVerificationInput<B, MS>,
-) -> moved_shared::error::Result<()> {
+) -> umi_shared::error::Result<()> {
     if let Some(chain_id) = input.tx.chain_id {
         if chain_id != input.genesis_config.chain_id {
             return Err(InvalidTransactionCause::IncorrectChainId.into());
@@ -125,16 +125,16 @@ pub(super) fn execute_canonical_transaction<
     H: BlockHashLookup,
 >(
     input: CanonicalExecutionInput<S, ST, F, B, H>,
-) -> moved_shared::error::Result<TransactionExecutionOutcome> {
+) -> umi_shared::error::Result<TransactionExecutionOutcome> {
     let sender_move_address = input.tx.signer.to_move_address();
 
     let tx_data = TransactionData::parse_from(input.tx)?;
 
-    let moved_vm = MovedVm::new(input.genesis_config);
+    let umi_vm = UmiVm::new(input.genesis_config);
     let module_bytes_storage: ResolverBasedModuleBytesStorage<'_, S> =
         ResolverBasedModuleBytesStorage::new(input.state);
-    let code_storage = module_bytes_storage.as_unsync_code_storage(&moved_vm);
-    let vm = moved_vm.create_move_vm()?;
+    let code_storage = module_bytes_storage.as_unsync_code_storage(&umi_vm);
+    let vm = umi_vm.create_move_vm()?;
     let session_id = SessionId::new_from_canonical(
         input.tx,
         tx_data.maybe_entry_fn(),
@@ -293,14 +293,14 @@ pub(super) fn execute_canonical_transaction<
             &code_storage,
         )
         .map_err(|_| {
-            moved_shared::error::Error::InvariantViolation(InvariantViolation::EthToken(
+            umi_shared::error::Error::InvariantViolation(InvariantViolation::EthToken(
                 EthToken::RefundAlwaysSucceeds,
             ))
         })?;
 
     let (mut changes, mut extensions) = session.finish_with_extensions(&code_storage)?;
     let logs = extensions.logs();
-    let evm_changes = moved_evm_ext::extract_evm_changes(&extensions);
+    let evm_changes = umi_evm_ext::extract_evm_changes(&extensions);
     changes
         .squash(evm_changes.accounts)
         .expect("EVM changes must merge with other session changes");

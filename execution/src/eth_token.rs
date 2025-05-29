@@ -16,13 +16,13 @@ use {
         resolver::MoveResolver,
         value_serde::ValueSerDeContext,
     },
-    moved_evm_ext::{EVM_NATIVE_ADDRESS, events::EthTransferLog, state::StorageTrieRepository},
-    moved_genesis::{CreateMoveVm, FRAMEWORK_ADDRESS, MovedVm},
-    moved_shared::{
+    umi_evm_ext::{EVM_NATIVE_ADDRESS, events::EthTransferLog, state::StorageTrieRepository},
+    umi_genesis::{CreateMoveVm, FRAMEWORK_ADDRESS, UmiVm},
+    umi_shared::{
         error::EthToken,
         primitives::{ToMoveU256, ToU256},
     },
-    moved_state::ResolverBasedModuleBytesStorage,
+    umi_state::ResolverBasedModuleBytesStorage,
 };
 
 const TOKEN_ADMIN: AccountAddress = FRAMEWORK_ADDRESS;
@@ -47,7 +47,7 @@ pub trait BaseTokenAccounts {
         traversal_context: &mut TraversalContext,
         gas_meter: &mut G,
         module_storage: &MS,
-    ) -> Result<(), moved_shared::error::Error>;
+    ) -> Result<(), umi_shared::error::Error>;
 
     fn refund_gas_cost(
         &self,
@@ -56,7 +56,7 @@ pub trait BaseTokenAccounts {
         session: &mut Session,
         traversal_context: &mut TraversalContext,
         module_storage: &impl ModuleStorage,
-    ) -> Result<(), moved_shared::error::Error>;
+    ) -> Result<(), umi_shared::error::Error>;
 
     fn transfer<G: GasMeter, MS: ModuleStorage>(
         &self,
@@ -65,21 +65,21 @@ pub trait BaseTokenAccounts {
         traversal_context: &mut TraversalContext,
         gas_meter: &mut G,
         module_storage: &MS,
-    ) -> Result<(), moved_shared::error::Error>;
+    ) -> Result<(), umi_shared::error::Error>;
 }
 
 #[derive(Debug, Clone)]
-pub struct MovedBaseTokenAccounts {
+pub struct UmiBaseTokenAccounts {
     eth_treasury: AccountAddress,
 }
 
-impl MovedBaseTokenAccounts {
+impl UmiBaseTokenAccounts {
     pub fn new(eth_treasury: AccountAddress) -> Self {
         Self { eth_treasury }
     }
 }
 
-impl BaseTokenAccounts for MovedBaseTokenAccounts {
+impl BaseTokenAccounts for UmiBaseTokenAccounts {
     fn charge_gas_cost<G: GasMeter, MS: ModuleStorage>(
         &self,
         from: &AccountAddress,
@@ -88,7 +88,7 @@ impl BaseTokenAccounts for MovedBaseTokenAccounts {
         traversal_context: &mut TraversalContext,
         gas_meter: &mut G,
         module_storage: &MS,
-    ) -> Result<(), moved_shared::error::Error> {
+    ) -> Result<(), umi_shared::error::Error> {
         transfer_eth(
             TransferArgs {
                 from,
@@ -109,7 +109,7 @@ impl BaseTokenAccounts for MovedBaseTokenAccounts {
         session: &mut Session,
         traversal_context: &mut TraversalContext,
         module_storage: &impl ModuleStorage,
-    ) -> Result<(), moved_shared::error::Error> {
+    ) -> Result<(), umi_shared::error::Error> {
         let mut gas_meter = UnmeteredGasMeter;
         transfer_eth(
             TransferArgs {
@@ -131,7 +131,7 @@ impl BaseTokenAccounts for MovedBaseTokenAccounts {
         traversal_context: &mut TraversalContext,
         gas_meter: &mut G,
         module_storage: &MS,
-    ) -> Result<(), moved_shared::error::Error> {
+    ) -> Result<(), umi_shared::error::Error> {
         transfer_eth(args, session, traversal_context, gas_meter, module_storage)
     }
 }
@@ -143,7 +143,7 @@ pub fn mint_eth<G: GasMeter>(
     traversal_context: &mut TraversalContext,
     gas_meter: &mut G,
     module_storage: &impl ModuleStorage,
-) -> Result<(), moved_shared::error::Error> {
+) -> Result<(), umi_shared::error::Error> {
     if amount.is_zero() {
         return Ok(());
     }
@@ -170,7 +170,7 @@ pub fn mint_eth<G: GasMeter>(
         )
         .map_err(|e| {
             println!("{e:?}");
-            moved_shared::error::Error::eth_token_invariant_violation(EthToken::MintAlwaysSucceeds)
+            umi_shared::error::Error::eth_token_invariant_violation(EthToken::MintAlwaysSucceeds)
         })?;
 
     Ok(())
@@ -182,7 +182,7 @@ pub fn transfer_eth<G: GasMeter>(
     traversal_context: &mut TraversalContext,
     gas_meter: &mut G,
     module_storage: &impl ModuleStorage,
-) -> Result<(), moved_shared::error::Error> {
+) -> Result<(), umi_shared::error::Error> {
     if args.amount.is_zero() {
         return Ok(());
     }
@@ -224,7 +224,7 @@ pub fn replicate_transfers<G: GasMeter, L: EthTransferLog>(
     traversal_context: &mut TraversalContext,
     gas_meter: &mut G,
     module_storage: &impl ModuleStorage,
-) -> Result<(), moved_shared::error::Error> {
+) -> Result<(), umi_shared::error::Error> {
     // Transfer the transaction value from EVM native account to `origin`.
     // This step is needed because all EVM transactions start with the caller
     // transferring tokens to the EVM native account as part of `evm_call`.
@@ -273,7 +273,7 @@ pub fn get_eth_balance<G: GasMeter>(
     traversal_context: &mut TraversalContext,
     gas_meter: &mut G,
     module_storage: &impl ModuleStorage,
-) -> Result<U256, moved_shared::error::Error> {
+) -> Result<U256, umi_shared::error::Error> {
     let addr_arg = bcs::to_bytes(account).expect("address can serialize");
     let token_module_id = ModuleId::new(FRAMEWORK_ADDRESS, TOKEN_MODULE_NAME.into());
 
@@ -290,7 +290,7 @@ pub fn get_eth_balance<G: GasMeter>(
         .map_err(|e| {
             println!("{e:?}");
 
-            moved_shared::error::Error::eth_token_invariant_violation(
+            umi_shared::error::Error::eth_token_invariant_violation(
                 EthToken::GetBalanceAlwaysSucceeds,
             )
         })?
@@ -299,20 +299,20 @@ pub fn get_eth_balance<G: GasMeter>(
     let (raw_output, layout) =
         return_values
             .first()
-            .ok_or(moved_shared::error::Error::eth_token_invariant_violation(
+            .ok_or(umi_shared::error::Error::eth_token_invariant_violation(
                 EthToken::GetBalanceReturnsAValue,
             ))?;
 
     let value = ValueSerDeContext::new()
         .deserialize(raw_output, layout)
-        .ok_or(moved_shared::error::Error::eth_token_invariant_violation(
+        .ok_or(umi_shared::error::Error::eth_token_invariant_violation(
             EthToken::GetBalanceReturnDeserializes,
         ))?
         .as_move_value(layout);
 
     match value {
         MoveValue::U256(balance) => Ok(balance.to_u256()),
-        _ => Err(moved_shared::error::Error::eth_token_invariant_violation(
+        _ => Err(umi_shared::error::Error::eth_token_invariant_violation(
             EthToken::GetBalanceReturnsU256,
         )),
     }
@@ -325,10 +325,10 @@ pub fn quick_get_eth_balance(
     state: &(impl MoveResolver + TableResolver),
     storage_trie: &impl StorageTrieRepository,
 ) -> U256 {
-    let moved_vm = MovedVm::new(&Default::default());
-    let vm = moved_vm.create_move_vm().unwrap();
+    let umi_vm = UmiVm::new(&Default::default());
+    let vm = umi_vm.create_move_vm().unwrap();
     let module_bytes_storage = ResolverBasedModuleBytesStorage::new(state);
-    let code_storage = module_bytes_storage.as_unsync_code_storage(&moved_vm);
+    let code_storage = module_bytes_storage.as_unsync_code_storage(&umi_vm);
     // Noop block hash lookup is safe here because the EVM is not used for
     // querying base token balances.
     let mut session =
@@ -348,7 +348,7 @@ pub fn quick_get_eth_balance(
 
 #[cfg(any(feature = "test-doubles", test))]
 mod tests {
-    use {super::*, moved_shared::error::Error};
+    use {super::*, umi_shared::error::Error};
 
     impl BaseTokenAccounts for () {
         fn charge_gas_cost<G: GasMeter, MS: ModuleStorage>(

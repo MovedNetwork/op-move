@@ -1,5 +1,5 @@
 # Add build image
-FROM moved-optimism:latest AS build
+FROM umi-optimism:latest AS build
 
 # Switch to clean image
 FROM alpine:3.21.2

@@ -7,8 +7,8 @@ use {
             PayloadStatusV1, Status,
         },
     },
-    moved_app::{Command, CommandQueue, Payload, ToPayloadIdInput},
-    moved_blockchain::payload::NewPayloadId,
+    umi_app::{Command, CommandQueue, Payload, ToPayloadIdInput},
+    umi_blockchain::payload::NewPayloadId,
 };
 
 pub async fn execute_v3(
@@ -93,7 +93,7 @@ pub(super) mod tests {
         super::*,
         crate::methods::tests::create_app,
         alloy::primitives::hex,
-        moved_shared::primitives::{Address, B256, Bytes, U64},
+        umi_shared::primitives::{Address, B256, Bytes, U64},
     };
 
     pub fn example_request() -> serde_json::Value {
@@ -227,9 +227,9 @@ pub(super) mod tests {
     #[tokio::test]
     async fn test_execute_v3() {
         let (_reader, mut app) = create_app();
-        let (queue, state) = moved_app::create(&mut app, 10);
+        let (queue, state) = umi_app::create(&mut app, 10);
 
-        moved_app::run(state, async move {
+        umi_app::run(state, async move {
             let request = example_request();
 
             let expected_response: serde_json::Value = serde_json::from_str(r#"

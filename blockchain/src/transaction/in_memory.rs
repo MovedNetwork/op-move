@@ -1,7 +1,7 @@
 use {
     crate::transaction::ExtendedTransaction,
-    moved_shared::primitives::B256,
     std::{ops::Deref, sync::Arc},
+    umi_shared::primitives::B256,
 };
 
 pub type ReadHandle = evmap::ReadHandle<B256, Arc<ExtendedTransaction>>;

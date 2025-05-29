@@ -1,5 +1,5 @@
 [package]
-name = "moved-shared"
+name = "umi-shared"
 description = "Defines the minimal generic shared kernel"
 version.workspace = true
 edition.workspace = true

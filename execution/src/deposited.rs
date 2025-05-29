@@ -13,18 +13,18 @@ use {
         module_traversal::{TraversalContext, TraversalStorage},
     },
     move_vm_types::{resolver::MoveResolver, value_serde::ValueSerDeContext, values::Value},
-    moved_evm_ext::{
+    umi_evm_ext::{
         self, CODE_LAYOUT, EVM_DEPOSIT_FN_NAME, EVM_NATIVE_ADDRESS, EVM_NATIVE_MODULE,
         events::EthTransfersLogger,
         extract_evm_changes, extract_evm_result,
         state::{BlockHashLookup, StorageTrieRepository},
     },
-    moved_genesis::{CreateMoveVm, MovedVm},
-    moved_shared::{
+    umi_genesis::{CreateMoveVm, UmiVm},
+    umi_shared::{
         error::{Error, UserError},
         primitives::{ToMoveAddress, ToMoveU256},
     },
-    moved_state::ResolverBasedModuleBytesStorage,
+    umi_state::ResolverBasedModuleBytesStorage,
 };
 
 pub(super) fn execute_deposited_transaction<
@@ -33,11 +33,11 @@ pub(super) fn execute_deposited_transaction<
     H: BlockHashLookup,
 >(
     input: DepositExecutionInput<S, ST, H>,
-) -> moved_shared::error::Result<TransactionExecutionOutcome> {
-    let moved_vm = MovedVm::new(input.genesis_config);
+) -> umi_shared::error::Result<TransactionExecutionOutcome> {
+    let umi_vm = UmiVm::new(input.genesis_config);
     let module_bytes_storage = ResolverBasedModuleBytesStorage::new(input.state);
-    let code_storage = module_bytes_storage.as_unsync_code_storage(&moved_vm);
-    let vm = moved_vm.create_move_vm()?;
+    let code_storage = module_bytes_storage.as_unsync_code_storage(&umi_vm);
+    let vm = umi_vm.create_move_vm()?;
     let session_id = SessionId::new_from_deposited(
         input.tx,
         input.tx_hash,

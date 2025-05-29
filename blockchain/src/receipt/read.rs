@@ -1,8 +1,8 @@
 use {
     crate::receipt::ExtendedReceipt,
     alloy::rpc::types::TransactionReceipt as AlloyTxReceipt,
-    moved_shared::{primitives, primitives::B256},
     std::fmt::Debug,
+    umi_shared::{primitives, primitives::B256},
 };
 
 pub trait ReceiptQueries {

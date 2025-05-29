@@ -1,9 +1,9 @@
 pub use alloy::eips::BlockNumberOrTag;
 
 use {
-    moved_app::{RpcBlock, RpcTransaction},
-    moved_blockchain::{block::BlockResponse, transaction::TransactionResponse},
     serde::{Deserialize, Serialize},
+    umi_app::{RpcBlock, RpcTransaction},
+    umi_blockchain::{block::BlockResponse, transaction::TransactionResponse},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

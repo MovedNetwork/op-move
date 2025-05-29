@@ -1,14 +1,14 @@
 [package]
-name = "moved-server"
-description = "Moved execution HTTP server (using warp)"
+name = "umi-server"
+description = "Umi execution HTTP server (using warp)"
 version = "0.1.0"
 edition = "2021"
 
 [features]
 default = []
 storage = ["storage-lmdb"]
-storage-lmdb = ["moved-storage-heed"]
-storage-rocksdb = ["moved-storage-rocksdb"]
+storage-lmdb = ["umi-storage-heed"]
+storage-rocksdb = ["umi-storage-rocksdb"]
 
 [dependencies]
 anyhow.workspace = true
@@ -22,18 +22,18 @@ jsonwebtoken.workspace = true
 lazy_static.workspace = true
 move-binary-format.workspace = true
 move-core-types.workspace = true
-moved-api.workspace = true
-moved-app.workspace = true
-moved-blockchain.workspace = true
-moved-evm-ext.workspace = true
-moved-execution.workspace = true
-moved-genesis.workspace = true
-moved-shared.workspace = true
-moved-state.workspace = true
-moved-storage-heed.optional = true
-moved-storage-heed.workspace = true
-moved-storage-rocksdb.optional = true
-moved-storage-rocksdb.workspace = true
+umi-api.workspace = true
+umi-app.workspace = true
+umi-blockchain.workspace = true
+umi-evm-ext.workspace = true
+umi-execution.workspace = true
+umi-genesis.workspace = true
+umi-shared.workspace = true
+umi-state.workspace = true
+umi-storage-heed.optional = true
+umi-storage-heed.workspace = true
+umi-storage-rocksdb.optional = true
+umi-storage-rocksdb.workspace = true
 once_cell.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -48,8 +48,8 @@ dotenvy.workspace = true
 eth_trie.workspace = true
 move-binary-format.workspace = true
 move-vm-runtime.workspace = true
-moved-evm-ext.workspace = true
-moved-genesis-image.workspace = true
+umi-evm-ext.workspace = true
+umi-genesis-image.workspace = true
 openssl.workspace = true
 
 [[bin]]

@@ -1,6 +1,6 @@
 use {
     crate::jsonrpc::JsonRpcError,
-    moved_app::{ApplicationReader, Dependencies},
+    umi_app::{ApplicationReader, Dependencies},
 };
 
 pub async fn execute(

@@ -8,9 +8,9 @@ pub trait BlockHash {
 
 /// Computes the block hash following the Ethereum specification.
 #[derive(Debug, Clone)]
-pub struct MovedBlockHash;
+pub struct UmiBlockHash;
 
-impl BlockHash for MovedBlockHash {
+impl BlockHash for UmiBlockHash {
     fn block_hash(&self, header: &Header) -> B256 {
         header.hash_slow()
     }
@@ -68,7 +68,7 @@ mod tests {
             requests_hash: None,
         };
         assert_eq!(
-            MovedBlockHash.block_hash(&header),
+            UmiBlockHash.block_hash(&header),
             B256::new(hex!(
                 "2fb75468d63d9e7c88f5f9b846417cdfd208db0defd1cdae2f388c92ca82a839"
             ))

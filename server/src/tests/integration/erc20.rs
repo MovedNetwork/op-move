@@ -3,8 +3,8 @@ use {
     super::*,
     alloy::sol_types::SolEvent,
     move_vm_runtime::session::SerializedReturnValues,
-    moved_evm_ext::{extract_evm_result, EVM_NATIVE_ADDRESS, EVM_NATIVE_OUTCOME_LAYOUT},
-    moved_shared::primitives::{ToEthAddress, ToMoveU256},
+    umi_evm_ext::{extract_evm_result, EVM_NATIVE_ADDRESS, EVM_NATIVE_OUTCOME_LAYOUT},
+    umi_shared::primitives::{ToEthAddress, ToMoveU256},
 };
 
 alloy::sol!(

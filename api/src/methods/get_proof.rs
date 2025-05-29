@@ -7,7 +7,7 @@ use {
         eips::{BlockId, BlockNumberOrTag},
         primitives::{Address, U256},
     },
-    moved_app::{ApplicationReader, Dependencies},
+    umi_app::{ApplicationReader, Dependencies},
 };
 
 pub async fn execute(
@@ -61,10 +61,10 @@ mod tests {
         super::*,
         crate::methods::tests::create_app,
         alloy::{hex, primitives::address},
-        moved_blockchain::state::ProofResponse,
-        moved_shared::primitives::U64,
         std::str::FromStr,
         test_case::test_case,
+        umi_blockchain::state::ProofResponse,
+        umi_shared::primitives::U64,
     };
 
     #[test_case("0x1")]

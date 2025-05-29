@@ -1,7 +1,7 @@
 use {
     crate::payload::PayloadId,
-    moved_shared::primitives::{B256, U256},
     std::fmt::Debug,
+    umi_shared::primitives::{B256, U256},
 };
 
 pub type Header = alloy::consensus::Header;
@@ -95,8 +95,8 @@ pub mod in_memory {
             },
             in_memory::SharedMemory,
         },
-        moved_shared::primitives::B256,
         std::convert::Infallible,
+        umi_shared::primitives::B256,
     };
 
     /// Block repository that works with in memory backing store [`BlockMemory`].

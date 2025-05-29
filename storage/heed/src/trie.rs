@@ -5,9 +5,9 @@ use {
     },
     eth_trie::{DB, EthTrie, TrieError},
     heed::RoTxn,
-    moved_evm_ext::state::DbWithRoot,
-    moved_shared::primitives::B256,
     std::sync::Arc,
+    umi_evm_ext::state::DbWithRoot,
+    umi_shared::primitives::B256,
 };
 
 pub type Key = EncodableBytes;

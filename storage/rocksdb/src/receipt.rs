@@ -1,10 +1,10 @@
 use {
     crate::generic::{FromValue, ToValue},
-    moved_blockchain::receipt::{
+    rocksdb::{AsColumnFamilyRef, DB as RocksDb, WriteBatchWithTransaction},
+    umi_blockchain::receipt::{
         ExtendedReceipt, ReceiptQueries, ReceiptRepository, TransactionReceipt,
     },
-    moved_shared::primitives::B256,
-    rocksdb::{AsColumnFamilyRef, DB as RocksDb, WriteBatchWithTransaction},
+    umi_shared::primitives::B256,
 };
 
 pub const COLUMN_FAMILY: &str = "receipt";

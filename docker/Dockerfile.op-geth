@@ -1,5 +1,5 @@
-FROM moved-foundry:latest AS foundry
-FROM moved-optimism:latest AS optimism
+FROM umi-foundry:latest AS foundry
+FROM umi-optimism:latest AS optimism
 WORKDIR /volume
 
 RUN \

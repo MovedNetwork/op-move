@@ -1,8 +1,8 @@
-name: moved
+name: umi
 
 services:
   foundry:
-    image: moved-foundry:latest
+    image: umi-foundry:latest
     build:
       context: ./
       dockerfile: ./docker/Dockerfile.foundry
@@ -10,7 +10,7 @@ services:
       replicas: 0
 
   optimism:
-    image: moved-optimism:latest
+    image: umi-optimism:latest
     build:
       context: ./
       dockerfile: ./docker/Dockerfile.optimism
@@ -22,7 +22,7 @@ services:
       - localnet
 
   op-node:
-    image: moved-op-node:latest
+    image: umi-op-node:latest
     build:
       context: ./
       dockerfile: ./docker/Dockerfile.op-node
@@ -37,7 +37,7 @@ services:
       - ./docker/volumes/shared:/volume/shared
 
   op-batcher:
-    image: moved-op-batcher:latest
+    image: umi-op-batcher:latest
     build:
       context: ./
       dockerfile: ./docker/Dockerfile.op-batcher
@@ -50,7 +50,7 @@ services:
       - ./docker/volumes/shared:/volume/shared
 
   op-proposer:
-    image: moved-op-proposer:latest
+    image: umi-op-proposer:latest
     build:
       context: ./
       dockerfile: ./docker/Dockerfile.op-proposer
@@ -63,7 +63,7 @@ services:
       - ./docker/volumes/shared:/volume/shared
 
   op-geth:
-    image: moved-op-geth:latest
+    image: umi-op-geth:latest
     build:
       context: ./
       dockerfile: ./docker/Dockerfile.op-geth
@@ -78,7 +78,7 @@ services:
       - ./docker/volumes/shared:/volume/shared
 
   op-move:
-    image: moved-op-move:latest
+    image: umi-op-move:latest
     build:
       context: ./
       dockerfile: ./docker/Dockerfile.op-move
@@ -95,7 +95,7 @@ services:
       - "8545:8545"
 
   geth:
-    image: moved-geth:latest
+    image: umi-geth:latest
     build:
       context: ./
       dockerfile: ./docker/Dockerfile.geth

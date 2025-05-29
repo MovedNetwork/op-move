@@ -1,6 +1,6 @@
 use {
     crate::{json_utils::parse_params_2, jsonrpc::JsonRpcError, schema::GetBlockResponse},
-    moved_app::{ApplicationReader, Dependencies},
+    umi_app::{ApplicationReader, Dependencies},
 };
 
 pub async fn execute(

@@ -1,18 +1,10 @@
 #[cfg(test)]
-use moved_blockchain::block::{Block, BlockHash, ExtendedBlock, Header};
+use umi_blockchain::block::{Block, BlockHash, ExtendedBlock, Header};
 use {
     crate::mirror::MirrorLog,
     clap::Parser,
     flate2::read::GzDecoder,
     jsonwebtoken::{DecodingKey, Validation},
-    moved_api::method_name::MethodName,
-    moved_app::{Application, ApplicationReader, Command, CommandQueue, Dependencies},
-    moved_blockchain::{
-        block::BlockQueries,
-        payload::{NewPayloadId, StatePayloadId},
-    },
-    moved_genesis::config::GenesisConfig,
-    moved_shared::primitives::U256,
     once_cell::sync::Lazy,
     std::{
         fs,
@@ -20,6 +12,14 @@ use {
         net::{Ipv4Addr, SocketAddr, SocketAddrV4},
         time::SystemTime,
     },
+    umi_api::method_name::MethodName,
+    umi_app::{Application, ApplicationReader, Command, CommandQueue, Dependencies},
+    umi_blockchain::{
+        block::BlockQueries,
+        payload::{NewPayloadId, StatePayloadId},
+    },
+    umi_genesis::config::GenesisConfig,
+    umi_shared::primitives::U256,
     warp::{
         http::{header::CONTENT_TYPE, HeaderMap, HeaderValue, StatusCode},
         hyper::{body::Bytes, Body, Response},
@@ -78,9 +78,9 @@ pub async fn run(max_buffered_commands: u32) {
     };
 
     let (mut app, app_reader) = initialize_app(genesis_config);
-    let (queue, state) = moved_app::create(&mut app, max_buffered_commands);
+    let (queue, state) = umi_app::create(&mut app, max_buffered_commands);
 
-    moved_app::run(
+    umi_app::run(
         state,
         tokio::spawn(async move {
             let http_app_reader = app_reader.clone();
@@ -158,18 +158,18 @@ pub fn initialize_app(
         let (genesis_changes, table_changes, evm_storage_changes) = {
             #[cfg(test)]
             {
-                moved_genesis_image::load()
+                umi_genesis_image::load()
             }
             #[cfg(not(test))]
             {
-                moved_genesis::build(
-                    &moved_genesis::MovedVm::new(&genesis_config),
+                umi_genesis::build(
+                    &umi_genesis::UmiVm::new(&genesis_config),
                     &genesis_config,
                     &app.evm_storage,
                 )
             }
         };
-        moved_genesis::apply(
+        umi_genesis::apply(
             genesis_changes,
             table_changes,
             evm_storage_changes,
@@ -276,8 +276,7 @@ async fn mirror(
 
     let request = request.expect("geth responded, so body must have been JSON");
     let op_move_response =
-        moved_api::request::handle(request.clone(), queue.clone(), is_allowed, payload_id, app)
-            .await;
+        umi_api::request::handle(request.clone(), queue.clone(), is_allowed, payload_id, app).await;
     let log = MirrorLog {
         request: &request,
         geth_response: &parsed_geth_response,

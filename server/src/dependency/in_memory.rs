@@ -1,8 +1,8 @@
 use {
     crate::dependency::shared::*,
-    moved_app::{Application, ApplicationReader, CommandActor},
-    moved_genesis::config::GenesisConfig,
     std::sync::Arc,
+    umi_app::{Application, ApplicationReader, CommandActor},
+    umi_genesis::config::GenesisConfig,
 };
 
 pub type Dependency = InMemoryDependencies;
@@ -23,25 +23,25 @@ pub fn create(
 }
 
 pub struct InMemoryDependencies {
-    memory_reader: moved_blockchain::in_memory::SharedMemoryReader,
-    memory: Option<moved_blockchain::in_memory::SharedMemory>,
-    receipt_memory_reader: moved_blockchain::receipt::ReceiptMemoryReader,
-    receipt_memory: Option<moved_blockchain::receipt::ReceiptMemory>,
-    trie_db: Arc<moved_state::InMemoryTrieDb>,
+    memory_reader: umi_blockchain::in_memory::SharedMemoryReader,
+    memory: Option<umi_blockchain::in_memory::SharedMemory>,
+    receipt_memory_reader: umi_blockchain::receipt::ReceiptMemoryReader,
+    receipt_memory: Option<umi_blockchain::receipt::ReceiptMemory>,
+    trie_db: Arc<umi_state::InMemoryTrieDb>,
 }
 
 impl InMemoryDependencies {
     pub fn new() -> Self {
-        let (memory_reader, memory) = moved_blockchain::in_memory::shared_memory::new();
+        let (memory_reader, memory) = umi_blockchain::in_memory::shared_memory::new();
         let (receipt_memory_reader, receipt_memory) =
-            moved_blockchain::receipt::receipt_memory::new();
+            umi_blockchain::receipt::receipt_memory::new();
 
         Self {
             memory_reader,
             memory: Some(memory),
             receipt_memory_reader,
             receipt_memory: Some(receipt_memory),
-            trie_db: Arc::new(moved_state::InMemoryTrieDb::empty()),
+            trie_db: Arc::new(umi_state::InMemoryTrieDb::empty()),
         }
     }
 
@@ -65,31 +65,31 @@ impl Default for InMemoryDependencies {
     }
 }
 
-impl moved_app::Dependencies for InMemoryDependencies {
-    type BlockQueries = moved_blockchain::block::InMemoryBlockQueries;
-    type BlockRepository = moved_blockchain::block::InMemoryBlockRepository;
-    type OnPayload = moved_app::OnPayload<Application<Self>>;
-    type OnTx = moved_app::OnTx<Application<Self>>;
-    type OnTxBatch = moved_app::OnTxBatch<Application<Self>>;
-    type PayloadQueries = moved_blockchain::payload::InMemoryPayloadQueries;
-    type ReceiptQueries = moved_blockchain::receipt::InMemoryReceiptQueries;
-    type ReceiptRepository = moved_blockchain::receipt::InMemoryReceiptRepository;
-    type ReceiptStorage = moved_blockchain::receipt::ReceiptMemory;
-    type SharedStorage = moved_blockchain::in_memory::SharedMemory;
-    type ReceiptStorageReader = moved_blockchain::receipt::ReceiptMemoryReader;
-    type SharedStorageReader = moved_blockchain::in_memory::SharedMemoryReader;
-    type State = moved_state::InMemoryState;
-    type StateQueries = moved_blockchain::state::InMemoryStateQueries;
-    type StorageTrieRepository = moved_evm_ext::state::InMemoryStorageTrieRepository;
-    type TransactionQueries = moved_blockchain::transaction::InMemoryTransactionQueries;
-    type TransactionRepository = moved_blockchain::transaction::InMemoryTransactionRepository;
+impl umi_app::Dependencies for InMemoryDependencies {
+    type BlockQueries = umi_blockchain::block::InMemoryBlockQueries;
+    type BlockRepository = umi_blockchain::block::InMemoryBlockRepository;
+    type OnPayload = umi_app::OnPayload<Application<Self>>;
+    type OnTx = umi_app::OnTx<Application<Self>>;
+    type OnTxBatch = umi_app::OnTxBatch<Application<Self>>;
+    type PayloadQueries = umi_blockchain::payload::InMemoryPayloadQueries;
+    type ReceiptQueries = umi_blockchain::receipt::InMemoryReceiptQueries;
+    type ReceiptRepository = umi_blockchain::receipt::InMemoryReceiptRepository;
+    type ReceiptStorage = umi_blockchain::receipt::ReceiptMemory;
+    type SharedStorage = umi_blockchain::in_memory::SharedMemory;
+    type ReceiptStorageReader = umi_blockchain::receipt::ReceiptMemoryReader;
+    type SharedStorageReader = umi_blockchain::in_memory::SharedMemoryReader;
+    type State = umi_state::InMemoryState;
+    type StateQueries = umi_blockchain::state::InMemoryStateQueries;
+    type StorageTrieRepository = umi_evm_ext::state::InMemoryStorageTrieRepository;
+    type TransactionQueries = umi_blockchain::transaction::InMemoryTransactionQueries;
+    type TransactionRepository = umi_blockchain::transaction::InMemoryTransactionRepository;
 
     fn block_queries() -> Self::BlockQueries {
-        moved_blockchain::block::InMemoryBlockQueries
+        umi_blockchain::block::InMemoryBlockQueries
     }
 
     fn block_repository() -> Self::BlockRepository {
-        moved_blockchain::block::InMemoryBlockRepository::new()
+        umi_blockchain::block::InMemoryBlockRepository::new()
     }
 
     fn on_payload() -> &'static Self::OnPayload {
@@ -105,15 +105,15 @@ impl moved_app::Dependencies for InMemoryDependencies {
     }
 
     fn payload_queries() -> Self::PayloadQueries {
-        moved_blockchain::payload::InMemoryPayloadQueries::new()
+        umi_blockchain::payload::InMemoryPayloadQueries::new()
     }
 
     fn receipt_queries() -> Self::ReceiptQueries {
-        moved_blockchain::receipt::InMemoryReceiptQueries::new()
+        umi_blockchain::receipt::InMemoryReceiptQueries::new()
     }
 
     fn receipt_repository() -> Self::ReceiptRepository {
-        moved_blockchain::receipt::InMemoryReceiptRepository::new()
+        umi_blockchain::receipt::InMemoryReceiptRepository::new()
     }
 
     fn receipt_memory(&mut self) -> Self::ReceiptStorage {
@@ -137,12 +137,12 @@ impl moved_app::Dependencies for InMemoryDependencies {
     }
 
     fn state(&self) -> Self::State {
-        moved_state::InMemoryState::try_new(self.trie_db.clone())
+        umi_state::InMemoryState::try_new(self.trie_db.clone())
             .expect("State root should exist and be fetched")
     }
 
     fn state_queries(&self, genesis_config: &GenesisConfig) -> Self::StateQueries {
-        moved_blockchain::state::InMemoryStateQueries::new(
+        umi_blockchain::state::InMemoryStateQueries::new(
             self.shared_storage_reader(),
             self.trie_db.clone(),
             genesis_config.initial_state_root,
@@ -150,15 +150,15 @@ impl moved_app::Dependencies for InMemoryDependencies {
     }
 
     fn storage_trie_repository() -> Self::StorageTrieRepository {
-        moved_evm_ext::state::InMemoryStorageTrieRepository::new()
+        umi_evm_ext::state::InMemoryStorageTrieRepository::new()
     }
 
     fn transaction_queries() -> Self::TransactionQueries {
-        moved_blockchain::transaction::InMemoryTransactionQueries::new()
+        umi_blockchain::transaction::InMemoryTransactionQueries::new()
     }
 
     fn transaction_repository() -> Self::TransactionRepository {
-        moved_blockchain::transaction::InMemoryTransactionRepository::new()
+        umi_blockchain::transaction::InMemoryTransactionRepository::new()
     }
 
     impl_shared!();

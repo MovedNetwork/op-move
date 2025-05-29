@@ -4,10 +4,10 @@ use {
         generic::{EncodableB256, SerdeJson},
     },
     heed::RoTxn,
-    moved_blockchain::transaction::{
+    umi_blockchain::transaction::{
         ExtendedTransaction, TransactionQueries, TransactionRepository, TransactionResponse,
     },
-    moved_shared::primitives::B256,
+    umi_shared::primitives::B256,
 };
 
 pub type Key = EncodableB256;

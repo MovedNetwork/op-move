@@ -1,8 +1,8 @@
 use {
     alloy::eips::eip2718::Encodable2718,
-    moved_shared::primitives::{B256, U256},
     op_alloy::consensus::{OpTxEnvelope, TxDeposit},
     std::fmt::Debug,
+    umi_shared::primitives::{B256, U256},
 };
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -33,7 +33,7 @@ impl ExtendedTransaction {
 
     pub fn from(
         &self,
-    ) -> Result<moved_shared::primitives::Address, alloy::primitives::SignatureError> {
+    ) -> Result<umi_shared::primitives::Address, alloy::primitives::SignatureError> {
         match self.inner() {
             OpTxEnvelope::Legacy(tx) => tx.recover_signer(),
             OpTxEnvelope::Eip1559(tx) => tx.recover_signer(),

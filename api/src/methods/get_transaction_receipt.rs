@@ -1,6 +1,6 @@
 use {
     crate::{json_utils::parse_params_1, jsonrpc::JsonRpcError},
-    moved_app::{ApplicationReader, Dependencies},
+    umi_app::{ApplicationReader, Dependencies},
 };
 
 pub async fn execute(
@@ -22,16 +22,16 @@ mod tests {
             methods::{forkchoice_updated, get_payload, send_raw_transaction, tests::create_app},
             schema::{ForkchoiceUpdatedResponseV1, GetPayloadResponseV3},
         },
-        moved_blockchain::receipt::TransactionReceipt,
         std::iter,
+        umi_blockchain::receipt::TransactionReceipt,
     };
 
     #[tokio::test]
     async fn test_execute() {
         let (reader, mut app) = create_app();
-        let (queue, state) = moved_app::create(&mut app, 10);
+        let (queue, state) = umi_app::create(&mut app, 10);
 
-        moved_app::run(state, async move {
+        umi_app::run(state, async move {
             // 1. Send transaction
             let tx_hash = send_raw_transaction::execute(
                 send_raw_transaction::tests::example_request(),

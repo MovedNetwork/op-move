@@ -6,7 +6,7 @@ set -euxo allexport
 . /volume/.env
 WORKDIR="/volume/packages/contracts-bedrock"
 SHARED="/volume/shared"
-DEPLOY_CONFIG="${WORKDIR}/deploy-config/moved.json"
+DEPLOY_CONFIG="${WORKDIR}/deploy-config/umi.json"
 ROLLUP_FILE="${WORKDIR}/deployments/rollup.json"
 JWT_FILE="${WORKDIR}/deployments/jwt.txt"
 GENESIS_FILE="${WORKDIR}/deployments/genesis.json"
@@ -29,7 +29,7 @@ if [ ! -f "${DEPLOY_CONFIG_PATH}" ]; then
     cd "${WORKDIR}"
 
     # 4. Deploy Optimism L1 contracts
-    DEPLOYMENT_CONTEXT=moved \
+    DEPLOYMENT_CONTEXT=umi \
     DEPLOY_CONFIG_PATH="${DEPLOY_CONFIG_PATH}" \
     IMPL_SALT=0000000000000000000000000000000000000000000000000000000000000000 \
     forge script scripts/Deploy.s.sol:Deploy \

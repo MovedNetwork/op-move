@@ -1,6 +1,6 @@
-FROM moved-foundry:latest AS foundry
+FROM umi-foundry:latest AS foundry
 # Add build image
-FROM moved-optimism:latest AS optimism
+FROM umi-optimism:latest AS optimism
 
 # Switch to clean image
 FROM alpine:3.21.2

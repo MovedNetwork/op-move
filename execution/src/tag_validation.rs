@@ -9,7 +9,7 @@ use {
     },
     move_vm_runtime::{ModuleStorage, session::Session},
     move_vm_types::loaded_data::runtime_types::Type,
-    moved_shared::error::{EntryFunctionValue, Error, InvalidTransactionCause},
+    umi_shared::error::{EntryFunctionValue, Error, InvalidTransactionCause},
 };
 
 const ALLOWED_STRUCTS: [MoveStructInfo<'static>; 5] = [
@@ -45,7 +45,7 @@ const ALLOWED_STRUCTS: [MoveStructInfo<'static>; 5] = [
 /// The reason for this restriction is to respect the invariants that Move contracts
 /// may have around their types. For example token types and capability types should
 /// only be created under specific conditions, not directly deserialized from raw bytes.
-pub fn validate_entry_type_tag(tag: &TypeTag) -> moved_shared::error::Result<()> {
+pub fn validate_entry_type_tag(tag: &TypeTag) -> umi_shared::error::Result<()> {
     let mut current_tag = tag;
     loop {
         match current_tag {
@@ -109,7 +109,7 @@ pub fn validate_entry_value(
     expected_signer: &AccountAddress,
     session: &mut Session,
     module_storage: &impl ModuleStorage,
-) -> moved_shared::error::Result<()> {
+) -> umi_shared::error::Result<()> {
     let mut stack = Vec::with_capacity(10);
     stack.push((tag, value));
 
@@ -178,7 +178,7 @@ pub fn validate_entry_value(
 }
 
 /// String must be utf-8 encoded bytes.
-fn validate_string(value: &MoveStruct) -> moved_shared::error::Result<()> {
+fn validate_string(value: &MoveStruct) -> umi_shared::error::Result<()> {
     let inner = value.optional_variant_and_fields().1.first().ok_or(
         Error::entry_fn_invariant_violation(EntryFunctionValue::StringStructHasField),
     )?;
@@ -213,7 +213,7 @@ fn validate_string(value: &MoveStruct) -> moved_shared::error::Result<()> {
 }
 
 /// Option must be a vector with 0 or 1 values
-fn validate_option(value: &MoveStruct) -> moved_shared::error::Result<Option<&MoveValue>> {
+fn validate_option(value: &MoveStruct) -> umi_shared::error::Result<Option<&MoveValue>> {
     let inner = value.optional_variant_and_fields().1.first().ok_or(
         Error::entry_fn_invariant_violation(EntryFunctionValue::OptionStructHasField),
     )?;
@@ -242,7 +242,7 @@ fn validate_object(
     inner_type: &TypeTag,
     session: &mut Session,
     module_storage: &impl ModuleStorage,
-) -> moved_shared::error::Result<()> {
+) -> umi_shared::error::Result<()> {
     let inner = value.optional_variant_and_fields().1.first().ok_or(
         Error::entry_fn_invariant_violation(EntryFunctionValue::ObjectStructHasField),
     )?;
@@ -286,7 +286,7 @@ fn resource_exists(
 fn get_object_core_type(
     session: &mut Session,
     module_storage: &impl ModuleStorage,
-) -> moved_shared::error::Result<Type> {
+) -> umi_shared::error::Result<Type> {
     let type_tag = TypeTag::Struct(Box::new(StructTag {
         address: ALLOWED_STRUCTS[1].address,
         module: ALLOWED_STRUCTS[1].module.into(),
@@ -323,10 +323,10 @@ mod tests {
         alloy::primitives::address,
         move_core_types::value::MoveStruct,
         move_vm_runtime::AsUnsyncCodeStorage,
-        moved_evm_ext::state::InMemoryStorageTrieRepository,
-        moved_genesis::{CreateMoveVm, MovedVm},
-        moved_shared::primitives::ToMoveAddress,
-        moved_state::{InMemoryState, ResolverBasedModuleBytesStorage, State},
+        umi_evm_ext::state::InMemoryStorageTrieRepository,
+        umi_genesis::{CreateMoveVm, UmiVm},
+        umi_shared::primitives::ToMoveAddress,
+        umi_state::{InMemoryState, ResolverBasedModuleBytesStorage, State},
     };
 
     #[test]
@@ -523,11 +523,11 @@ mod tests {
             ),
         ];
 
-        let moved_vm = MovedVm::new(&Default::default());
-        let vm = moved_vm.create_move_vm().unwrap();
+        let umi_vm = UmiVm::new(&Default::default());
+        let vm = umi_vm.create_move_vm().unwrap();
         let state = InMemoryState::default();
         let module_bytes_storage = ResolverBasedModuleBytesStorage::new(state.resolver());
-        let code_storage = module_bytes_storage.as_unsync_code_storage(&moved_vm);
+        let code_storage = module_bytes_storage.as_unsync_code_storage(&umi_vm);
         let evm_storage = InMemoryStorageTrieRepository::new();
         let mut session = create_vm_session(
             &vm,
@@ -611,11 +611,11 @@ mod tests {
             ),
         ];
 
-        let moved_vm = MovedVm::new(&Default::default());
-        let vm = moved_vm.create_move_vm().unwrap();
+        let umi_vm = UmiVm::new(&Default::default());
+        let vm = umi_vm.create_move_vm().unwrap();
         let state = InMemoryState::default();
         let module_bytes_storage = ResolverBasedModuleBytesStorage::new(state.resolver());
-        let code_storage = module_bytes_storage.as_unsync_code_storage(&moved_vm);
+        let code_storage = module_bytes_storage.as_unsync_code_storage(&umi_vm);
         let evm_storage = InMemoryStorageTrieRepository::new();
         let mut session = create_vm_session(
             &vm,

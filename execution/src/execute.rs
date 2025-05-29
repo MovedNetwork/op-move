@@ -18,11 +18,11 @@ use {
         gas::GasMeter, loaded_data::runtime_types::Type, value_serde::ValueSerDeContext,
         values::Value,
     },
-    moved_evm_ext::{
+    umi_evm_ext::{
         CODE_LAYOUT, EVM_CALL_FN_NAME, EVM_CREATE_FN_NAME, EVM_NATIVE_ADDRESS, EVM_NATIVE_MODULE,
         EvmNativeOutcome, extract_evm_result,
     },
-    moved_shared::{
+    umi_shared::{
         error::{
             Error::{self, User},
             InvalidTransactionCause, ScriptTransaction, UserError,
@@ -38,7 +38,7 @@ pub(super) fn execute_entry_function<G: GasMeter, MS: ModuleStorage>(
     traversal_context: &mut TraversalContext,
     gas_meter: &mut G,
     module_storage: &MS,
-) -> moved_shared::error::Result<()> {
+) -> umi_shared::error::Result<()> {
     let (module_id, function_name, ty_args, args) = entry_fn.into_inner();
 
     // Validate signer params match the actual signer
@@ -83,7 +83,7 @@ pub(super) fn execute_script<G: GasMeter, CS: CodeStorage>(
     traversal_context: &mut TraversalContext,
     gas_meter: &mut G,
     code_storage: &CS,
-) -> moved_shared::error::Result<()> {
+) -> umi_shared::error::Result<()> {
     let function = session.load_script(code_storage, script.code(), script.ty_args())?;
     let serialized_signer = MoveValue::Signer(*signer).simple_serialize().ok_or(
         Error::script_tx_invariant_violation(ScriptTransaction::ArgsMustSerialize),
@@ -138,7 +138,7 @@ pub(super) fn deploy_evm_contract<G: GasMeter, MS: ModuleStorage>(
     traversal_context: &mut TraversalContext,
     gas_meter: &mut G,
     module_storage: &MS,
-) -> moved_shared::error::Result<Address> {
+) -> umi_shared::error::Result<Address> {
     let module = ModuleId::new(EVM_NATIVE_ADDRESS, EVM_NATIVE_MODULE.into());
     let function_name = EVM_CREATE_FN_NAME;
     let args = vec![
@@ -188,7 +188,7 @@ pub(super) fn execute_evm_contract<G: GasMeter, MS: ModuleStorage>(
     traversal_context: &mut TraversalContext,
     gas_meter: &mut G,
     module_storage: &MS,
-) -> moved_shared::error::Result<EvmNativeOutcome> {
+) -> umi_shared::error::Result<EvmNativeOutcome> {
     let module = ModuleId::new(EVM_NATIVE_ADDRESS, EVM_NATIVE_MODULE.into());
     let function_name = EVM_CALL_FN_NAME;
     // Unwraps in serialization are safe because the layouts match the types.
@@ -225,7 +225,7 @@ pub(super) fn execute_evm_contract<G: GasMeter, MS: ModuleStorage>(
 
 // If `t` is wrapped in `Type::Reference` or `Type::MutableReference`,
 // return the inner type
-fn strip_reference(t: &Type) -> moved_shared::error::Result<&Type> {
+fn strip_reference(t: &Type) -> umi_shared::error::Result<&Type> {
     match t {
         Type::Reference(inner) | Type::MutableReference(inner) => {
             match inner.as_ref() {
@@ -245,7 +245,7 @@ pub(super) fn deploy_module(
     code: Module,
     address: AccountAddress,
     module_storage: &impl ModuleStorage,
-) -> moved_shared::error::Result<(ModuleId, ChangeSet)> {
+) -> umi_shared::error::Result<(ModuleId, ChangeSet)> {
     let code = code.into_inner();
     let module = CompiledModule::deserialize(&code)?;
 

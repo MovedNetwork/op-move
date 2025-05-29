@@ -22,10 +22,10 @@ use {
         loaded_data::runtime_types::Type,
         values::{Struct, Value},
     },
-    moved_shared::primitives::{ToEthAddress, ToMoveAddress, ToMoveU256, ToU256},
     revm::primitives::U256,
     smallvec::{SmallVec, smallvec},
     std::{collections::VecDeque, sync::LazyLock},
+    umi_shared::primitives::{ToEthAddress, ToMoveAddress, ToMoveU256, ToU256},
 };
 
 /// Marker struct defined in our framework for marking data as FixedBytes in the Solidity ABI.

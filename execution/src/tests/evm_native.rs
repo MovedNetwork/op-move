@@ -12,12 +12,12 @@ use {
     aptos_types::transaction::EntryFunction,
     move_core_types::{ident_str, language_storage::ModuleId, value::MoveValue},
     move_vm_types::{value_serde::ValueSerDeContext, values::Value},
-    moved_evm_ext::{
+    revm::primitives::{TxKind, U256},
+    umi_evm_ext::{
         CODE_LAYOUT, EVM_NATIVE_ADDRESS, EVM_NATIVE_MODULE, state::InMemoryStorageTrieRepository,
     },
-    moved_shared::primitives::{ToEthAddress, ToMoveAddress, ToMoveU256},
-    moved_state::{InMemoryState, State},
-    revm::primitives::{TxKind, U256},
+    umi_shared::primitives::{ToEthAddress, ToMoveAddress, ToMoveU256},
+    umi_state::{InMemoryState, State},
 };
 
 sol!(

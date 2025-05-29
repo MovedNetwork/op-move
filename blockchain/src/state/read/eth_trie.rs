@@ -38,10 +38,14 @@ impl<R, D: DB> EthTrieStateQueries<R, D> {
 }
 
 impl<R: HeightToStateRootIndex, D: DB> EthTrieStateQueries<R, D> {
+    pub fn push_state_root(&self, state_root: B256) -> Result<(), R::Err> {
+        self.index.push_state_root(state_root)
+    }
+
     fn root_by_height(&self, height: BlockHeight) -> Option<B256> {
         match height {
             0 => Some(self.genesis_state_root),
-            _ => self.index.root_by_height(height),
+            _ => self.index.root_by_height(height).ok()?,
         }
     }
 

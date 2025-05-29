@@ -1,6 +1,7 @@
 use {
     crate::dependency::shared::*,
     moved_app::{Application, ApplicationReader, CommandActor},
+    moved_blockchain::state::EthTrieStateQueries,
     moved_genesis::config::GenesisConfig,
     moved_state::{EthTrieState, State},
     moved_storage_heed::{
@@ -39,7 +40,8 @@ impl moved_app::Dependencies for HeedDependencies {
     type ReceiptStorageReader = &'static moved_storage_heed::Env;
     type SharedStorageReader = &'static moved_storage_heed::Env;
     type State = EthTrieState<trie::HeedEthTrieDb<'static>>;
-    type StateQueries = state::HeedStateQueries<'static>;
+    type StateQueries =
+        EthTrieStateQueries<state::HeedStateRootIndex<'static>, trie::HeedEthTrieDb<'static>>;
     type StorageTrieRepository = evm::HeedStorageTrieRepository;
     type TransactionQueries = transaction::HeedTransactionQueries;
     type TransactionRepository = transaction::HeedTransactionRepository;
@@ -102,7 +104,11 @@ impl moved_app::Dependencies for HeedDependencies {
     }
 
     fn state_queries(&self, genesis_config: &GenesisConfig) -> Self::StateQueries {
-        state::HeedStateQueries::new(db(), TRIE_DB.clone(), genesis_config.initial_state_root)
+        EthTrieStateQueries::new(
+            state::HeedStateRootIndex::new(db()),
+            TRIE_DB.clone(),
+            genesis_config.initial_state_root,
+        )
     }
 
     fn storage_trie_repository() -> Self::StorageTrieRepository {

@@ -14,6 +14,7 @@ use {
     moved_execution::{quick_get_eth_balance, quick_get_nonce},
     moved_shared::primitives::{Address, B256, KeyHashable, U256},
     moved_state::nodes::TreeKey,
+    std::error,
 };
 
 pub type ProofResponse = EIP1186AccountProofResponse;
@@ -80,8 +81,10 @@ pub trait StateQueries {
 }
 
 pub trait HeightToStateRootIndex {
-    fn root_by_height(&self, height: BlockHeight) -> Option<B256>;
-    fn height(&self) -> BlockHeight;
+    type Err: error::Error;
+    fn root_by_height(&self, height: BlockHeight) -> Result<Option<B256>, Self::Err>;
+    fn height(&self) -> Result<BlockHeight, Self::Err>;
+    fn push_state_root(&self, state_root: B256) -> Result<(), Self::Err>;
 }
 
 pub fn proof_from_trie_and_resolver(

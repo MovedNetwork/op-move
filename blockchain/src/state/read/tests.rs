@@ -14,16 +14,22 @@ use {
     moved_genesis::{CreateMoveVm, MovedVm, config::GenesisConfig},
     moved_shared::primitives::{B256, U256},
     moved_state::{InMemoryState, ResolverBasedModuleBytesStorage, State},
-    std::sync::Arc,
+    std::{convert::Infallible, sync::Arc},
 };
 
 impl HeightToStateRootIndex for Vec<B256> {
-    fn root_by_height(&self, height: BlockHeight) -> Option<B256> {
-        self.get(height as usize).cloned()
+    type Err = Infallible;
+
+    fn root_by_height(&self, height: BlockHeight) -> Result<Option<B256>, Self::Err> {
+        Ok(self.get(height as usize).cloned())
     }
 
-    fn height(&self) -> BlockHeight {
-        self.len() as u64 - 1
+    fn height(&self) -> Result<BlockHeight, Self::Err> {
+        Ok(self.len() as u64 - 1)
+    }
+
+    fn push_state_root(&self, _state_root: B256) -> Result<(), Self::Err> {
+        Ok(())
     }
 }
 

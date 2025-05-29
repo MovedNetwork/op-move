@@ -11,6 +11,7 @@ use {
         ResolverBackedDB,
         state::{self, StorageTrieRepository},
     },
+    moved_execution::{quick_get_eth_balance, quick_get_nonce},
     moved_shared::primitives::{Address, B256, KeyHashable, U256},
     moved_state::nodes::TreeKey,
 };
@@ -48,7 +49,11 @@ pub trait StateQueries {
         evm_storage: &impl StorageTrieRepository,
         account: AccountAddress,
         height: BlockHeight,
-    ) -> Option<Balance>;
+    ) -> Option<Balance> {
+        let resolver = self.resolver_at(height);
+
+        Some(quick_get_eth_balance(&account, &resolver, evm_storage))
+    }
 
     /// Queries the blockchain state version corresponding with block `height` for the nonce value
     /// associated with `account`.
@@ -57,7 +62,11 @@ pub trait StateQueries {
         evm_storage: &impl StorageTrieRepository,
         account: AccountAddress,
         height: BlockHeight,
-    ) -> Option<Nonce>;
+    ) -> Option<Nonce> {
+        let resolver = self.resolver_at(height);
+
+        Some(quick_get_nonce(&account, &resolver, evm_storage))
+    }
 
     fn proof_at(
         &self,
@@ -70,7 +79,7 @@ pub trait StateQueries {
     fn resolver_at(&self, height: BlockHeight) -> impl MoveResolver + TableResolver + '_;
 }
 
-pub trait ReadStateRoot {
+pub trait HeightToStateRootIndex {
     fn root_by_height(&self, height: BlockHeight) -> Option<B256>;
     fn height(&self) -> BlockHeight;
 }

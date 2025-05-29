@@ -17,7 +17,7 @@ use {
     std::sync::Arc,
 };
 
-impl ReadStateRoot for Vec<B256> {
+impl HeightToStateRootIndex for Vec<B256> {
     fn root_by_height(&self, height: BlockHeight) -> Option<B256> {
         self.get(height as usize).cloned()
     }

@@ -33,7 +33,7 @@ mod tests {
         crate::methods::forkchoice_updated,
         alloy::primitives::hex,
         std::sync::Arc,
-        umi_app::{Application, CommandActor, TestDependencies},
+        umi_app::{Application, CommandActor, SharedBlockHashCache, TestDependencies},
         umi_blockchain::{
             block::{
                 Block, BlockRepository, Eip1559GasFee, InMemoryBlockQueries,
@@ -45,7 +45,7 @@ mod tests {
             state::InMemoryStateQueries,
             transaction::{InMemoryTransactionQueries, InMemoryTransactionRepository},
         },
-        umi_evm_ext::state::InMemoryStorageTrieRepository,
+        umi_evm_ext::state::{BlockHashWriter, InMemoryStorageTrieRepository},
         umi_genesis::config::GenesisConfig,
         umi_shared::primitives::{B256, U256},
         umi_state::{InMemoryState, InMemoryTrieDb},
@@ -77,6 +77,7 @@ mod tests {
     #[tokio::test]
     async fn test_execute_v3() {
         let genesis_config = GenesisConfig::default();
+        let mut block_hash_cache = SharedBlockHashCache::default();
 
         // Set known block height
         let head_hash = B256::new(hex!(
@@ -87,6 +88,7 @@ mod tests {
         let (memory_reader, mut memory) = shared_memory::new();
         let mut repository = InMemoryBlockRepository::new();
         repository.add(&mut memory, genesis_block).unwrap();
+        block_hash_cache.push(0, head_hash);
 
         let trie_db = Arc::new(InMemoryTrieDb::empty());
         let mut state = InMemoryState::empty(trie_db.clone());
@@ -108,6 +110,7 @@ mod tests {
             genesis_config: genesis_config.clone(),
             state,
             block_hash: head_hash,
+            block_hash_writer: block_hash_cache.clone(),
             block_repository: repository,
             gas_fee: Eip1559GasFee::default(),
             base_token: (),
@@ -140,6 +143,8 @@ mod tests {
                 _,
                 UmiBlockHash,
                 _,
+                SharedBlockHashCache,
+                _,
                 (),
                 _,
                 _,
@@ -158,6 +163,7 @@ mod tests {
         > {
             genesis_config,
             base_token: (),
+            block_hash_lookup: block_hash_cache,
             block_queries: InMemoryBlockQueries,
             storage: memory_reader.clone(),
             state_queries: InMemoryStateQueries::new(memory_reader, trie_db, genesis_state_root),

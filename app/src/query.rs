@@ -1,5 +1,5 @@
 use {
-    crate::{ApplicationReader, Dependencies, block_hash::StorageBasedProvider},
+    crate::{ApplicationReader, Dependencies},
     alloy::{
         consensus::Header,
         eips::{
@@ -81,7 +81,6 @@ impl<D: Dependencies> ApplicationReader<D> {
         block_number: BlockNumberOrTag,
         reward_percentiles: Option<Vec<f64>>,
     ) -> Result<FeeHistory> {
-        dbg!(self.block_number());
         if block_count < 1 {
             return Err(Error::User(UserError::InvalidBlockCount));
         }
@@ -153,15 +152,13 @@ impl<D: Dependencies> ApplicationReader<D> {
                                 percentiles
                                     .iter()
                                     .map(|p| {
-                                        dbg!(p);
                                         let threshold =
                                             ((block_gas_used as f64) * p / 100.0).round() as u64;
-                                        dbg!(&threshold);
                                         price_and_cum_gas
                                             .iter()
-                                            .find(|(_, cum_gas)| dbg!(cum_gas) >= &threshold)
-                                            .or_else(|| dbg!(price_and_cum_gas.last()))
-                                            .map(|(p, _)| dbg!(p))
+                                            .find(|(_, cum_gas)| cum_gas >= &threshold)
+                                            .or_else(|| price_and_cum_gas.last())
+                                            .map(|(p, _)| p)
                                             .copied()
                                             .unwrap_or(0u128)
                                     })
@@ -216,7 +213,6 @@ impl<D: Dependencies> ApplicationReader<D> {
                 .expect("Blocks should be non-empty"),
             Earliest => 0,
         };
-        let block_hash_lookup = StorageBasedProvider::new(&self.storage, &self.block_queries);
         let outcome = simulate_transaction(
             transaction,
             &self.state_queries.resolver_at(height),
@@ -224,7 +220,7 @@ impl<D: Dependencies> ApplicationReader<D> {
             &self.genesis_config,
             &self.base_token,
             block_height,
-            &block_hash_lookup,
+            &self.block_hash_lookup,
         );
 
         outcome.map(|outcome| {
@@ -239,14 +235,13 @@ impl<D: Dependencies> ApplicationReader<D> {
         block_number: BlockNumberOrTag,
     ) -> Result<Vec<u8>> {
         let height = self.resolve_height(block_number).unwrap();
-        let block_hash_lookup = StorageBasedProvider::new(&self.storage, &self.block_queries);
         call_transaction(
             transaction,
             &self.state_queries.resolver_at(height),
             &self.evm_storage,
             &self.genesis_config,
             &self.base_token,
-            &block_hash_lookup,
+            &self.block_hash_lookup,
         )
     }
 

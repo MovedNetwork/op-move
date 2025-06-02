@@ -88,10 +88,9 @@ fn create_app_with_given_queries<SQ: StateQueries + Clone + Send + Sync + 'stati
 
     let mut state = InMemoryState::default();
     let mut evm_storage = InMemoryStorageTrieRepository::new();
-    let (changes, tables, evm_storage_changes) = umi_genesis_image::load();
+    let (changes, evm_storage_changes) = umi_genesis_image::load();
     umi_genesis::apply(
         changes,
-        tables,
         evm_storage_changes,
         &genesis_config,
         &mut state,
@@ -206,14 +205,12 @@ fn create_app_with_fake_queries(
     let evm_storage = InMemoryStorageTrieRepository::new();
     let trie_db = Arc::new(InMemoryTrieDb::empty());
     let mut state = InMemoryState::empty(trie_db.clone());
-    let (genesis_changes, table_changes, evm_storage_changes) = umi_genesis_image::load();
+    let (genesis_changes, evm_storage_changes) = umi_genesis_image::load();
 
-    state
-        .apply_with_tables(genesis_changes.clone(), table_changes)
-        .unwrap();
+    state.apply(genesis_changes).unwrap();
     evm_storage.apply(evm_storage_changes).unwrap();
     let changes_addition = mint_eth(&state, &evm_storage, addr, initial_balance);
-    state.apply(changes_addition.clone()).unwrap();
+    state.apply(changes_addition.clone().into()).unwrap();
 
     let (receipt_reader, receipt_memory) = receipt_memory::new();
 

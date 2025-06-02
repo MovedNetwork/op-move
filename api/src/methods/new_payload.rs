@@ -270,10 +270,9 @@ mod tests {
         let trie_db = Arc::new(InMemoryTrieDb::empty());
         let mut state = InMemoryState::empty(trie_db.clone());
         let mut evm_storage = InMemoryStorageTrieRepository::new();
-        let (changes, table_changes, evm_storage_changes) = umi_genesis_image::load();
+        let (changes, evm_storage_changes) = umi_genesis_image::load();
         umi_genesis::apply(
             changes.clone(),
-            table_changes,
             evm_storage_changes,
             &genesis_config,
             &mut state,

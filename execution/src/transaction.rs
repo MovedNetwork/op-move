@@ -9,9 +9,7 @@ use {
         rpc::types::TransactionRequest,
     },
     aptos_types::transaction::{EntryFunction, Module, Script},
-    move_core_types::{
-        account_address::AccountAddress, effects::ChangeSet, language_storage::ModuleId,
-    },
+    move_core_types::{account_address::AccountAddress, language_storage::ModuleId},
     op_alloy::consensus::{
         OpDepositReceipt, OpDepositReceiptWithBloom, OpReceiptEnvelope, OpTxEnvelope, TxDeposit,
     },
@@ -113,7 +111,7 @@ impl NormalizedExtendedTxEnvelope {
     }
 }
 
-type MoveChanges = ChangeSet;
+type MoveChanges = umi_state::Changes;
 type EvmChanges = umi_evm_ext::state::StorageTriesChanges;
 
 #[derive(Debug, Clone)]

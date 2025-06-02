@@ -243,7 +243,7 @@ impl<D: Dependencies> Application<D> {
                 .as_ref()
                 .and_then(|x| x.l1_block_info(pending_tx.l1_gas_fee_input.clone()));
 
-            self.on_tx(outcome.changes.move_vm.clone());
+            self.on_tx(outcome.changes.move_vm.clone().accounts);
 
             self.state
                 .apply(outcome.changes.move_vm)

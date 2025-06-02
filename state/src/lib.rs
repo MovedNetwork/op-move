@@ -1,11 +1,12 @@
 pub mod nodes;
 
+mod diff;
 mod in_memory;
 mod resolver;
 mod state;
 
 pub use {
-    in_memory::InMemoryState, resolver::EthTrieResolver, state::EthTrieState,
+    diff::Changes, in_memory::InMemoryState, resolver::EthTrieResolver, state::EthTrieState,
     umi_evm_ext::state::InMemoryDb as InMemoryTrieDb,
 };
 
@@ -21,7 +22,7 @@ use {
         identifier::IdentStr,
         language_storage::{ModuleId, StructTag},
     },
-    move_table_extension::{TableChangeSet, TableResolver},
+    move_table_extension::TableResolver,
     move_vm_types::{code::ModuleBytesStorage, resolver::MoveResolver},
     nodes::{TreeKey, TreeValue},
     std::{collections::HashMap, fmt::Debug, sync::Arc},
@@ -35,27 +36,16 @@ use {
 /// * [`resolver`]: Creates [`MoveResolver`] that can resolve both resources and modules.
 /// * [`state_root`]: Returns current state root.
 /// * [`apply`]: Applies changes produced by a transaction on the state trie.
-/// * [`apply_with_tables`]: Same as [`apply`] but includes changes to tables from
-///   [`move_table_extension`].
 ///
 /// [`resolver`]: Self::resolver
 /// [`state_root`]: Self::state_root
 /// [`apply`]: Self::apply
-/// [`apply_with_tables`]: Self::apply_with_tables
 pub trait State {
     /// The associated error that can occur on storage operations.
     type Err: Debug;
 
     /// Applies the `changes` to the blockchain state.
-    fn apply(&mut self, changes: ChangeSet) -> Result<(), Self::Err>;
-
-    /// Applies the `changes` to the blockchain state. In addition, applies `table_changes`
-    /// from the [`move_table_extension`].
-    fn apply_with_tables(
-        &mut self,
-        changes: ChangeSet,
-        table_changes: TableChangeSet,
-    ) -> Result<(), Self::Err>;
+    fn apply(&mut self, changes: Changes) -> Result<(), Self::Err>;
 
     /// Returns a reference to a [`DB`] that can access the merkle trie holding the current
     /// blockchain state.
@@ -243,9 +233,10 @@ mod tests {
     #[test]
     fn test_insert_to_empty_tree_produces_new_state_root() {
         let mut state = InMemoryState::default();
-        let mut change_set = ChangeSet::new();
+        let mut change_set = Changes::empty();
 
         change_set
+            .accounts
             .add_account_changeset(AccountAddress::new([0; 32]), AccountChanges::new())
             .unwrap();
 
@@ -259,15 +250,16 @@ mod tests {
     #[test]
     fn test_state_root_is_different_after_update_changes_trie() {
         let mut state = InMemoryState::default();
-        let mut change_set = ChangeSet::new();
+        let mut change_set = Changes::empty();
 
         change_set
+            .accounts
             .add_account_changeset(AccountAddress::new([0; 32]), AccountChanges::new())
             .unwrap();
         state.apply(change_set).unwrap();
         let old_state_root = state.state_root();
 
-        let mut change_set = ChangeSet::new();
+        let mut change_set = Changes::empty();
 
         let mut account_change_set = AccountChanges::new();
         account_change_set
@@ -277,6 +269,7 @@ mod tests {
             )
             .unwrap();
         change_set
+            .accounts
             .add_account_changeset(AccountAddress::new([9; 32]), account_change_set)
             .unwrap();
         state.apply(change_set).unwrap();
@@ -288,7 +281,7 @@ mod tests {
     #[test]
     fn test_state_root_remains_the_same_when_update_does_not_change_trie() {
         let mut state = InMemoryState::default();
-        let mut change_set = ChangeSet::new();
+        let mut change_set = Changes::empty();
 
         let mut account_change_set = AccountChanges::new();
         account_change_set
@@ -299,15 +292,16 @@ mod tests {
             .unwrap();
 
         change_set
+            .accounts
             .add_account_changeset(AccountAddress::new([9; 32]), account_change_set)
             .unwrap();
         state
             .trie_mut()
-            .insert_change_set_into_merkle_trie(&change_set)
+            .insert_change_set_into_merkle_trie(&change_set.accounts)
             .unwrap();
         let expected_state_root = state.state_root();
 
-        let mut change_set = ChangeSet::new();
+        let mut change_set = Changes::empty();
 
         let mut account_change_set = AccountChanges::new();
         account_change_set
@@ -317,11 +311,12 @@ mod tests {
             )
             .unwrap();
         change_set
+            .accounts
             .add_account_changeset(AccountAddress::new([9; 32]), account_change_set)
             .unwrap();
         state
             .trie_mut()
-            .insert_change_set_into_merkle_trie(&change_set)
+            .insert_change_set_into_merkle_trie(&change_set.accounts)
             .unwrap();
         let actual_state_root = state.state_root();
 

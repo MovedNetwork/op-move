@@ -109,10 +109,9 @@ impl TestContext {
         let genesis_config = GenesisConfig::default();
         let mut state = InMemoryState::default();
         let mut evm_storage = InMemoryStorageTrieRepository::new();
-        let (changes, tables, evm_storage_changes) = umi_genesis_image::load();
+        let (changes, evm_storage_changes) = umi_genesis_image::load();
         umi_genesis::apply(
             changes,
-            tables,
             evm_storage_changes,
             &genesis_config,
             &mut state,
@@ -553,7 +552,7 @@ impl TestContext {
         changes.squash(evm_changes.accounts).unwrap();
         drop(extensions);
 
-        self.state.apply(changes).unwrap();
+        self.state.apply(changes.into()).unwrap();
         self.evm_storage.apply(evm_changes.storage).unwrap();
         outcome
     }

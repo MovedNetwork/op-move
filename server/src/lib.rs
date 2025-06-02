@@ -155,7 +155,7 @@ pub fn initialize_app(
         .unwrap()
         .is_none()
     {
-        let (genesis_changes, table_changes, evm_storage_changes) = {
+        let (genesis_changes, evm_storage_changes) = {
             #[cfg(test)]
             {
                 umi_genesis_image::load()
@@ -171,7 +171,6 @@ pub fn initialize_app(
         };
         umi_genesis::apply(
             genesis_changes,
-            table_changes,
             evm_storage_changes,
             &genesis_config,
             &mut app.state,

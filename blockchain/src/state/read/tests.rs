@@ -3,7 +3,7 @@ use {
     ::eth_trie::DB,
     alloy::hex,
     move_core_types::{account_address::AccountAddress, effects::ChangeSet},
-    move_table_extension::{TableChangeSet, TableResolver},
+    move_table_extension::TableResolver,
     move_vm_runtime::{
         AsUnsyncCodeStorage,
         module_traversal::{TraversalContext, TraversalStorage},
@@ -14,7 +14,7 @@ use {
     umi_execution::{check_nonce, create_vm_session, mint_eth, session_id::SessionId},
     umi_genesis::{CreateMoveVm, UmiVm, config::GenesisConfig},
     umi_shared::primitives::{B256, U256},
-    umi_state::{InMemoryState, ResolverBasedModuleBytesStorage, State},
+    umi_state::{Changes, InMemoryState, ResolverBasedModuleBytesStorage, State},
 };
 
 impl HeightToStateRootIndex for Vec<B256> {
@@ -38,18 +38,9 @@ struct StateSpy(InMemoryState, ChangeSet);
 impl State for StateSpy {
     type Err = <InMemoryState as State>::Err;
 
-    fn apply(&mut self, changes: ChangeSet) -> Result<(), Self::Err> {
-        self.1.squash(changes.clone()).unwrap();
+    fn apply(&mut self, changes: Changes) -> Result<(), Self::Err> {
+        self.1.squash(changes.accounts.clone()).unwrap();
         self.0.apply(changes)
-    }
-
-    fn apply_with_tables(
-        &mut self,
-        changes: ChangeSet,
-        table_changes: TableChangeSet,
-    ) -> Result<(), Self::Err> {
-        self.1.squash(changes.clone()).unwrap();
-        self.0.apply_with_tables(changes, table_changes)
     }
 
     fn db(&self) -> Arc<impl DB> {
@@ -95,7 +86,7 @@ fn mint_one_eth(state: &mut impl State, addr: AccountAddress) -> ChangeSet {
 
     let changes = session.finish(&code_storage).unwrap();
 
-    state.apply(changes.clone()).unwrap();
+    state.apply(changes.clone().into()).unwrap();
 
     changes
 }
@@ -107,10 +98,9 @@ fn test_query_fetches_latest_balance() {
     let mut state = StateSpy(state, ChangeSet::new());
 
     let genesis_config = GenesisConfig::default();
-    let (changes, tables, evm_storage_changes) = umi_genesis_image::load();
+    let (changes, evm_storage_changes) = umi_genesis_image::load();
     umi_genesis::apply(
         changes,
-        tables,
         evm_storage_changes,
         &genesis_config,
         &mut state,
@@ -142,10 +132,9 @@ fn test_query_fetches_older_balance() {
     let mut state = StateSpy(state, ChangeSet::new());
 
     let genesis_config = GenesisConfig::default();
-    let (changes, tables, evm_storage_changes) = umi_genesis_image::load();
+    let (changes, evm_storage_changes) = umi_genesis_image::load();
     umi_genesis::apply(
         changes,
-        tables,
         evm_storage_changes,
         &genesis_config,
         &mut state,
@@ -181,10 +170,9 @@ fn test_query_fetches_latest_and_previous_balance() {
     let mut state = StateSpy(state, ChangeSet::new());
 
     let genesis_config = GenesisConfig::default();
-    let (changes, tables, evm_storage_changes) = umi_genesis_image::load();
+    let (changes, evm_storage_changes) = umi_genesis_image::load();
     umi_genesis::apply(
         changes,
-        tables,
         evm_storage_changes,
         &genesis_config,
         &mut state,
@@ -227,10 +215,9 @@ fn test_query_fetches_zero_balance_for_non_existent_account() {
     let mut state = StateSpy(state, ChangeSet::new());
 
     let genesis_config = GenesisConfig::default();
-    let (changes, tables, evm_storage_changes) = umi_genesis_image::load();
+    let (changes, evm_storage_changes) = umi_genesis_image::load();
     umi_genesis::apply(
         changes,
-        tables,
         evm_storage_changes,
         &genesis_config,
         &mut state,
@@ -285,7 +272,7 @@ fn inc_one_nonce(old_nonce: u64, state: &mut impl State, addr: AccountAddress) -
 
     let changes = session.finish(&code_storage).unwrap();
 
-    state.apply(changes.clone()).unwrap();
+    state.apply(changes.clone().into()).unwrap();
 
     changes
 }
@@ -297,10 +284,9 @@ fn test_query_fetches_latest_nonce() {
     let mut state = StateSpy(state, ChangeSet::new());
 
     let genesis_config = GenesisConfig::default();
-    let (changes, tables, evm_storage_changes) = umi_genesis_image::load();
+    let (changes, evm_storage_changes) = umi_genesis_image::load();
     umi_genesis::apply(
         changes,
-        tables,
         evm_storage_changes,
         &genesis_config,
         &mut state,
@@ -332,10 +318,9 @@ fn test_query_fetches_older_nonce() {
     let mut state = StateSpy(state, ChangeSet::new());
 
     let genesis_config = GenesisConfig::default();
-    let (changes, tables, evm_storage_changes) = umi_genesis_image::load();
+    let (changes, evm_storage_changes) = umi_genesis_image::load();
     umi_genesis::apply(
         changes,
-        tables,
         evm_storage_changes,
         &genesis_config,
         &mut state,
@@ -371,10 +356,9 @@ fn test_query_fetches_latest_and_previous_nonce() {
     let mut state = StateSpy(state, ChangeSet::new());
 
     let genesis_config = GenesisConfig::default();
-    let (changes, tables, evm_storage_changes) = umi_genesis_image::load();
+    let (changes, evm_storage_changes) = umi_genesis_image::load();
     umi_genesis::apply(
         changes,
-        tables,
         evm_storage_changes,
         &genesis_config,
         &mut state,
@@ -417,10 +401,9 @@ fn test_query_fetches_zero_nonce_for_non_existent_account() {
     let mut state = StateSpy(state, ChangeSet::new());
 
     let genesis_config = GenesisConfig::default();
-    let (changes, tables, evm_storage_changes) = umi_genesis_image::load();
+    let (changes, evm_storage_changes) = umi_genesis_image::load();
     umi_genesis::apply(
         changes,
-        tables,
         evm_storage_changes,
         &genesis_config,
         &mut state,

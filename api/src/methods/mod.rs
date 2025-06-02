@@ -85,10 +85,9 @@ pub mod tests {
             genesis_config.initial_state_root,
         );
         let mut evm_storage = InMemoryStorageTrieRepository::new();
-        let (changes, table_changes, evm_storage_changes) = umi_genesis_image::load();
+        let (changes, evm_storage_changes) = umi_genesis_image::load();
         umi_genesis::apply(
             changes.clone(),
-            table_changes,
             evm_storage_changes,
             &genesis_config,
             &mut state,

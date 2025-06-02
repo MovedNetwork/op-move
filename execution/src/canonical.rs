@@ -307,7 +307,7 @@ pub(super) fn execute_canonical_transaction<
     changes
         .squash(deploy_changes)
         .expect("Module deploy changes must merge with other session changes");
-    let changes = Changes::new(changes, evm_changes.storage);
+    let changes = Changes::new(changes.into(), evm_changes.storage);
 
     match vm_outcome {
         Ok(_) => Ok(TransactionExecutionOutcome::new(

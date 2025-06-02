@@ -10,9 +10,8 @@ pub use {
 use {
     self::config::GenesisConfig,
     move_core_types::effects::ChangeSet,
-    move_table_extension::TableChangeSet,
     umi_evm_ext::state::{StorageTrieRepository, StorageTriesChanges},
-    umi_state::{InMemoryState, State},
+    umi_state::{Changes, InMemoryState, State},
 };
 
 pub mod config;
@@ -28,7 +27,7 @@ pub fn build(
     vm: &UmiVm,
     config: &GenesisConfig,
     storage_trie: &impl StorageTrieRepository,
-) -> (ChangeSet, TableChangeSet, StorageTriesChanges) {
+) -> (Changes, StorageTriesChanges) {
     let mut state = InMemoryState::default();
     // Deploy Move/Aptos/Sui frameworks
     let changes_framework = framework::init_state(vm, &mut state);
@@ -53,20 +52,17 @@ pub fn build(
         .squash(changes_l2.accounts)
         .expect("L2 contract changes should not be in conflict");
 
-    (changes, TableChangeSet::default(), changes_l2.storage)
+    (changes.into(), changes_l2.storage)
 }
 
 pub fn apply(
-    changes: ChangeSet,
-    table_changes: TableChangeSet,
+    changes: Changes,
     evm_storage_changes: StorageTriesChanges,
     config: &GenesisConfig,
     state: &mut impl State,
     storage_trie: &mut impl StorageTrieRepository,
 ) {
-    state
-        .apply_with_tables(changes, table_changes)
-        .expect("Changes should be applicable");
+    state.apply(changes).expect("Changes should be applicable");
     storage_trie
         .apply(evm_storage_changes)
         .expect("EVM storage changes should be applicable");
@@ -87,13 +83,6 @@ pub fn build_and_apply(
     state: &mut impl State,
     storage_trie: &mut impl StorageTrieRepository,
 ) {
-    let (changes, table_changes, evm_storage) = build(vm, config, storage_trie);
-    apply(
-        changes,
-        table_changes,
-        evm_storage,
-        config,
-        state,
-        storage_trie,
-    );
+    let (changes, evm_storage) = build(vm, config, storage_trie);
+    apply(changes, evm_storage, config, state, storage_trie);
 }

@@ -29,9 +29,6 @@ use {
     umi_shared::primitives::{Address, B256, KeyHashable},
 };
 
-// TODO: Should change `State` interface to return `Result`.
-pub const IN_MEMORY_EXPECT_MSG: &str = "In-memory storage cannot fail";
-
 /// A global blockchain state trait.
 ///
 /// This trait is defined by these operations:

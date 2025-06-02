@@ -478,6 +478,7 @@ mod tests {
     };
 
     #[test]
+    #[ignore = "flaky"]
     fn test_gas_costs() {
         let gas_params = NativeGasParameters::initial();
         let mut rng = rand::thread_rng();

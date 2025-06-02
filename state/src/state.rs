@@ -56,10 +56,6 @@ impl<D: DbWithRoot> State for EthTrieState<D> {
             .map_err(|e| TrieError::DB(e.to_string()))
     }
 
-    fn db(&self) -> Arc<impl DB> {
-        self.db().clone()
-    }
-
     fn resolver(&self) -> &(impl MoveResolver + TableResolver) {
         &self.resolver
     }

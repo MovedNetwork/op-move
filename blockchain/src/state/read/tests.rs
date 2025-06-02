@@ -1,6 +1,5 @@
 use {
     super::*,
-    ::eth_trie::DB,
     alloy::hex,
     move_core_types::{account_address::AccountAddress, effects::ChangeSet},
     move_table_extension::TableResolver,
@@ -14,7 +13,7 @@ use {
     umi_execution::{check_nonce, create_vm_session, mint_eth, session_id::SessionId},
     umi_genesis::{CreateMoveVm, UmiVm, config::GenesisConfig},
     umi_shared::primitives::{B256, U256},
-    umi_state::{Changes, InMemoryState, ResolverBasedModuleBytesStorage, State},
+    umi_state::{Changes, InMemoryState, InMemoryTrieDb, ResolverBasedModuleBytesStorage, State},
 };
 
 impl HeightToStateRootIndex for Vec<B256> {
@@ -41,10 +40,6 @@ impl State for StateSpy {
     fn apply(&mut self, changes: Changes) -> Result<(), Self::Err> {
         self.1.squash(changes.accounts.clone()).unwrap();
         self.0.apply(changes)
-    }
-
-    fn db(&self) -> Arc<impl DB> {
-        self.0.db()
     }
 
     fn resolver(&self) -> &(impl MoveResolver + TableResolver) {
@@ -94,7 +89,8 @@ fn mint_one_eth(state: &mut impl State, addr: AccountAddress) -> ChangeSet {
 #[test]
 fn test_query_fetches_latest_balance() {
     let mut evm_storage = InMemoryStorageTrieRepository::new();
-    let state = InMemoryState::default();
+    let trie_db = Arc::new(InMemoryTrieDb::empty());
+    let state = InMemoryState::empty(trie_db.clone());
     let mut state = StateSpy(state, ChangeSet::new());
 
     let genesis_config = GenesisConfig::default();
@@ -115,7 +111,7 @@ fn test_query_fetches_latest_balance() {
     mint_one_eth(&mut state, addr);
     storage.push(state.state_root());
 
-    let query = InMemoryStateQueries::new(storage, state.db(), genesis_config.initial_state_root);
+    let query = InMemoryStateQueries::new(storage, trie_db, genesis_config.initial_state_root);
 
     let actual_balance = query
         .balance_at(&evm_storage, addr, 1)
@@ -128,7 +124,8 @@ fn test_query_fetches_latest_balance() {
 #[test]
 fn test_query_fetches_older_balance() {
     let mut evm_storage = InMemoryStorageTrieRepository::new();
-    let state = InMemoryState::default();
+    let trie_db = Arc::new(InMemoryTrieDb::empty());
+    let state = InMemoryState::empty(trie_db.clone());
     let mut state = StateSpy(state, ChangeSet::new());
 
     let genesis_config = GenesisConfig::default();
@@ -153,7 +150,7 @@ fn test_query_fetches_older_balance() {
     mint_one_eth(&mut state, addr);
     storage.push(state.state_root());
 
-    let query = InMemoryStateQueries::new(storage, state.db(), genesis_config.initial_state_root);
+    let query = InMemoryStateQueries::new(storage, trie_db, genesis_config.initial_state_root);
 
     let actual_balance = query
         .balance_at(&evm_storage, addr, 1)
@@ -166,7 +163,8 @@ fn test_query_fetches_older_balance() {
 #[test]
 fn test_query_fetches_latest_and_previous_balance() {
     let mut evm_storage = InMemoryStorageTrieRepository::new();
-    let state = InMemoryState::default();
+    let trie_db = Arc::new(InMemoryTrieDb::empty());
+    let state = InMemoryState::empty(trie_db.clone());
     let mut state = StateSpy(state, ChangeSet::new());
 
     let genesis_config = GenesisConfig::default();
@@ -191,7 +189,7 @@ fn test_query_fetches_latest_and_previous_balance() {
     mint_one_eth(&mut state, addr);
     storage.push(state.state_root());
 
-    let query = InMemoryStateQueries::new(storage, state.db(), genesis_config.initial_state_root);
+    let query = InMemoryStateQueries::new(storage, trie_db, genesis_config.initial_state_root);
 
     let actual_balance = query
         .balance_at(&evm_storage, addr, 1)
@@ -211,7 +209,8 @@ fn test_query_fetches_latest_and_previous_balance() {
 #[test]
 fn test_query_fetches_zero_balance_for_non_existent_account() {
     let mut evm_storage = InMemoryStorageTrieRepository::new();
-    let state = InMemoryState::default();
+    let trie_db = Arc::new(InMemoryTrieDb::empty());
+    let state = InMemoryState::empty(trie_db.clone());
     let mut state = StateSpy(state, ChangeSet::new());
 
     let genesis_config = GenesisConfig::default();
@@ -224,15 +223,13 @@ fn test_query_fetches_zero_balance_for_non_existent_account() {
         &mut evm_storage,
     );
 
-    let state = state.0;
-
     let addr = AccountAddress::new(hex!(
         "123456136717634683648732647632874638726487fefefefefeefefefefefff"
     ));
 
     let storage = vec![genesis_config.initial_state_root];
 
-    let query = InMemoryStateQueries::new(storage, state.db(), genesis_config.initial_state_root);
+    let query = InMemoryStateQueries::new(storage, trie_db, genesis_config.initial_state_root);
 
     let actual_balance = query
         .balance_at(&evm_storage, addr, 0)
@@ -280,7 +277,8 @@ fn inc_one_nonce(old_nonce: u64, state: &mut impl State, addr: AccountAddress) -
 #[test]
 fn test_query_fetches_latest_nonce() {
     let mut evm_storage = InMemoryStorageTrieRepository::new();
-    let state = InMemoryState::default();
+    let trie_db = Arc::new(InMemoryTrieDb::empty());
+    let state = InMemoryState::empty(trie_db.clone());
     let mut state = StateSpy(state, ChangeSet::new());
 
     let genesis_config = GenesisConfig::default();
@@ -301,7 +299,7 @@ fn test_query_fetches_latest_nonce() {
     inc_one_nonce(0, &mut state, addr);
     storage.push(state.state_root());
 
-    let query = InMemoryStateQueries::new(storage, state.db(), genesis_config.initial_state_root);
+    let query = InMemoryStateQueries::new(storage, trie_db, genesis_config.initial_state_root);
 
     let actual_nonce = query
         .nonce_at(&evm_storage, addr, 1)
@@ -314,7 +312,8 @@ fn test_query_fetches_latest_nonce() {
 #[test]
 fn test_query_fetches_older_nonce() {
     let mut evm_storage = InMemoryStorageTrieRepository::new();
-    let state = InMemoryState::default();
+    let trie_db = Arc::new(InMemoryTrieDb::empty());
+    let state = InMemoryState::empty(trie_db.clone());
     let mut state = StateSpy(state, ChangeSet::new());
 
     let genesis_config = GenesisConfig::default();
@@ -339,7 +338,7 @@ fn test_query_fetches_older_nonce() {
     inc_one_nonce(2, &mut state, addr);
     storage.push(state.state_root());
 
-    let query = InMemoryStateQueries::new(storage, state.db(), genesis_config.initial_state_root);
+    let query = InMemoryStateQueries::new(storage, trie_db, genesis_config.initial_state_root);
 
     let actual_nonce = query
         .nonce_at(&evm_storage, addr, 1)
@@ -352,7 +351,8 @@ fn test_query_fetches_older_nonce() {
 #[test]
 fn test_query_fetches_latest_and_previous_nonce() {
     let mut evm_storage = InMemoryStorageTrieRepository::new();
-    let state = InMemoryState::default();
+    let trie_db = Arc::new(InMemoryTrieDb::empty());
+    let state = InMemoryState::empty(trie_db.clone());
     let mut state = StateSpy(state, ChangeSet::new());
 
     let genesis_config = GenesisConfig::default();
@@ -377,7 +377,7 @@ fn test_query_fetches_latest_and_previous_nonce() {
     inc_one_nonce(2, &mut state, addr);
     storage.push(state.state_root());
 
-    let query = InMemoryStateQueries::new(storage, state.db(), genesis_config.initial_state_root);
+    let query = InMemoryStateQueries::new(storage, trie_db, genesis_config.initial_state_root);
 
     let actual_nonce = query
         .nonce_at(&evm_storage, addr, 1)
@@ -397,7 +397,8 @@ fn test_query_fetches_latest_and_previous_nonce() {
 #[test]
 fn test_query_fetches_zero_nonce_for_non_existent_account() {
     let mut evm_storage = InMemoryStorageTrieRepository::new();
-    let state = InMemoryState::default();
+    let trie_db = Arc::new(InMemoryTrieDb::empty());
+    let state = InMemoryState::empty(trie_db.clone());
     let mut state = StateSpy(state, ChangeSet::new());
 
     let genesis_config = GenesisConfig::default();
@@ -410,15 +411,13 @@ fn test_query_fetches_zero_nonce_for_non_existent_account() {
         &mut evm_storage,
     );
 
-    let state = state.0;
-
     let addr = AccountAddress::new(hex!(
         "123456136717634683648732647632874638726487fefefefefeefefefefefff"
     ));
 
     let storage = vec![genesis_config.initial_state_root];
 
-    let query = InMemoryStateQueries::new(storage, state.db(), genesis_config.initial_state_root);
+    let query = InMemoryStateQueries::new(storage, trie_db, genesis_config.initial_state_root);
 
     let actual_nonce = query
         .nonce_at(&evm_storage, addr, 0)

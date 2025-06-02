@@ -25,7 +25,7 @@ use {
     move_table_extension::TableResolver,
     move_vm_types::{code::ModuleBytesStorage, resolver::MoveResolver},
     nodes::{TreeKey, TreeValue},
-    std::{collections::HashMap, fmt::Debug, sync::Arc},
+    std::{collections::HashMap, fmt::Debug},
     umi_evm_ext::{EVM_NATIVE_ADDRESS, EVM_NATIVE_MODULE, type_utils::ACCOUNT_INFO_PREFIX},
     umi_shared::primitives::{Address, B256, KeyHashable},
 };
@@ -46,10 +46,6 @@ pub trait State {
 
     /// Applies the `changes` to the blockchain state.
     fn apply(&mut self, changes: Changes) -> Result<(), Self::Err>;
-
-    /// Returns a reference to a [`DB`] that can access the merkle trie holding the current
-    /// blockchain state.
-    fn db(&self) -> Arc<impl DB>;
 
     /// Returns a reference to a [`MoveResolver`] that can resolve both resources and modules on
     /// the current blockchain state.

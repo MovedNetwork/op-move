@@ -33,6 +33,8 @@ jobs:
         with:
           default: true
           toolchain: stable
+      - name: Free up disk space
+        run: rm -rf /opt/hostedtoolcache
       - name: Run flaky tests
         run: cargo test -- --ignored
         continue-on-error: true

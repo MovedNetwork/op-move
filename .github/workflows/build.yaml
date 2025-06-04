@@ -1,0 +1,57 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1
+        with:
+          default: true
+          toolchain: stable
+      - name: Free up disk space
+        run: rm -rf /opt/hostedtoolcache
+      - name: Test
+        run: cargo test -- --skip integration
+      - name: Run flaky tests
+        run: cargo test -- --ignored
+        continue-on-error: true
+
+  clippy:
+    name: Clippy
+    permissions: write-all
+    runs-on: ubuntu-latest
+    env:
+      # Make sure CI fails on all warnings, including Clippy lints
+      RUSTFLAGS: "-Dwarnings --cfg tokio_unstable"
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup component add clippy
+      - uses: actions-rs/clippy-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          args: --all-features --all-targets
+
+  format:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1
+        with:
+          default: true
+          toolchain: nightly
+      - run: rustup component add --toolchain nightly rustfmt
+      - name: format
+        run: cargo +nightly fmt -- --check

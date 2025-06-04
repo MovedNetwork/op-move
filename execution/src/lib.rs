@@ -9,6 +9,7 @@ pub use {
 };
 
 use {
+    crate::resolver_cache::ResolverCache,
     alloy::primitives::{Bloom, Keccak256, Log, LogData},
     aptos_framework::natives::{
         event::NativeEventContext, object::NativeObjectContext,
@@ -41,6 +42,7 @@ use {
     umi_shared::primitives::{B256, ToEthAddress},
 };
 
+pub mod resolver_cache;
 pub mod session_id;
 pub mod simulate;
 pub mod transaction;
@@ -164,10 +166,13 @@ pub fn execute_transaction<
     H: BlockHashLookup,
 >(
     input: TransactionExecutionInput<S, ST, F, B, H>,
+    resolver_cache: &mut ResolverCache,
 ) -> umi_shared::error::Result<TransactionExecutionOutcome> {
     match input {
         TransactionExecutionInput::Deposit(input) => execute_deposited_transaction(input),
-        TransactionExecutionInput::Canonical(input) => execute_canonical_transaction(input),
+        TransactionExecutionInput::Canonical(input) => {
+            execute_canonical_transaction(input, resolver_cache)
+        }
     }
 }
 

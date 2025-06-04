@@ -137,6 +137,7 @@ fn create_app_with_given_queries<SQ: StateQueries + Clone + Send + Sync + 'stati
             gas_fee: Eip1559GasFee::default(),
             l1_fee: U256::ZERO,
             l2_fee: U256::ZERO,
+            resolver_cache: Default::default(),
         },
     )
 }
@@ -258,6 +259,7 @@ fn create_app_with_fake_queries(
             gas_fee: Eip1559GasFee::default(),
             l1_fee: U256::ZERO,
             l2_fee: U256::ZERO,
+            resolver_cache: Default::default(),
         },
     )
 }

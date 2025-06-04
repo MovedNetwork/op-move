@@ -9,6 +9,7 @@ use {
         },
         gas::{new_gas_meter, total_gas_used},
         nonces::check_nonce,
+        resolver_cache::{CachedResolver, ResolverCache},
         session_id::SessionId,
         transaction::{
             Changes, NormalizedEthTransaction, ScriptOrDeployment, TransactionData,
@@ -17,7 +18,7 @@ use {
     },
     alloy::primitives::U256,
     aptos_framework::natives::event::NativeEventContext,
-    aptos_gas_algebra::FeePerGasUnit,
+    aptos_gas_algebra::{FeePerGasUnit, NumBytes, NumSlots},
     aptos_gas_meter::{AptosGasMeter, StandardGasAlgebra, StandardGasMeter},
     aptos_table_natives::TableResolver,
     aptos_types::{
@@ -135,14 +136,16 @@ pub(super) fn execute_canonical_transaction<
     H: BlockHashLookup,
 >(
     input: CanonicalExecutionInput<S, ST, F, B, H>,
+    resolver_cache: &mut ResolverCache,
 ) -> umi_shared::error::Result<TransactionExecutionOutcome> {
+    resolver_cache.clear();
+    let cached_resolver = CachedResolver::new(input.state, resolver_cache);
     let sender_move_address = input.tx.signer.to_move_address();
 
     let tx_data = TransactionData::parse_from(input.tx)?;
 
     let umi_vm = UmiVm::new(input.genesis_config);
-    let module_bytes_storage: ResolverBasedModuleBytesStorage<'_, S> =
-        ResolverBasedModuleBytesStorage::new(input.state);
+    let module_bytes_storage = ResolverBasedModuleBytesStorage::new(&cached_resolver);
     let code_storage = module_bytes_storage.as_unsync_code_storage(&umi_vm);
     let vm = umi_vm.create_move_vm()?;
     let session_id = SessionId::new_from_canonical(
@@ -156,7 +159,7 @@ pub(super) fn execute_canonical_transaction<
     let eth_transfers_logger = EthTransfersLogger::default();
     let mut session = create_vm_session(
         &vm,
-        input.state,
+        &cached_resolver,
         session_id,
         input.storage_trie,
         &eth_transfers_logger,
@@ -296,9 +299,10 @@ pub(super) fn execute_canonical_transaction<
         .squash(deploy_changes)
         .expect("Module deploy changes must merge with other session changes");
 
-    let gas_unit_price = FeePerGasUnit::new(wei_to_octa(input.l2_input.effective_gas_price));
+    let gas_unit_price = FeePerGasUnit::new(input.l2_input.effective_gas_price.saturating_to());
     let vm_outcome = vm_outcome.and_then(|_| {
         charge_io_gas(
+            &cached_resolver.borrow_cache(),
             &user_changes,
             &user_events,
             &mut gas_meter,
@@ -309,7 +313,7 @@ pub(super) fn execute_canonical_transaction<
 
     let (changes, logs, gas_used) = {
         let changes_resolver = ChangesBasedResolver::new(&user_changes);
-        let refund_resolver = PairedResolvers::new(&changes_resolver, input.state);
+        let refund_resolver = PairedResolvers::new(&changes_resolver, &cached_resolver);
         let mut refund_session = vm.new_session_with_extensions(&refund_resolver, extensions);
 
         let gas_used = total_gas_used(&gas_meter, input.genesis_config);
@@ -366,12 +370,21 @@ pub(super) fn execute_canonical_transaction<
 }
 
 fn charge_io_gas(
+    resolver_cache: &ResolverCache,
     changes: &ChangeSet,
     user_events: &[(ContractEvent, Option<MoveTypeLayout>)],
     gas_meter: &mut StandardGasMeter<StandardGasAlgebra>,
     genesis_config: &GenesisConfig,
     gas_unit_price: FeePerGasUnit,
 ) -> umi_shared::error::Result<()> {
+    // If gas is free then we can't charge storage because the parameters for
+    // storage costs are denominated in base token units and converted to gas via the price.
+    // Putting the early return here also skips the io charges which do not depend
+    // on the gas price, but this is fine because if gas is free then computing the accurate
+    // amount of gas used is not very important (we get zero tokens regardless).
+    if gas_unit_price.is_zero() {
+        return Ok(());
+    }
     let invariant_violation =
         |_| umi_shared::error::Error::InvariantViolation(InvariantViolation::StateKey);
 
@@ -380,14 +393,28 @@ fn charge_io_gas(
         let key = StateKey::resource(&address, struct_tag).map_err(invariant_violation)?;
         gas_meter.charge_io_gas_for_write(&key, &op_size)?;
 
-        // TODO: storage gas for ops. Need to charge based on change in size in case of modified.
-        // Aptos does this with the StateValueMetadata which we are currently not using.
+        charge_storage_gas(
+            op_size,
+            gas_meter,
+            || resolver_cache.resource_original_size(&address, struct_tag) as u64,
+            genesis_config,
+            gas_unit_price,
+        )?;
     }
 
     for (address, id, op) in changes.modules() {
         let op_size = to_op_size(op);
         let key = StateKey::module(address, id);
         gas_meter.charge_io_gas_for_write(&key, &op_size)?;
+
+        let module_id = ModuleId::new(*address, id.clone());
+        charge_storage_gas(
+            op_size,
+            gas_meter,
+            || resolver_cache.module_original_size(&module_id) as u64,
+            genesis_config,
+            gas_unit_price,
+        )?;
     }
 
     for (event, _) in user_events {
@@ -395,6 +422,37 @@ fn charge_io_gas(
     }
 
     Ok(())
+}
+
+fn charge_storage_gas<F: FnOnce() -> u64>(
+    op: WriteOpSize,
+    gas_meter: &mut StandardGasMeter<StandardGasAlgebra>,
+    get_original_size: F,
+    genesis_config: &GenesisConfig,
+    gas_unit_price: FeePerGasUnit,
+) -> umi_shared::error::Result<()> {
+    let (slots, bytes) = match op {
+        WriteOpSize::Creation { write_len } => (NumSlots::new(1), NumBytes::new(write_len)),
+        WriteOpSize::Modification { write_len } => {
+            let original_size = get_original_size();
+            if original_size >= write_len {
+                return Ok(());
+            }
+            (
+                NumSlots::new(0),
+                NumBytes::new(write_len.saturating_sub(original_size)),
+            )
+        }
+        WriteOpSize::Deletion => {
+            // No gas charge for deletion.
+            return Ok(());
+        }
+    };
+    let amount = genesis_config.gas_costs.vm.txn.storage_fee_per_state_slot * slots
+        + genesis_config.gas_costs.vm.txn.storage_fee_per_state_byte * bytes;
+    gas_meter
+        .charge_storage_fee(amount, gas_unit_price)
+        .map_err(Into::into)
 }
 
 fn to_op_size<T: AsRef<[u8]>>(op: Op<&T>) -> WriteOpSize {
@@ -407,12 +465,4 @@ fn to_op_size<T: AsRef<[u8]>>(op: Op<&T>) -> WriteOpSize {
         },
         Op::Delete => WriteOpSize::Deletion,
     }
-}
-
-// Ethereum's smallest base token unit is Wei (1 Wei = 10^{-18} ETH),
-// but Aptos' smallest base token unit is Octa (1 Octa = 10^{-8} APT).
-// This function scales down Wei to Octa for use in Aptos code.
-fn wei_to_octa(x: U256) -> u64 {
-    const FACTOR: U256 = U256::from_limbs([10_000_000_000, 0, 0, 0]);
-    x.wrapping_div(FACTOR).saturating_to()
 }

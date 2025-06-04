@@ -8,6 +8,7 @@ use {
         execute_transaction,
         gas::new_gas_meter,
         quick_get_nonce,
+        resolver_cache::ResolverCache,
         session_id::SessionId,
         transaction::{
             NormalizedEthTransaction, ScriptOrDeployment, TransactionData,
@@ -73,7 +74,7 @@ pub fn simulate_transaction(
         block_hash_lookup,
     };
 
-    execute_transaction(input.into())
+    execute_transaction(input.into(), &mut ResolverCache::default())
 }
 
 pub fn call_transaction(

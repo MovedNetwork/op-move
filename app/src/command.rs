@@ -232,7 +232,7 @@ impl<D: Dependencies> Application<D> {
                 }
                 .into(),
             };
-            let outcome = match execute_transaction(input) {
+            let outcome = match execute_transaction(input, &mut self.resolver_cache) {
                 Ok(outcome) => outcome,
                 Err(User(e)) => unreachable!("User errors are handled in execution {e:?}"),
                 Err(InvalidTransaction(_)) => continue,

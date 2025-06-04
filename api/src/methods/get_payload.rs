@@ -131,6 +131,7 @@ mod tests {
             on_tx: CommandActor::on_tx_noop(),
             on_tx_batch: CommandActor::on_tx_batch_noop(),
             on_payload: CommandActor::on_payload_in_memory(),
+            resolver_cache: Default::default(),
         };
         let reader = ApplicationReader::<
             TestDependencies<

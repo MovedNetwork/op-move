@@ -9,14 +9,14 @@ fn test_treasury_charges_l1_and_l2_cost_to_sender_account_on_success() {
 
     // Mint tokens in sender account
     let sender = EVM_ADDRESS;
-    let mint_amount = one_eth();
+    let mint_amount = one_eth() * U256::from(100);
     ctx.deposit_eth(sender, mint_amount);
 
     // Transfer to receiver account
     let l1_cost = 1;
     // Set a gas limit higher than the cost of operation
     let l2_gas_limit = 100_000;
-    let l2_gas_price = U256::from(1);
+    let l2_gas_price = U256::from(10).pow(U256::from(9)); // 1 Gwei
     let receiver = ALT_EVM_ADDRESS;
     let transfer_amount = mint_amount.wrapping_shr(2);
 
@@ -29,7 +29,7 @@ fn test_treasury_charges_l1_and_l2_cost_to_sender_account_on_success() {
             l2_gas_price,
         )
         .expect("Transfer should succeed");
-    assert!(outcome.vm_outcome.is_ok());
+    outcome.vm_outcome.unwrap();
 
     let l2_cost = outcome
         .gas_used

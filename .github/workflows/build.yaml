@@ -42,6 +42,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           args: --all-features --all-targets
+          name: "Clippy results for rev ${{ github.sha }}"
 
   format:
     name: Format

@@ -23,18 +23,6 @@ jobs:
         run: rm -rf /opt/hostedtoolcache
       - name: Test
         run: cargo test -- --skip integration
-
-  flaky:
-    name: flaky
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
-        with:
-          default: true
-          toolchain: stable
-      - name: Free up disk space
-        run: rm -rf /opt/hostedtoolcache
       - name: Run flaky tests
         run: cargo test -- --ignored
         continue-on-error: true

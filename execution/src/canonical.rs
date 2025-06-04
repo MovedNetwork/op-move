@@ -18,7 +18,7 @@ use {
     },
     alloy::primitives::U256,
     aptos_framework::natives::event::NativeEventContext,
-    aptos_gas_algebra::{FeePerGasUnit, NumBytes, NumSlots},
+    aptos_gas_algebra::{FeePerGasUnit, GasQuantity, NumBytes, NumSlots, Octa},
     aptos_gas_meter::{AptosGasMeter, StandardGasAlgebra, StandardGasMeter},
     aptos_table_natives::TableResolver,
     aptos_types::{
@@ -388,18 +388,17 @@ fn charge_io_gas(
     let invariant_violation =
         |_| umi_shared::error::Error::InvariantViolation(InvariantViolation::StateKey);
 
+    let mut storage_fee: GasQuantity<Octa> = GasQuantity::new(0);
     for (address, struct_tag, op) in changes.resources() {
         let op_size = to_op_size(op);
         let key = StateKey::resource(&address, struct_tag).map_err(invariant_violation)?;
         gas_meter.charge_io_gas_for_write(&key, &op_size)?;
 
-        charge_storage_gas(
+        storage_fee += charge_storage_gas(
             op_size,
-            gas_meter,
             || resolver_cache.resource_original_size(&address, struct_tag) as u64,
             genesis_config,
-            gas_unit_price,
-        )?;
+        );
     }
 
     for (address, id, op) in changes.modules() {
@@ -408,14 +407,14 @@ fn charge_io_gas(
         gas_meter.charge_io_gas_for_write(&key, &op_size)?;
 
         let module_id = ModuleId::new(*address, id.clone());
-        charge_storage_gas(
+        storage_fee += charge_storage_gas(
             op_size,
-            gas_meter,
             || resolver_cache.module_original_size(&module_id) as u64,
             genesis_config,
-            gas_unit_price,
-        )?;
+        );
     }
+
+    gas_meter.charge_storage_fee(storage_fee, gas_unit_price)?;
 
     for (event, _) in user_events {
         gas_meter.charge_io_gas_for_event(event)?;
@@ -426,17 +425,15 @@ fn charge_io_gas(
 
 fn charge_storage_gas<F: FnOnce() -> u64>(
     op: WriteOpSize,
-    gas_meter: &mut StandardGasMeter<StandardGasAlgebra>,
     get_original_size: F,
     genesis_config: &GenesisConfig,
-    gas_unit_price: FeePerGasUnit,
-) -> umi_shared::error::Result<()> {
+) -> GasQuantity<Octa> {
     let (slots, bytes) = match op {
         WriteOpSize::Creation { write_len } => (NumSlots::new(1), NumBytes::new(write_len)),
         WriteOpSize::Modification { write_len } => {
             let original_size = get_original_size();
             if original_size >= write_len {
-                return Ok(());
+                return GasQuantity::new(0);
             }
             (
                 NumSlots::new(0),
@@ -445,14 +442,11 @@ fn charge_storage_gas<F: FnOnce() -> u64>(
         }
         WriteOpSize::Deletion => {
             // No gas charge for deletion.
-            return Ok(());
+            return GasQuantity::new(0);
         }
     };
-    let amount = genesis_config.gas_costs.vm.txn.storage_fee_per_state_slot * slots
-        + genesis_config.gas_costs.vm.txn.storage_fee_per_state_byte * bytes;
-    gas_meter
-        .charge_storage_fee(amount, gas_unit_price)
-        .map_err(Into::into)
+    genesis_config.gas_costs.vm.txn.storage_fee_per_state_slot * slots
+        + genesis_config.gas_costs.vm.txn.storage_fee_per_state_byte * bytes
 }
 
 fn to_op_size<T: AsRef<[u8]>>(op: Op<&T>) -> WriteOpSize {

@@ -1,10 +1,9 @@
-use crate::mempool::Mempool;
 #[cfg(any(feature = "test-doubles", test))]
 pub use test_doubles::TestDependencies;
-use umi_execution::resolver_cache::ResolverCache;
 
 use {
-    move_core_types::effects::ChangeSet, umi_blockchain::payload::PayloadId,
+    crate::mempool::Mempool, move_core_types::effects::ChangeSet,
+    umi_blockchain::payload::PayloadId, umi_execution::resolver_cache::ResolverCache,
     umi_genesis::config::GenesisConfig, umi_shared::primitives::B256,
 };
 

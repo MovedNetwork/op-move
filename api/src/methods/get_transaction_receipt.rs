@@ -9,7 +9,9 @@ pub async fn execute(
 ) -> Result<serde_json::Value, JsonRpcError> {
     let tx_hash = parse_params_1(request)?;
 
-    let response = app.transaction_receipt(tx_hash);
+    let response = app
+        .transaction_receipt(tx_hash)
+        .map_err(|_| JsonRpcError::block_not_found(tx_hash));
 
     Ok(serde_json::to_value(response).expect("Must be able to JSON-serialize response"))
 }

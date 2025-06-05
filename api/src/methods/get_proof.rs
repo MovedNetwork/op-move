@@ -18,7 +18,8 @@ pub async fn execute(
 
     let response = app
         .proof(address, storage_slots, block_number)
-        .ok_or(JsonRpcError::block_not_found(block_number))?;
+        // TODO: more granular mapping
+        .map_err(|_| JsonRpcError::block_not_found(block_number))?;
 
     // Format the balance as a hex string
     Ok(serde_json::to_value(response).expect("Must be able to JSON-serialize response"))
@@ -134,4 +135,5 @@ mod tests {
             assert!(list.len() == 2 || list.len() == 17);
         }
     }
+    // TODO: test acc out of range, db error
 }

@@ -1,5 +1,6 @@
 use {
     crate::dependency::shared::*,
+    std::sync::Arc,
     umi_app::{Application, ApplicationReader, CommandActor},
     umi_blockchain::state::EthTrieStateQueries,
     umi_genesis::config::GenesisConfig,
@@ -27,14 +28,14 @@ pub fn create(
 pub struct HeedDependencies;
 
 impl umi_app::Dependencies for HeedDependencies {
-    type BlockQueries = block::HeedBlockQueries;
-    type BlockRepository = block::HeedBlockRepository;
+    type BlockQueries = block::HeedBlockQueries<'static>;
+    type BlockRepository = block::HeedBlockRepository<'static>;
     type OnPayload = umi_app::OnPayload<Application<Self>>;
     type OnTx = umi_app::OnTx<Application<Self>>;
     type OnTxBatch = umi_app::OnTxBatch<Application<Self>>;
-    type PayloadQueries = payload::HeedPayloadQueries;
-    type ReceiptQueries = receipt::HeedReceiptQueries;
-    type ReceiptRepository = receipt::HeedReceiptRepository;
+    type PayloadQueries = payload::HeedPayloadQueries<'static>;
+    type ReceiptQueries = receipt::HeedReceiptQueries<'static>;
+    type ReceiptRepository = receipt::HeedReceiptRepository<'static>;
     type ReceiptStorage = &'static umi_storage_heed::Env;
     type SharedStorage = &'static umi_storage_heed::Env;
     type ReceiptStorageReader = &'static umi_storage_heed::Env;
@@ -43,15 +44,15 @@ impl umi_app::Dependencies for HeedDependencies {
     type StateQueries =
         EthTrieStateQueries<state::HeedStateRootIndex<'static>, trie::HeedEthTrieDb<'static>>;
     type StorageTrieRepository = evm::HeedStorageTrieRepository;
-    type TransactionQueries = transaction::HeedTransactionQueries;
-    type TransactionRepository = transaction::HeedTransactionRepository;
+    type TransactionQueries = transaction::HeedTransactionQueries<'static>;
+    type TransactionRepository = transaction::HeedTransactionRepository<'static>;
 
     fn block_queries() -> Self::BlockQueries {
-        block::HeedBlockQueries
+        block::HeedBlockQueries::new()
     }
 
     fn block_repository() -> Self::BlockRepository {
-        block::HeedBlockRepository
+        block::HeedBlockRepository::new()
     }
 
     fn on_payload() -> &'static Self::OnPayload {
@@ -76,11 +77,11 @@ impl umi_app::Dependencies for HeedDependencies {
     }
 
     fn receipt_queries() -> Self::ReceiptQueries {
-        receipt::HeedReceiptQueries
+        receipt::HeedReceiptQueries::new()
     }
 
     fn receipt_repository() -> Self::ReceiptRepository {
-        receipt::HeedReceiptRepository
+        receipt::HeedReceiptRepository::new()
     }
 
     fn receipt_memory(&mut self) -> Self::ReceiptStorage {
@@ -112,26 +113,26 @@ impl umi_app::Dependencies for HeedDependencies {
     }
 
     fn storage_trie_repository() -> Self::StorageTrieRepository {
-        evm::HeedStorageTrieRepository::new(db())
+        evm::HeedStorageTrieRepository::new(Database.clone())
     }
 
     fn transaction_queries() -> Self::TransactionQueries {
-        transaction::HeedTransactionQueries
+        transaction::HeedTransactionQueries::new()
     }
 
     fn transaction_repository() -> Self::TransactionRepository {
-        transaction::HeedTransactionRepository
+        transaction::HeedTransactionRepository::new()
     }
 
     impl_shared!();
 }
 
 lazy_static::lazy_static! {
-    static ref Database: umi_storage_heed::Env = {
-        create_db()
+    static ref Database: Arc<umi_storage_heed::Env> = {
+        Arc::new(create_db())
     };
-    static ref TRIE_DB: std::sync::Arc<trie::HeedEthTrieDb<'static>> = {
-        std::sync::Arc::new(trie::HeedEthTrieDb::new(db()))
+    static ref TRIE_DB: Arc<trie::HeedEthTrieDb<'static>> = {
+        Arc::new(trie::HeedEthTrieDb::new(db()))
     };
 }
 

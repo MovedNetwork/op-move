@@ -1,9 +1,9 @@
-use crate::mempool::Mempool;
 #[cfg(any(feature = "test-doubles", test))]
 pub use test_doubles::TestDependencies;
 
 use {
-    move_core_types::effects::ChangeSet, umi_blockchain::payload::PayloadId,
+    crate::mempool::Mempool, move_core_types::effects::ChangeSet,
+    umi_blockchain::payload::PayloadId, umi_execution::resolver_cache::ResolverCache,
     umi_genesis::config::GenesisConfig, umi_shared::primitives::B256,
 };
 
@@ -81,6 +81,10 @@ pub struct Application<D: Dependencies> {
     pub evm_storage: D::StorageTrieRepository,
     pub transaction_queries: D::TransactionQueries,
     pub transaction_repository: D::TransactionRepository,
+    // Note: the purpose of having the resolver cache here is to reuse the memory
+    // allocated for the cache for all transaction execution instead of continuously
+    // allocating and releasing memory.
+    pub resolver_cache: ResolverCache,
 }
 
 impl<D: Dependencies> Application<D> {
@@ -110,6 +114,7 @@ impl<D: Dependencies> Application<D> {
             evm_storage: D::storage_trie_repository(),
             transaction_queries: D::transaction_queries(),
             transaction_repository: D::transaction_repository(),
+            resolver_cache: ResolverCache::default(),
         }
     }
 

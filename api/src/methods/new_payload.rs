@@ -312,6 +312,7 @@ mod tests {
                 genesis_state_root,
             ),
             transaction_repository: InMemoryTransactionRepository::new(),
+            resolver_cache: Default::default(),
         };
         let reader = ApplicationReader::<
             TestDependencies<

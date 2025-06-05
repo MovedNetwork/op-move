@@ -133,6 +133,7 @@ pub mod tests {
                 evm_storage,
                 transaction_queries: InMemoryTransactionQueries::new(),
                 transaction_repository: InMemoryTransactionRepository::new(),
+                resolver_cache: Default::default(),
             },
         )
     }
@@ -297,6 +298,7 @@ pub mod tests {
                 evm_storage: (),
                 transaction_queries: (),
                 transaction_repository: (),
+                resolver_cache: Default::default(),
             },
         ))
     }

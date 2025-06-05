@@ -8,6 +8,7 @@ use {
         execute_transaction,
         gas::new_gas_meter,
         quick_get_nonce,
+        resolver_cache::ResolverCache,
         session_id::SessionId,
         transaction::{
             NormalizedEthTransaction, ScriptOrDeployment, TransactionData,
@@ -73,7 +74,7 @@ pub fn simulate_transaction(
         block_hash_lookup,
     };
 
-    execute_transaction(input.into())
+    execute_transaction(input.into(), &mut ResolverCache::default())
 }
 
 pub fn call_transaction(
@@ -101,7 +102,7 @@ pub fn call_transaction(
     let mut traversal_context = TraversalContext::new(&traversal_storage);
     let mut gas_meter = new_gas_meter(genesis_config, tx.gas_limit());
 
-    let mut verify_input = CanonicalVerificationInput {
+    verify_transaction(CanonicalVerificationInput {
         tx: &tx,
         session: &mut session,
         traversal_context: &mut traversal_context,
@@ -111,18 +112,17 @@ pub fn call_transaction(
         l2_cost: U256::ZERO,
         base_token,
         module_storage: &code_storage,
-    };
-    verify_transaction(&mut verify_input)?;
+    })?;
 
     match tx_data {
         TransactionData::EntryFunction(entry_fn) => {
-            let outcome = verify_input.session.execute_function_bypass_visibility(
+            let outcome = session.execute_function_bypass_visibility(
                 entry_fn.module(),
                 entry_fn.function(),
                 entry_fn.ty_args().to_vec(),
                 entry_fn.args().to_vec(),
-                verify_input.gas_meter,
-                verify_input.traversal_context,
+                &mut gas_meter,
+                &mut traversal_context,
                 &code_storage,
             )?;
             // Only return the results of the transaction in bytes without the Move value layout.
@@ -139,9 +139,9 @@ pub fn call_transaction(
             crate::execute::execute_script(
                 script,
                 &tx.signer.to_move_address(),
-                verify_input.session,
-                verify_input.traversal_context,
-                verify_input.gas_meter,
+                &mut session,
+                &mut traversal_context,
+                &mut gas_meter,
                 &code_storage,
             )?;
             Ok(vec![])
@@ -152,9 +152,9 @@ pub fn call_transaction(
                 &contract.to_move_address(),
                 tx.value,
                 tx.data.to_vec(),
-                verify_input.session,
-                verify_input.traversal_context,
-                verify_input.gas_meter,
+                &mut session,
+                &mut traversal_context,
+                &mut gas_meter,
                 &code_storage,
             )?;
             Ok(outcome.output)
@@ -165,9 +165,9 @@ pub fn call_transaction(
                 &address.to_move_address(),
                 tx.value,
                 data,
-                verify_input.session,
-                verify_input.traversal_context,
-                verify_input.gas_meter,
+                &mut session,
+                &mut traversal_context,
+                &mut gas_meter,
                 &code_storage,
             )?;
             Ok(outcome.output)

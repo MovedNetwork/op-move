@@ -1,6 +1,6 @@
 use alloy::signers::local::PrivateKeySigner;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Signer {
     pub inner: PrivateKeySigner,
     pub nonce: u64,

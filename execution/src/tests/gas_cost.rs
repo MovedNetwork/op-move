@@ -9,14 +9,14 @@ fn test_treasury_charges_l1_and_l2_cost_to_sender_account_on_success() {
 
     // Mint tokens in sender account
     let sender = EVM_ADDRESS;
-    let mint_amount = one_eth();
+    let mint_amount = one_eth() * U256::from(100);
     ctx.deposit_eth(sender, mint_amount);
 
     // Transfer to receiver account
     let l1_cost = 1;
     // Set a gas limit higher than the cost of operation
     let l2_gas_limit = 100_000;
-    let l2_gas_price = U256::from(1);
+    let l2_gas_price = U256::from(10).pow(U256::from(9)); // 1 Gwei
     let receiver = ALT_EVM_ADDRESS;
     let transfer_amount = mint_amount.wrapping_shr(2);
 
@@ -29,7 +29,7 @@ fn test_treasury_charges_l1_and_l2_cost_to_sender_account_on_success() {
             l2_gas_price,
         )
         .expect("Transfer should succeed");
-    assert!(outcome.vm_outcome.is_ok());
+    outcome.vm_outcome.unwrap();
 
     let l2_cost = outcome
         .gas_used
@@ -158,6 +158,71 @@ fn test_low_gas_limit_gets_charged_and_fails_the_tx() {
     outcome.unwrap().vm_outcome.unwrap_err();
     assert_eq!(sender_balance, expected_sender_balance);
     assert_eq!(receiver_balance, U256::ZERO);
+}
+
+#[test]
+fn test_storage_update_cost() {
+    let mut ctx = TestContext::new();
+    let module_id = ctx.deploy_contract("hello_strings");
+
+    // Mint tokens in sender account
+    let sender = EVM_ADDRESS;
+    let mint_amount = one_eth();
+    ctx.deposit_eth(sender, mint_amount);
+
+    let gas_limit = 50_000;
+    // Choose gas price equal to 1 for convenience in checking how much the gas changes.
+    let gas_price = U256::ONE;
+
+    // Create the resource
+    let text = "Hello, world";
+    let signer_arg = MoveValue::Signer(ctx.move_address);
+    let input_arg = MoveValue::Struct(MoveStruct::new(vec![MoveValue::Vector(
+        text.bytes().map(MoveValue::U8).collect(),
+    )]));
+    ctx.execute(&module_id, "publish", vec![&signer_arg, &input_arg]);
+
+    // Do nothing to modify it (stays the same size)
+    let address_arg = MoveValue::Address(ctx.move_address);
+    let base_outcome = ctx.execute_with_fee(
+        &module_id,
+        "update",
+        vec![&address_arg, &input_arg],
+        gas_price,
+        gas_limit,
+    );
+
+    let storage_per_byte_cost: u64 = ctx
+        .genesis_config
+        .gas_costs
+        .vm
+        .txn
+        .storage_fee_per_state_byte
+        .into();
+
+    // Increase the size of the resource by a number of bytes
+    for size_increase in 1..10 {
+        let input_arg = MoveValue::Struct(MoveStruct::new(vec![MoveValue::Vector(
+            text.bytes()
+                .chain(std::iter::repeat_n(b'!', size_increase))
+                .map(MoveValue::U8)
+                .collect(),
+        )]));
+        let outcome = ctx.execute_with_fee(
+            &module_id,
+            "update",
+            vec![&address_arg, &input_arg],
+            gas_price,
+            gas_limit,
+        );
+        let size_increase = size_increase as u64;
+        // The two transactions are identical except for larger input argument causing the new bytes of stored data.
+        // Therefore the only difference in gas cost should be from the larger transaction size and the new stored bytes.
+        // We calculate the new stored bytes difference and check the observed difference is at least that big.
+        assert!(
+            (outcome.gas_used - base_outcome.gas_used) >= (storage_per_byte_cost * size_increase)
+        );
+    }
 }
 
 fn one_eth() -> U256 {

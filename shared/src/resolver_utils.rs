@@ -15,6 +15,10 @@ use {
 /// It tries to look up the module/resource with the primary resolver first,
 /// trying the secondary if that lookup fails. Note: this means if the same
 /// key is present is both then the primary overshadows the secondary.
+/// Note: "fails" includes returning `Ok(None)` and `Err(_)`, this means if
+/// the primary resolver is broken then the secondary resolver is effectively
+/// all that remains. It also means that if both resolvers are broken then the
+/// error from the secondary resolver is returned in the Result.
 pub struct PairedResolvers<'a, T, U> {
     primary: &'a T,
     secondary: &'a U,

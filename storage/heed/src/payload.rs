@@ -17,12 +17,12 @@ pub type Db = heed::Database<Key, Value>;
 pub const DB: &str = "payload";
 
 #[derive(Debug, Clone)]
-pub struct HeedPayloadQueries {
-    env: &'static heed::Env,
+pub struct HeedPayloadQueries<'db> {
+    env: &'db heed::Env,
 }
 
-impl HeedPayloadQueries {
-    pub fn new(env: &'static heed::Env) -> Self {
+impl<'db> HeedPayloadQueries<'db> {
+    pub const fn new(env: &'db heed::Env) -> Self {
         Self { env }
     }
 
@@ -37,9 +37,9 @@ impl HeedPayloadQueries {
     }
 }
 
-impl PayloadQueries for HeedPayloadQueries {
+impl<'db> PayloadQueries for HeedPayloadQueries<'db> {
     type Err = heed::Error;
-    type Storage = &'static heed::Env;
+    type Storage = &'db heed::Env;
 
     fn by_hash(
         &self,

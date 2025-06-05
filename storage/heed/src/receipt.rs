@@ -4,6 +4,7 @@ use {
         generic::{EncodableB256, SerdeJson},
     },
     heed::RoTxn,
+    std::marker::PhantomData,
     umi_blockchain::receipt::{
         ExtendedReceipt, ReceiptQueries, ReceiptRepository, TransactionReceipt,
     },
@@ -18,11 +19,23 @@ pub type EncodableReceipt = SerdeJson<ExtendedReceipt>;
 pub const DB: &str = "receipt";
 
 #[derive(Debug)]
-pub struct HeedReceiptRepository;
+pub struct HeedReceiptRepository<'db>(PhantomData<&'db ()>);
 
-impl ReceiptRepository for HeedReceiptRepository {
+impl Default for HeedReceiptRepository<'_> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl HeedReceiptRepository<'_> {
+    pub const fn new() -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<'db> ReceiptRepository for HeedReceiptRepository<'db> {
     type Err = heed::Error;
-    type Storage = &'static heed::Env;
+    type Storage = &'db heed::Env;
 
     fn contains(&self, env: &Self::Storage, transaction_hash: B256) -> Result<bool, Self::Err> {
         let transaction = env.read_txn()?;
@@ -54,11 +67,23 @@ impl ReceiptRepository for HeedReceiptRepository {
 }
 
 #[derive(Debug, Clone)]
-pub struct HeedReceiptQueries;
+pub struct HeedReceiptQueries<'db>(PhantomData<&'db ()>);
 
-impl ReceiptQueries for HeedReceiptQueries {
+impl Default for HeedReceiptQueries<'_> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl HeedReceiptQueries<'_> {
+    pub const fn new() -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<'db> ReceiptQueries for HeedReceiptQueries<'db> {
     type Err = heed::Error;
-    type Storage = &'static heed::Env;
+    type Storage = &'db heed::Env;
 
     fn by_transaction_hash(
         &self,

@@ -36,18 +36,18 @@ impl From<heed::Error> for Error {
 
 #[derive(Debug, Clone)]
 pub struct HeedStorageTrieRepository {
-    env: &'static heed::Env,
+    env: Arc<heed::Env>,
 }
 
 impl HeedStorageTrieRepository {
-    pub fn new(env: &'static heed::Env) -> Self {
+    pub const fn new(env: Arc<heed::Env>) -> Self {
         Self { env }
     }
 }
 
 impl StorageTrieDb for HeedStorageTrieRepository {
     fn db(&self, account: Address) -> Arc<StagingEthTrieDb<BoxedTrieDb>> {
-        let db = HeedEthStorageTrieDb::new(self.env, account);
+        let db = HeedEthStorageTrieDb::new(self.env.clone(), account);
 
         Arc::new(StagingEthTrieDb::new(BoxedTrieDb::new(
             EthTrieDbWithLocalError::new(EthTrieDbWithHeedError::new(db)),

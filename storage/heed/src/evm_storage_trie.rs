@@ -5,6 +5,7 @@ use {
     },
     eth_trie::DB,
     heed::RoTxn,
+    std::sync::Arc,
     umi_evm_ext::state::DbWithRoot,
     umi_shared::primitives::{Address, B256},
 };
@@ -18,13 +19,13 @@ pub type RootDb = heed::Database<RootKey, RootValue>;
 pub const DB: &str = "evm_storage_trie";
 pub const ROOT_DB: &str = "evm_storage_trie_root";
 
-pub struct HeedEthStorageTrieDb<'db> {
-    env: &'db heed::Env,
+pub struct HeedEthStorageTrieDb {
+    env: Arc<heed::Env>,
     account: Address,
 }
 
-impl<'db> HeedEthStorageTrieDb<'db> {
-    pub fn new(env: &'db heed::Env, account: Address) -> Self {
+impl HeedEthStorageTrieDb {
+    pub fn new(env: Arc<heed::Env>, account: Address) -> Self {
         Self { env, account }
     }
 
@@ -33,7 +34,7 @@ impl<'db> HeedEthStorageTrieDb<'db> {
     }
 }
 
-impl DbWithRoot for HeedEthStorageTrieDb<'_> {
+impl DbWithRoot for HeedEthStorageTrieDb {
     fn root(&self) -> Result<Option<B256>, heed::Error> {
         let transaction = self.env.read_txn()?;
 
@@ -57,7 +58,7 @@ impl DbWithRoot for HeedEthStorageTrieDb<'_> {
     }
 }
 
-impl DB for HeedEthStorageTrieDb<'_> {
+impl DB for HeedEthStorageTrieDb {
     type Error = heed::Error;
 
     fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {

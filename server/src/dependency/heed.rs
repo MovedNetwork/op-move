@@ -1,6 +1,6 @@
 use {
     crate::dependency::shared::*,
-    umi_app::{Application, ApplicationReader, CommandActor},
+    umi_app::{Application, ApplicationReader, CommandActor, SharedBlockHashCache},
     umi_blockchain::state::EthTrieStateQueries,
     umi_genesis::config::GenesisConfig,
     umi_state::{EthTrieState, State},
@@ -29,6 +29,8 @@ pub struct HeedDependencies;
 impl umi_app::Dependencies for HeedDependencies {
     type BlockQueries = block::HeedBlockQueries;
     type BlockRepository = block::HeedBlockRepository;
+    type BlockHashLookup = umi_app::SharedBlockHashCache;
+    type BlockHashWriter = umi_app::SharedBlockHashCache;
     type OnPayload = umi_app::OnPayload<Application<Self>>;
     type OnTx = umi_app::OnTx<Application<Self>>;
     type OnTxBatch = umi_app::OnTxBatch<Application<Self>>;
@@ -69,6 +71,14 @@ impl umi_app::Dependencies for HeedDependencies {
                 .push_state_root(state.state.state_root())
                 .unwrap()
         }
+    }
+
+    fn block_hash_lookup(&self) -> Self::BlockHashLookup {
+        BLOCK_HASH_CACHE.clone()
+    }
+
+    fn block_hash_writer(&self) -> Self::BlockHashWriter {
+        BLOCK_HASH_CACHE.clone()
     }
 
     fn payload_queries() -> Self::PayloadQueries {
@@ -132,6 +142,9 @@ lazy_static::lazy_static! {
     };
     static ref TRIE_DB: std::sync::Arc<trie::HeedEthTrieDb<'static>> = {
         std::sync::Arc::new(trie::HeedEthTrieDb::new(db()))
+    };
+    static ref BLOCK_HASH_CACHE: SharedBlockHashCache = {
+        SharedBlockHashCache::default()
     };
 }
 

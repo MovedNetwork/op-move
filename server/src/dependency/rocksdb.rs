@@ -1,6 +1,6 @@
 use {
     crate::dependency::shared::*,
-    umi_app::{Application, ApplicationReader, CommandActor},
+    umi_app::{Application, ApplicationReader, CommandActor, SharedBlockHashCache},
     umi_blockchain::state::EthTrieStateQueries,
     umi_genesis::config::GenesisConfig,
     umi_state::{EthTrieState, State},
@@ -69,6 +69,14 @@ impl umi_app::Dependencies for RocksDbDependencies {
         }
     }
 
+    fn block_hash_lookup(&self) -> Self::BlockHashLookup {
+        BLOCK_HASH_CACHE.clone()
+    }
+
+    fn block_hash_writer(&self) -> Self::BlockHashWriter {
+        BLOCK_HASH_CACHE.clone()
+    }
+
     fn payload_queries() -> Self::PayloadQueries {
         umi_storage_rocksdb::payload::RocksDbPayloadQueries::new(db())
     }
@@ -132,6 +140,9 @@ lazy_static::lazy_static! {
         std::sync::Arc::new(
             umi_storage_rocksdb::RocksEthTrieDb::new(db()),
         )
+    };
+    static ref BLOCK_HASH_CACHE: SharedBlockHashCache = {
+        SharedBlockHashCache::default()
     };
 }
 

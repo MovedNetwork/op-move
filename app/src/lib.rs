@@ -1,3 +1,7 @@
+pub use {
+    actor::*, dependency::*, factory::create, input::*, queue::CommandQueue, uninit::Uninitialized,
+};
+
 pub mod factory;
 
 pub(crate) mod input;
@@ -9,8 +13,6 @@ mod dependency;
 mod mempool;
 mod query;
 mod queue;
-
 #[cfg(test)]
 mod tests;
-
-pub use {actor::*, dependency::*, factory::create, input::*, queue::CommandQueue};
+mod uninit;

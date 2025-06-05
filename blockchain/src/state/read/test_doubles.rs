@@ -1,12 +1,14 @@
 use {
-    crate::state::{Balance, BlockHeight, Nonce, ProofResponse, StateQueries},
+    crate::state::{
+        Balance, BlockHeight, HeightToStateRootIndex, Nonce, ProofResponse, StateQueries,
+    },
     eth_trie::{EthTrie, MemoryDB},
     move_core_types::account_address::AccountAddress,
     move_table_extension::TableResolver,
     move_vm_types::resolver::MoveResolver,
-    std::sync::Arc,
+    std::{convert::Infallible, sync::Arc},
     umi_evm_ext::state::StorageTrieRepository,
-    umi_shared::primitives::U256,
+    umi_shared::primitives::{B256, U256},
     umi_state::EthTrieResolver,
 };
 
@@ -50,5 +52,21 @@ impl StateQueries for MockStateQueries {
 
     fn resolver_at(&self, _: BlockHeight) -> impl MoveResolver + TableResolver + '_ {
         EthTrieResolver::new(EthTrie::new(Arc::new(MemoryDB::new(true))))
+    }
+}
+
+impl HeightToStateRootIndex for Vec<B256> {
+    type Err = Infallible;
+
+    fn root_by_height(&self, height: BlockHeight) -> Result<Option<B256>, Self::Err> {
+        Ok(self.get(height as usize).cloned())
+    }
+
+    fn height(&self) -> Result<BlockHeight, Self::Err> {
+        Ok(self.len() as u64 - 1)
+    }
+
+    fn push_state_root(&self, _state_root: B256) -> Result<(), Self::Err> {
+        Ok(())
     }
 }

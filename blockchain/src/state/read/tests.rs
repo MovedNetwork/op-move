@@ -8,29 +8,13 @@ use {
         module_traversal::{TraversalContext, TraversalStorage},
     },
     move_vm_types::{gas::UnmeteredGasMeter, resolver::MoveResolver},
-    std::{convert::Infallible, sync::Arc},
+    std::sync::Arc,
     umi_evm_ext::state::InMemoryStorageTrieRepository,
     umi_execution::{check_nonce, create_vm_session, mint_eth, session_id::SessionId},
     umi_genesis::{CreateMoveVm, UmiVm, config::GenesisConfig},
     umi_shared::primitives::{B256, U256},
     umi_state::{Changes, InMemoryState, InMemoryTrieDb, ResolverBasedModuleBytesStorage, State},
 };
-
-impl HeightToStateRootIndex for Vec<B256> {
-    type Err = Infallible;
-
-    fn root_by_height(&self, height: BlockHeight) -> Result<Option<B256>, Self::Err> {
-        Ok(self.get(height as usize).cloned())
-    }
-
-    fn height(&self) -> Result<BlockHeight, Self::Err> {
-        Ok(self.len() as u64 - 1)
-    }
-
-    fn push_state_root(&self, _state_root: B256) -> Result<(), Self::Err> {
-        Ok(())
-    }
-}
 
 struct StateSpy(InMemoryState, ChangeSet);
 

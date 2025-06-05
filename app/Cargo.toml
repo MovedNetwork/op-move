@@ -27,6 +27,8 @@ op-alloy.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]
+umi-evm-ext.features = ["test-doubles"]
+umi-evm-ext.workspace = true
 umi-execution.features = ["test-doubles"]
 umi-execution.workspace = true
 umi-blockchain.features = ["test-doubles"]

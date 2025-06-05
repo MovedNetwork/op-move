@@ -11,7 +11,8 @@ pub async fn execute(
 
     let response = app
         .transaction_by_hash(tx_hash)
-        .map(GetTransactionResponse::from);
+        .map(GetTransactionResponse::from)
+        .map_err(|_| JsonRpcError::block_not_found(tx_hash))?;
 
     Ok(serde_json::to_value(response).expect("Must be able to JSON-serialize response"))
 }

@@ -8,7 +8,8 @@ pub async fn execute(
     app: &ApplicationReader<impl Dependencies>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     parse_params_0(request)?;
-    let response = app.block_number();
+    // TODO: should it be some other code?
+    let response = app.block_number().map_err(JsonRpcError::block_not_found)?;
 
     // Format the block number as a hex string
     Ok(serde_json::to_value(format!("0x{:x}", response))

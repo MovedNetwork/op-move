@@ -9,7 +9,7 @@
 //! [`Display`] trait, they serve only an informative purpose and a human-readable representation.   
 
 use {
-    alloy::consensus::TxType,
+    alloy::{consensus::TxType, primitives::Address},
     move_binary_format::errors::{PartialVMError, VMError},
     move_core_types::language_storage::TypeTag,
     thiserror::Error,
@@ -78,12 +78,16 @@ pub enum UserError {
     EvmContractCreationFailure,
     #[error("Invalid block height requested")]
     InvalidBlockHeight,
+    #[error("Invalid block hash requested")]
+    InvalidBlockHash,
     #[error("Invalid block count requested")]
     InvalidBlockCount,
     #[error("Fee history reward percentiles were malformed")]
     InvalidRewardPercentiles,
     #[error("Fee history reward percentiles vector was too long")]
     RewardPercentilesTooLong,
+    #[error("Invalid address requested: {0}")]
+    InvalidAddress(Address),
 }
 
 /// The error caused by invalid transaction input parameter.
@@ -153,6 +157,10 @@ pub enum InvariantViolation {
     ScriptTransaction(ScriptTransaction),
     #[error("Mempool admitted transactions cannot be deposited")]
     MempoolTransaction,
+    #[error("Error retrieving state from DB")]
+    DatabaseState,
+    #[error("At least genesis block should exist")]
+    GenesisBlock,
 }
 
 #[derive(Debug, Error)]

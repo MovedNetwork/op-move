@@ -2,6 +2,7 @@ use {
     alloy::{primitives::keccak256, rlp},
     auto_impl::auto_impl,
     eth_trie::{DB, EthTrie, MemDBError, MemoryDB, RootWithTrieDiff, Trie, TrieError},
+    move_binary_format::errors::PartialVMError,
     std::{
         collections::HashMap,
         fmt::Debug,
@@ -23,6 +24,30 @@ pub enum Error {
     EthTrie(#[from] TrieError),
     #[error(transparent)]
     Rlp(#[from] rlp::Error),
+    #[error("Address {0} is outside L2 range")]
+    AddressOutsideRange(Address),
+    #[error("VM execution failed with: {0}")]
+    PartialVMError(#[from] PartialVMError),
+    #[error("Account with address {0} not found")]
+    AccountNotFound(Address),
+}
+
+impl From<Error> for umi_shared::error::Error {
+    fn from(value: Error) -> Self {
+        match value {
+            Error::EthTrie(_) | Error::Rlp(_) => umi_shared::error::Error::InvariantViolation(
+                umi_shared::error::InvariantViolation::DatabaseState,
+            ),
+            Error::PartialVMError(e) => {
+                umi_shared::error::Error::User(umi_shared::error::UserError::PartialVm(e))
+            }
+            Error::AccountNotFound(address) | Error::AddressOutsideRange(address) => {
+                umi_shared::error::Error::User(umi_shared::error::UserError::InvalidAddress(
+                    address,
+                ))
+            }
+        }
+    }
 }
 
 impl From<MemDBError> for Error {

@@ -36,23 +36,19 @@ impl<D: Dependencies> ApplicationReader<D> {
     }
 
     pub fn balance_by_height(&self, address: Address, height: BlockNumberOrTag) -> Result<U256> {
-        self.state_queries
-            .balance_at(
-                &self.evm_storage,
-                address.to_move_address(),
-                self.resolve_height(height)?,
-            )
-            .map_err(Into::into)
+        Ok(self.state_queries.balance_at(
+            &self.evm_storage,
+            address.to_move_address(),
+            self.resolve_height(height)?,
+        )?)
     }
 
     pub fn nonce_by_height(&self, address: Address, height: BlockNumberOrTag) -> Result<u64> {
-        self.state_queries
-            .nonce_at(
-                &self.evm_storage,
-                address.to_move_address(),
-                self.resolve_height(height)?,
-            )
-            .map_err(Into::into)
+        Ok(self.state_queries.nonce_at(
+            &self.evm_storage,
+            address.to_move_address(),
+            self.resolve_height(height)?,
+        )?)
     }
 
     pub fn block_by_hash(&self, hash: B256, include_transactions: bool) -> Result<BlockResponse> {
@@ -269,14 +265,12 @@ impl<D: Dependencies> ApplicationReader<D> {
         height: BlockId,
     ) -> Result<ProofResponse> {
         let height = self.height_from_block_id(height)?;
-        self.state_queries
-            .proof_at(
-                &self.evm_storage,
-                address.to_move_address(),
-                &storage_slots,
-                height,
-            )
-            .map_err(Into::into)
+        Ok(self.state_queries.proof_at(
+            &self.evm_storage,
+            address.to_move_address(),
+            &storage_slots,
+            height,
+        )?)
     }
 
     pub fn payload(&self, id: PayloadId) -> Option<PayloadResponse> {

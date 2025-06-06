@@ -28,7 +28,8 @@ pub fn deserialize<T: DeserializeOwned>(x: &serde_json::Value) -> Result<T, Json
 }
 
 pub fn transaction_error<E: fmt::Debug>(e: E) -> JsonRpcError {
-    JsonRpcError::without_data(3, format!("Execution reverted: {e:?}"))
+    // code as defined in geth's internal/ethapi/errors.go
+    JsonRpcError::without_data(-32000, format!("Execution reverted: {e:?}"))
 }
 
 pub fn parse_params_0(request: serde_json::Value) -> Result<(), JsonRpcError> {

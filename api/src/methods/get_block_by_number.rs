@@ -83,6 +83,17 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_bad_input() {
+        let (reader, _app) = create_app();
+
+        let request = example_request(BlockNumberOrTag::Number(5));
+
+        let response = execute(request, &reader).await;
+
+        assert_eq!(response.unwrap_err(), JsonRpcError::block_not_found("0x5"));
+    }
+
+    #[tokio::test]
     async fn test_latest_block_height_is_updated_with_newly_built_block() {
         let (state_channel, rx) = mpsc::channel(10);
         let (reader, mut app) = create_app();

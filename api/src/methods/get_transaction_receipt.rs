@@ -11,7 +11,7 @@ pub async fn execute(
 
     let response = app
         .transaction_receipt(tx_hash)
-        .map_err(|_| JsonRpcError::block_not_found(tx_hash));
+        .map_err(|_| JsonRpcError::block_not_found(tx_hash))?;
 
     Ok(serde_json::to_value(response).expect("Must be able to JSON-serialize response"))
 }
@@ -27,6 +27,30 @@ mod tests {
         std::iter,
         umi_blockchain::receipt::TransactionReceipt,
     };
+
+    #[tokio::test]
+    async fn test_bad_input() {
+        let (reader, _app) = create_app();
+
+        let request: serde_json::Value = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "eth_getTransactionReceipt",
+            "params": [
+                // bad hash
+                "0xe56ec7ba741931e8c55b7f654a6e56ed61cf8b8279bf5e3ef6ac86a11eb00000",
+            ],
+            "id": 1
+        });
+
+        let response = execute(request, &reader).await;
+
+        assert_eq!(
+            response.unwrap_err(),
+            JsonRpcError::block_not_found(
+                "0xe56ec7ba741931e8c55b7f654a6e56ed61cf8b8279bf5e3ef6ac86a11eb00000",
+            )
+        );
+    }
 
     #[tokio::test]
     async fn test_execute() {

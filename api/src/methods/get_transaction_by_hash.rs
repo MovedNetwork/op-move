@@ -30,6 +30,30 @@ mod tests {
     };
 
     #[tokio::test]
+    async fn test_bad_input() {
+        let (reader, _app) = create_app();
+
+        let request: serde_json::Value = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "eth_getTransactionByHash",
+            "params": [
+                // bad hash
+                "0xe56ec7ba741931e8c55b7f654a6e56ed61cf8b8279bf5e3ef6ac86a11eb00000",
+            ],
+            "id": 1
+        });
+
+        let response = execute(request, &reader).await;
+
+        assert_eq!(
+            response.unwrap_err(),
+            JsonRpcError::block_not_found(
+                "0xe56ec7ba741931e8c55b7f654a6e56ed61cf8b8279bf5e3ef6ac86a11eb00000",
+            )
+        );
+    }
+
+    #[tokio::test]
     async fn test_execute() {
         let (reader, mut app) = create_app();
         let (queue, state) = umi_app::create(&mut app, 10);

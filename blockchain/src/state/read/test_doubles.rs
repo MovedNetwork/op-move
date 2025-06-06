@@ -6,9 +6,9 @@ use {
     move_core_types::account_address::AccountAddress,
     move_table_extension::TableResolver,
     move_vm_types::resolver::MoveResolver,
-    std::sync::Arc,
+    std::{convert::Infallible, sync::Arc},
     umi_evm_ext::state::{self, StorageTrieRepository},
-    umi_shared::primitives::U256,
+    umi_shared::primitives::{B256, U256},
     umi_state::EthTrieResolver,
 };
 

@@ -105,6 +105,26 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_bad_input() {
+        let (reader, _app) = *create_app_with_mock_state_queries(AccountAddress::ONE, 1);
+
+        let request: serde_json::Value = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "eth_getNonce",
+            "params": [
+                "0x0000000000000000000000000000000000000001",
+                "0x5",
+            ],
+            "id": 1
+        });
+
+        let expected_response = JsonRpcError::block_not_found("0x5");
+        let response = execute(request, &reader).await.unwrap_err();
+
+        assert_eq!(response, expected_response);
+    }
+
+    #[tokio::test]
     async fn test_endpoint_returns_json_encoded_nonce_query_result_successfully() {
         let expected_nonce = 3;
         let height = 2;

@@ -1,6 +1,6 @@
 use std::fmt;
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, PartialEq, Eq, serde::Serialize)]
 pub struct JsonRpcError {
     pub code: i64,
     pub data: serde_json::Value,
@@ -25,7 +25,8 @@ impl JsonRpcError {
     }
 
     pub fn block_not_found<T: fmt::Display>(block_number: T) -> Self {
-        Self::without_data(-32001, format!("Block not found: {block_number}"))
+        // code as defined in geth's internal/ethapi/errors.go
+        Self::without_data(-38020, format!("Block not found: {block_number}"))
     }
 }
 

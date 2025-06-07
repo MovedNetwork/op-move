@@ -1,5 +1,6 @@
 use {
     crate::dependency::shared::*,
+    std::sync::Arc,
     umi_app::{Application, ApplicationReader, CommandActor},
     umi_blockchain::state::EthTrieStateQueries,
     umi_genesis::config::GenesisConfig,
@@ -23,14 +24,14 @@ pub fn create(
 pub struct RocksDbDependencies;
 
 impl umi_app::Dependencies for RocksDbDependencies {
-    type BlockQueries = umi_storage_rocksdb::block::RocksDbBlockQueries;
-    type BlockRepository = umi_storage_rocksdb::block::RocksDbBlockRepository;
+    type BlockQueries = umi_storage_rocksdb::block::RocksDbBlockQueries<'static>;
+    type BlockRepository = umi_storage_rocksdb::block::RocksDbBlockRepository<'static>;
     type OnPayload = umi_app::OnPayload<Application<Self>>;
     type OnTx = umi_app::OnTx<Application<Self>>;
     type OnTxBatch = umi_app::OnTxBatch<Application<Self>>;
-    type PayloadQueries = umi_storage_rocksdb::payload::RocksDbPayloadQueries;
-    type ReceiptQueries = umi_storage_rocksdb::receipt::RocksDbReceiptQueries;
-    type ReceiptRepository = umi_storage_rocksdb::receipt::RocksDbReceiptRepository;
+    type PayloadQueries = umi_storage_rocksdb::payload::RocksDbPayloadQueries<'static>;
+    type ReceiptQueries = umi_storage_rocksdb::receipt::RocksDbReceiptQueries<'static>;
+    type ReceiptRepository = umi_storage_rocksdb::receipt::RocksDbReceiptRepository<'static>;
     type ReceiptStorage = &'static umi_storage_rocksdb::RocksDb;
     type SharedStorage = &'static umi_storage_rocksdb::RocksDb;
     type ReceiptStorageReader = &'static umi_storage_rocksdb::RocksDb;
@@ -41,15 +42,16 @@ impl umi_app::Dependencies for RocksDbDependencies {
         umi_storage_rocksdb::RocksEthTrieDb<'static>,
     >;
     type StorageTrieRepository = umi_storage_rocksdb::evm::RocksDbStorageTrieRepository;
-    type TransactionQueries = umi_storage_rocksdb::transaction::RocksDbTransactionQueries;
-    type TransactionRepository = umi_storage_rocksdb::transaction::RocksDbTransactionRepository;
+    type TransactionQueries = umi_storage_rocksdb::transaction::RocksDbTransactionQueries<'static>;
+    type TransactionRepository =
+        umi_storage_rocksdb::transaction::RocksDbTransactionRepository<'static>;
 
     fn block_queries() -> Self::BlockQueries {
-        umi_storage_rocksdb::block::RocksDbBlockQueries
+        umi_storage_rocksdb::block::RocksDbBlockQueries::new()
     }
 
     fn block_repository() -> Self::BlockRepository {
-        umi_storage_rocksdb::block::RocksDbBlockRepository
+        umi_storage_rocksdb::block::RocksDbBlockRepository::new()
     }
 
     fn on_payload() -> &'static Self::OnPayload {
@@ -74,11 +76,11 @@ impl umi_app::Dependencies for RocksDbDependencies {
     }
 
     fn receipt_queries() -> Self::ReceiptQueries {
-        umi_storage_rocksdb::receipt::RocksDbReceiptQueries
+        umi_storage_rocksdb::receipt::RocksDbReceiptQueries::new()
     }
 
     fn receipt_repository() -> Self::ReceiptRepository {
-        umi_storage_rocksdb::receipt::RocksDbReceiptRepository
+        umi_storage_rocksdb::receipt::RocksDbReceiptRepository::new()
     }
 
     fn receipt_memory(&mut self) -> Self::ReceiptStorage {
@@ -110,28 +112,26 @@ impl umi_app::Dependencies for RocksDbDependencies {
     }
 
     fn storage_trie_repository() -> Self::StorageTrieRepository {
-        umi_storage_rocksdb::evm::RocksDbStorageTrieRepository::new(db())
+        umi_storage_rocksdb::evm::RocksDbStorageTrieRepository::new(Database.clone())
     }
 
     fn transaction_queries() -> Self::TransactionQueries {
-        umi_storage_rocksdb::transaction::RocksDbTransactionQueries
+        umi_storage_rocksdb::transaction::RocksDbTransactionQueries::new()
     }
 
     fn transaction_repository() -> Self::TransactionRepository {
-        umi_storage_rocksdb::transaction::RocksDbTransactionRepository
+        umi_storage_rocksdb::transaction::RocksDbTransactionRepository::new()
     }
 
     impl_shared!();
 }
 
 lazy_static::lazy_static! {
-    static ref Database: umi_storage_rocksdb::RocksDb = {
-        create_db()
+    static ref Database: Arc<umi_storage_rocksdb::RocksDb> = {
+        Arc::new(create_db())
     };
-    static ref TRIE_DB: std::sync::Arc<umi_storage_rocksdb::RocksEthTrieDb<'static>> = {
-        std::sync::Arc::new(
-            umi_storage_rocksdb::RocksEthTrieDb::new(db()),
-        )
+    static ref TRIE_DB: Arc<umi_storage_rocksdb::RocksEthTrieDb<'static>> = {
+        Arc::new(umi_storage_rocksdb::RocksEthTrieDb::new(db()))
     };
 }
 

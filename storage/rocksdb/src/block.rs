@@ -4,6 +4,7 @@ use {
         transaction,
     },
     rocksdb::{AsColumnFamilyRef, DB as RocksDb, IteratorMode, WriteBatchWithTransaction},
+    std::marker::PhantomData,
     umi_blockchain::{
         block::{BlockQueries, BlockRepository, BlockResponse, ExtendedBlock},
         transaction::ExtendedTransaction,
@@ -15,11 +16,23 @@ pub const BLOCK_COLUMN_FAMILY: &str = "block";
 pub const HEIGHT_COLUMN_FAMILY: &str = "height";
 
 #[derive(Debug)]
-pub struct RocksDbBlockRepository;
+pub struct RocksDbBlockRepository<'db>(PhantomData<&'db ()>);
 
-impl BlockRepository for RocksDbBlockRepository {
+impl Default for RocksDbBlockRepository<'_> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RocksDbBlockRepository<'_> {
+    pub const fn new() -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<'db> BlockRepository for RocksDbBlockRepository<'db> {
     type Err = rocksdb::Error;
-    type Storage = &'static RocksDb;
+    type Storage = &'db RocksDb;
 
     fn add(&mut self, db: &mut Self::Storage, block: ExtendedBlock) -> Result<(), Self::Err> {
         let mut batch = WriteBatchWithTransaction::<false>::default();
@@ -52,11 +65,23 @@ impl BlockRepository for RocksDbBlockRepository {
 }
 
 #[derive(Debug, Clone)]
-pub struct RocksDbBlockQueries;
+pub struct RocksDbBlockQueries<'db>(PhantomData<&'db ()>);
 
-impl BlockQueries for RocksDbBlockQueries {
+impl Default for RocksDbBlockQueries<'_> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RocksDbBlockQueries<'_> {
+    pub const fn new() -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<'db> BlockQueries for RocksDbBlockQueries<'db> {
     type Err = rocksdb::Error;
-    type Storage = &'static RocksDb;
+    type Storage = &'db RocksDb;
 
     fn by_hash(
         &self,

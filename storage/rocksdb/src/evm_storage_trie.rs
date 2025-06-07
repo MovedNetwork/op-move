@@ -1,6 +1,7 @@
 use {
     eth_trie::DB,
     rocksdb::{AsColumnFamilyRef, DB as RocksDb, WriteBatchWithTransaction},
+    std::sync::Arc,
     umi_evm_ext::state::DbWithRoot,
     umi_shared::primitives::{Address, B256},
 };
@@ -8,13 +9,13 @@ use {
 pub const TRIE_COLUMN_FAMILY: &str = "evm_storage_trie";
 pub const ROOT_COLUMN_FAMILY: &str = "evm_storage_trie_root";
 
-pub struct RocksEthStorageTrieDb<'db> {
-    db: &'db RocksDb,
+pub struct RocksEthStorageTrieDb {
+    db: Arc<RocksDb>,
     account: Address,
 }
 
-impl<'db> RocksEthStorageTrieDb<'db> {
-    pub fn new(db: &'db RocksDb, account: Address) -> Self {
+impl RocksEthStorageTrieDb {
+    pub fn new(db: Arc<RocksDb>, account: Address) -> Self {
         Self { db, account }
     }
 
@@ -35,7 +36,7 @@ impl<'db> RocksEthStorageTrieDb<'db> {
     }
 }
 
-impl DbWithRoot for RocksEthStorageTrieDb<'_> {
+impl DbWithRoot for RocksEthStorageTrieDb {
     fn root(&self) -> Result<Option<B256>, rocksdb::Error> {
         Ok(self
             .db
@@ -49,7 +50,7 @@ impl DbWithRoot for RocksEthStorageTrieDb<'_> {
     }
 }
 
-impl DB for RocksEthStorageTrieDb<'_> {
+impl DB for RocksEthStorageTrieDb {
     type Error = rocksdb::Error;
 
     fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {

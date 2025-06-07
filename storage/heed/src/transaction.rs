@@ -4,6 +4,7 @@ use {
         generic::{EncodableB256, SerdeJson},
     },
     heed::RoTxn,
+    std::marker::PhantomData,
     umi_blockchain::transaction::{
         ExtendedTransaction, TransactionQueries, TransactionRepository, TransactionResponse,
     },
@@ -18,11 +19,23 @@ pub type EncodableTransaction = SerdeJson<ExtendedTransaction>;
 pub const DB: &str = "transaction";
 
 #[derive(Debug)]
-pub struct HeedTransactionRepository;
+pub struct HeedTransactionRepository<'db>(PhantomData<&'db ()>);
 
-impl TransactionRepository for HeedTransactionRepository {
+impl Default for HeedTransactionRepository<'_> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl HeedTransactionRepository<'_> {
+    pub const fn new() -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<'db> TransactionRepository for HeedTransactionRepository<'db> {
     type Err = heed::Error;
-    type Storage = &'static heed::Env;
+    type Storage = &'db heed::Env;
 
     fn extend(
         &mut self,
@@ -42,11 +55,23 @@ impl TransactionRepository for HeedTransactionRepository {
 }
 
 #[derive(Debug, Clone)]
-pub struct HeedTransactionQueries;
+pub struct HeedTransactionQueries<'db>(PhantomData<&'db ()>);
 
-impl TransactionQueries for HeedTransactionQueries {
+impl Default for HeedTransactionQueries<'_> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl HeedTransactionQueries<'_> {
+    pub const fn new() -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<'db> TransactionQueries for HeedTransactionQueries<'db> {
     type Err = heed::Error;
-    type Storage = &'static heed::Env;
+    type Storage = &'db heed::Env;
 
     fn by_hash(
         &self,

@@ -5,6 +5,7 @@ use {
         transaction::HeedTransactionExt,
     },
     heed::RoTxn,
+    std::marker::PhantomData,
     umi_blockchain::block::{BlockQueries, BlockRepository, BlockResponse, ExtendedBlock},
     umi_shared::primitives::B256,
 };
@@ -21,11 +22,23 @@ pub const DB: &str = "block";
 pub const HEIGHT_DB: &str = "height";
 
 #[derive(Debug)]
-pub struct HeedBlockRepository;
+pub struct HeedBlockRepository<'db>(PhantomData<&'db ()>);
 
-impl BlockRepository for HeedBlockRepository {
+impl Default for HeedBlockRepository<'_> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl HeedBlockRepository<'_> {
+    pub const fn new() -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<'db> BlockRepository for HeedBlockRepository<'db> {
     type Err = heed::Error;
-    type Storage = &'static heed::Env;
+    type Storage = &'db heed::Env;
 
     fn add(&mut self, env: &mut Self::Storage, block: ExtendedBlock) -> Result<(), Self::Err> {
         let mut transaction = env.write_txn()?;
@@ -69,11 +82,23 @@ impl BlockRepository for HeedBlockRepository {
 }
 
 #[derive(Debug, Clone)]
-pub struct HeedBlockQueries;
+pub struct HeedBlockQueries<'db>(PhantomData<&'db ()>);
 
-impl BlockQueries for HeedBlockQueries {
+impl Default for HeedBlockQueries<'_> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl HeedBlockQueries<'_> {
+    pub const fn new() -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<'db> BlockQueries for HeedBlockQueries<'db> {
     type Err = heed::Error;
-    type Storage = &'static heed::Env;
+    type Storage = &'db heed::Env;
 
     fn by_hash(
         &self,

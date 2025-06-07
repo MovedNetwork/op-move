@@ -8,6 +8,7 @@ use {
     once_cell::sync::Lazy,
     std::{
         fs,
+        future::Future,
         io::Read,
         net::{Ipv4Addr, SocketAddr, SocketAddrV4},
         time::SystemTime,
@@ -32,6 +33,7 @@ use {
     },
 };
 
+mod allow;
 mod dependency;
 mod geth_genesis;
 mod mirror;
@@ -83,62 +85,49 @@ pub async fn run(max_buffered_commands: u32) {
     umi_app::run(
         state,
         tokio::spawn(async move {
-            let http_app_reader = app_reader.clone();
-            let http_cmd_queue = queue.clone();
-            let http_server_addr =
-                SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 8545));
-            let mut content_type = HeaderMap::new();
-            content_type.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-            let http_route = warp::any()
-                .map(move || (http_cmd_queue.clone(), http_app_reader.clone()))
-                .and(extract_request_data_filter())
-                .and_then(|(queue, app_reader), path, query, method, headers, body| {
-                    mirror(
-                        queue,
-                        (path, query, method, headers, body),
-                        "9545",
-                        // Limit engine API access to only authenticated endpoint
-                        MethodName::is_non_engine_api,
-                        &StatePayloadId,
-                        app_reader,
-                    )
-                })
-                .with(warp::reply::with::headers(content_type))
-                .with(warp::cors().allow_any_origin());
-
-            let auth_cmd_queue = queue.clone();
-            let auth_server_addr =
-                SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 8551));
-            let auth_route = warp::any()
-                .map(move || (auth_cmd_queue.clone(), app_reader.clone()))
-                .and(extract_request_data_filter())
-                .and(validate_jwt())
-                .and_then(
-                    move |(queue, app_reader), path, query, method, headers, body, _| {
-                        mirror(
-                            queue,
-                            (path, query, method, headers, body),
-                            "9551",
-                            |_| true,
-                            &StatePayloadId,
-                            app_reader,
-                        )
-                    },
-                )
-                .with(warp::cors().allow_any_origin());
+            let auth = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 8551));
+            let http = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 8545));
 
             tokio::join!(
-                warp::serve(http_route)
-                    .bind_with_graceful_shutdown(http_server_addr, queue.shutdown_listener())
-                    .1,
-                warp::serve(auth_route)
-                    .bind_with_graceful_shutdown(auth_server_addr, queue.shutdown_listener())
-                    .1,
+                serve(http, &queue, &app_reader, "9545", &allow::http),
+                serve(auth, &queue, &app_reader, "9551", &allow::auth),
             );
         }),
     )
     .await
     .unwrap();
+}
+
+fn serve(
+    addr: SocketAddr,
+    queue: &CommandQueue,
+    reader: &ApplicationReader<dependency::Dependency>,
+    port: &'static str,
+    is_allowed: &'static (impl Fn(&MethodName) -> bool + Send + Sync),
+) -> impl Future<Output = ()> {
+    let services = (queue.clone(), reader.clone());
+    let content_type =
+        HeaderMap::from_iter([(CONTENT_TYPE, HeaderValue::from_static("application/json"))]);
+
+    let route = warp::any()
+        .map(move || services.clone())
+        .and(extract_request_data_filter())
+        .and_then(move |(queue, reader), path, query, method, headers, body| {
+            mirror(
+                queue,
+                (path, query, method, headers, body),
+                port,
+                is_allowed,
+                &StatePayloadId,
+                reader,
+            )
+        })
+        .with(warp::reply::with::headers(content_type))
+        .with(warp::cors().allow_any_origin());
+
+    warp::serve(route)
+        .bind_with_graceful_shutdown(addr, queue.shutdown_listener())
+        .1
 }
 
 pub fn initialize_app(
@@ -224,7 +213,7 @@ async fn mirror(
     queue: CommandQueue,
     request: Request,
     port: &str,
-    is_allowed: impl Fn(&MethodName) -> bool,
+    is_allowed: &impl Fn(&MethodName) -> bool,
     payload_id: &impl NewPayloadId,
     app: ApplicationReader<impl Dependencies>,
 ) -> Result<warp::reply::Response, Rejection> {

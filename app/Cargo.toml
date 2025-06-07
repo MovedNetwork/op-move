@@ -9,6 +9,7 @@ default = []
 test-doubles = [
     "umi-blockchain/test-doubles",
     "umi-execution/test-doubles",
+    "umi-evm-ext/test-doubles",
 ]
 
 [dependencies]

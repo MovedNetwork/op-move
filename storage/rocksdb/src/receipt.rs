@@ -1,6 +1,7 @@
 use {
     crate::generic::{FromValue, ToValue},
     rocksdb::{AsColumnFamilyRef, DB as RocksDb, WriteBatchWithTransaction},
+    std::marker::PhantomData,
     umi_blockchain::receipt::{
         ExtendedReceipt, ReceiptQueries, ReceiptRepository, TransactionReceipt,
     },
@@ -10,11 +11,23 @@ use {
 pub const COLUMN_FAMILY: &str = "receipt";
 
 #[derive(Debug)]
-pub struct RocksDbReceiptRepository;
+pub struct RocksDbReceiptRepository<'db>(PhantomData<&'db ()>);
 
-impl ReceiptRepository for RocksDbReceiptRepository {
+impl Default for RocksDbReceiptRepository<'_> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RocksDbReceiptRepository<'_> {
+    pub const fn new() -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<'db> ReceiptRepository for RocksDbReceiptRepository<'db> {
     type Err = rocksdb::Error;
-    type Storage = &'static RocksDb;
+    type Storage = &'db RocksDb;
 
     fn contains(&self, db: &Self::Storage, transaction_hash: B256) -> Result<bool, Self::Err> {
         let cf = cf(db);
@@ -40,11 +53,23 @@ impl ReceiptRepository for RocksDbReceiptRepository {
 }
 
 #[derive(Debug, Clone)]
-pub struct RocksDbReceiptQueries;
+pub struct RocksDbReceiptQueries<'db>(PhantomData<&'db ()>);
 
-impl ReceiptQueries for RocksDbReceiptQueries {
+impl Default for RocksDbReceiptQueries<'_> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RocksDbReceiptQueries<'_> {
+    pub const fn new() -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<'db> ReceiptQueries for RocksDbReceiptQueries<'db> {
     type Err = rocksdb::Error;
-    type Storage = &'static RocksDb;
+    type Storage = &'db RocksDb;
 
     fn by_transaction_hash(
         &self,

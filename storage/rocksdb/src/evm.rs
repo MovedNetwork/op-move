@@ -13,18 +13,18 @@ use {
 
 #[derive(Clone)]
 pub struct RocksDbStorageTrieRepository {
-    db: &'static rocksdb::DB,
+    db: Arc<rocksdb::DB>,
 }
 
 impl RocksDbStorageTrieRepository {
-    pub fn new(db: &'static rocksdb::DB) -> Self {
+    pub fn new(db: Arc<rocksdb::DB>) -> Self {
         Self { db }
     }
 }
 
 impl StorageTrieDb for RocksDbStorageTrieRepository {
     fn db(&self, account: Address) -> Arc<StagingEthTrieDb<BoxedTrieDb>> {
-        let db = RocksEthStorageTrieDb::new(self.db, account);
+        let db = RocksEthStorageTrieDb::new(self.db.clone(), account);
 
         Arc::new(StagingEthTrieDb::new(BoxedTrieDb::new(
             EthTrieDbWithLocalError::new(EthTrieWithRocksDbError::new(db)),

@@ -1,6 +1,7 @@
 use {
     crate::generic::{FromValue, ToValue},
     rocksdb::{AsColumnFamilyRef, DB as RocksDb, WriteBatchWithTransaction},
+    std::marker::PhantomData,
     umi_blockchain::transaction::{
         ExtendedTransaction, TransactionQueries, TransactionRepository, TransactionResponse,
     },
@@ -10,11 +11,23 @@ use {
 pub const COLUMN_FAMILY: &str = "transaction";
 
 #[derive(Debug)]
-pub struct RocksDbTransactionRepository;
+pub struct RocksDbTransactionRepository<'db>(PhantomData<&'db ()>);
 
-impl TransactionRepository for RocksDbTransactionRepository {
+impl Default for RocksDbTransactionRepository<'_> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RocksDbTransactionRepository<'_> {
+    pub const fn new() -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<'db> TransactionRepository for RocksDbTransactionRepository<'db> {
     type Err = rocksdb::Error;
-    type Storage = &'static RocksDb;
+    type Storage = &'db RocksDb;
 
     fn extend(
         &mut self,
@@ -34,11 +47,23 @@ impl TransactionRepository for RocksDbTransactionRepository {
 }
 
 #[derive(Debug, Clone)]
-pub struct RocksDbTransactionQueries;
+pub struct RocksDbTransactionQueries<'db>(PhantomData<&'db ()>);
 
-impl TransactionQueries for RocksDbTransactionQueries {
+impl Default for RocksDbTransactionQueries<'_> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RocksDbTransactionQueries<'_> {
+    pub const fn new() -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<'db> TransactionQueries for RocksDbTransactionQueries<'db> {
     type Err = rocksdb::Error;
-    type Storage = &'static RocksDb;
+    type Storage = &'db RocksDb;
 
     fn by_hash(
         &self,

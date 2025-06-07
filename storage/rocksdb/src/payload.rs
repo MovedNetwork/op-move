@@ -22,12 +22,12 @@ impl ToKey for PayloadId {
 }
 
 #[derive(Debug, Clone)]
-pub struct RocksDbPayloadQueries {
-    db: &'static RocksDb,
+pub struct RocksDbPayloadQueries<'db> {
+    db: &'db RocksDb,
 }
 
-impl RocksDbPayloadQueries {
-    pub fn new(db: &'static RocksDb) -> Self {
+impl<'db> RocksDbPayloadQueries<'db> {
+    pub fn new(db: &'db RocksDb) -> Self {
         Self { db }
     }
 
@@ -40,9 +40,9 @@ impl RocksDbPayloadQueries {
     }
 }
 
-impl PayloadQueries for RocksDbPayloadQueries {
+impl<'db> PayloadQueries for RocksDbPayloadQueries<'db> {
     type Err = rocksdb::Error;
-    type Storage = &'static RocksDb;
+    type Storage = &'db RocksDb;
 
     fn by_hash(
         &self,

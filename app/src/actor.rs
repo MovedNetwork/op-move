@@ -90,9 +90,5 @@ where
     F: Future<Output = Out> + Send,
     Out: Send + Debug,
 {
-    tokio::join! {
-        actor.work(),
-        future,
-    }
-    .1
+    tokio::join!(actor.work(), future).1
 }

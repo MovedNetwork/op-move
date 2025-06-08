@@ -47,7 +47,7 @@ fn bench_build_1000_blocks_with_queue_size(bencher: &mut Criterion) -> impl Term
         .into_iter()
         .rev()
     {
-        let (mut app, _app_reader) = initialize_app(GenesisConfig::default());
+        let (mut app, _app_reader) = initialize_app(&GenesisConfig::default());
 
         app.genesis_update(input::GENESIS);
 

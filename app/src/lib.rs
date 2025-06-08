@@ -1,6 +1,12 @@
 #[cfg(any(feature = "test-doubles", test))]
 pub use uninit::Uninitialized;
-pub use {actor::*, dependency::*, factory::create, input::*, queue::CommandQueue};
+pub use {
+    actor::*,
+    dependency::*,
+    factory::{create, run_deferred},
+    input::*,
+    queue::CommandQueue,
+};
 
 pub mod factory;
 

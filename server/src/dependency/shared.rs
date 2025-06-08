@@ -1,3 +1,21 @@
+use {
+    crate::dependency::{dependencies, Dependency},
+    umi_app::{Application, ApplicationReader},
+    umi_genesis::config::GenesisConfig,
+};
+
+pub fn create(
+    genesis_config: &GenesisConfig,
+) -> (Application<Dependency>, ApplicationReader<Dependency>) {
+    let deps = dependencies();
+    let reader_deps = deps.reader();
+
+    (
+        Application::new(deps, genesis_config),
+        ApplicationReader::new(reader_deps, genesis_config),
+    )
+}
+
 macro_rules! impl_shared {
     () => {
         type BlockHash = umi_blockchain::block::UmiBlockHash;

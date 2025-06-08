@@ -79,21 +79,25 @@ pub async fn run(max_buffered_commands: u32) {
         ..Default::default()
     };
 
-    let (mut app, app_reader) = initialize_app(genesis_config);
-    let (queue, state) = umi_app::create(&mut app, max_buffered_commands);
+    let deps = dependency::dependencies();
+    let reader = {
+        let genesis_config = genesis_config.clone();
+        let deps = deps.reader();
+        move || ApplicationReader::new(deps, &genesis_config)
+    };
+    let app = move || Application::new(deps, &genesis_config).with_genesis(&genesis_config);
 
-    umi_app::run(
-        state,
+    umi_app::run_deferred(reader, app, max_buffered_commands, |queue, reader| {
         tokio::spawn(async move {
             let auth = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 8551));
             let http = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 8545));
 
             tokio::join!(
-                serve(http, &queue, &app_reader, "9545", &allow::http),
-                serve(auth, &queue, &app_reader, "9551", &allow::auth),
+                serve(http, &queue, &reader, "9545", &allow::http),
+                serve(auth, &queue, &reader, "9551", &allow::auth),
             );
-        }),
-    )
+        })
+    })
     .await
     .unwrap();
 }
@@ -130,20 +134,40 @@ fn serve(
         .1
 }
 
-pub fn initialize_app(
-    genesis_config: GenesisConfig,
-) -> (
-    Application<dependency::Dependency>,
-    ApplicationReader<dependency::Dependency>,
-) {
-    let (mut app, app_reader) = dependency::create(&genesis_config);
+/// An extension trait adds features for applying genesis state to an empty blockchain state.
+pub trait GenesisStateExt: Sized {
+    /// Determines if the blockchain state is empty.
+    ///
+    /// Empty blockchain state is defined as a tree with zero nodes, not even genesis.
+    fn is_state_empty(&self) -> bool;
 
-    if app
-        .block_queries
-        .latest(&app.storage_reader)
-        .unwrap()
-        .is_none()
-    {
+    /// Applies genesis blockchain state changes onto `self`.
+    fn initialize_genesis_state(&mut self, genesis_config: &GenesisConfig);
+
+    /// Applies genesis blockchain state changes onto `self`, but only if the state is empty.
+    fn initialize_genesis_state_if_empty(&mut self, genesis_config: &GenesisConfig) {
+        if self.is_state_empty() {
+            self.initialize_genesis_state(genesis_config);
+        }
+    }
+
+    /// Returns `self` that has genesis state changes applied. The implementation should not apply
+    /// the genesis changes if the state is not empty.
+    fn with_genesis(mut self, genesis_config: &GenesisConfig) -> Self {
+        self.initialize_genesis_state_if_empty(genesis_config);
+        self
+    }
+}
+
+impl<D: Dependencies> GenesisStateExt for Application<D> {
+    fn is_state_empty(&self) -> bool {
+        self.block_queries
+            .latest(&self.storage_reader)
+            .unwrap()
+            .is_none()
+    }
+
+    fn initialize_genesis_state(&mut self, genesis_config: &GenesisConfig) {
         let (genesis_changes, evm_storage_changes) = {
             #[cfg(test)]
             {
@@ -152,22 +176,30 @@ pub fn initialize_app(
             #[cfg(not(test))]
             {
                 umi_genesis::build(
-                    &umi_genesis::UmiVm::new(&genesis_config),
-                    &genesis_config,
-                    &app.evm_storage,
+                    &umi_genesis::UmiVm::new(genesis_config),
+                    genesis_config,
+                    &self.evm_storage,
                 )
             }
         };
         umi_genesis::apply(
             genesis_changes,
             evm_storage_changes,
-            &genesis_config,
-            &mut app.state,
-            &mut app.evm_storage,
+            genesis_config,
+            &mut self.state,
+            &mut self.evm_storage,
         );
     }
+}
 
-    (app, app_reader)
+pub fn initialize_app(
+    genesis_config: &GenesisConfig,
+) -> (
+    Application<dependency::Dependency>,
+    ApplicationReader<dependency::Dependency>,
+) {
+    let (app, app_reader) = dependency::create(genesis_config);
+    (app.with_genesis(genesis_config), app_reader)
 }
 
 #[cfg(test)]

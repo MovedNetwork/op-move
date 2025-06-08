@@ -30,7 +30,7 @@ impl TestContext {
         FU: FnMut(Self) -> F + Send,
     {
         let genesis_config = GenesisConfig::default();
-        let (mut app, reader) = initialize_app(genesis_config.clone());
+        let (mut app, reader) = initialize_app(&genesis_config);
 
         let genesis_block = create_genesis_block(&app.block_hash, &genesis_config);
         let head = genesis_block.hash;

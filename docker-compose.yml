@@ -76,7 +76,7 @@ services:
       - ./docker/volumes/shared:/volume/shared
 
   op-move:
-    image: umi-op-move:latest
+    image: umi-op-move:latest-1
     build:
       context: ./
       dockerfile: ./docker/Dockerfile.op-move

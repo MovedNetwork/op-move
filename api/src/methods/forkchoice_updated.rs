@@ -226,9 +226,7 @@ pub(super) mod tests {
 
     #[tokio::test]
     async fn test_execute_v3() {
-        let (reader, mut app) = create_app();
-
-        umi_app::run_deferred(move || reader, move || app, 10, |queue, _reader| async move {
+        umi_app::run_deferred(create_app, 10, |queue, _reader| async move {
             let request = example_request();
 
             let expected_response: serde_json::Value = serde_json::from_str(r#"

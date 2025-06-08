@@ -87,7 +87,7 @@ pub async fn run(max_buffered_commands: u32) {
     };
     let app = move || Application::new(deps, &genesis_config).with_genesis(&genesis_config);
 
-    umi_app::run_deferred(reader, app, max_buffered_commands, |queue, reader| {
+    umi_app::run_deferred((reader, app), max_buffered_commands, |queue, reader| {
         tokio::spawn(async move {
             let auth = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 8551));
             let http = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 8545));

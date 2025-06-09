@@ -44,7 +44,7 @@ use {
     umi_shared::{
         error::{
             Error::{InvalidTransaction, User},
-            EthToken, InvalidTransactionCause, InvariantViolation,
+            EthToken, InvalidTransactionCause,
         },
         primitives::ToMoveAddress,
         resolver_utils::{ChangesBasedResolver, PairedResolvers},
@@ -331,9 +331,9 @@ pub(super) fn execute_canonical_transaction<
                 &code_storage,
             )
             .map_err(|_| {
-                umi_shared::error::Error::InvariantViolation(InvariantViolation::EthToken(
+                umi_shared::error::Error::eth_token_invariant_violation(
                     EthToken::RefundAlwaysSucceeds,
-                ))
+                )
             })?;
 
         let (changes, mut extensions) = refund_session.finish_with_extensions(&code_storage)?;

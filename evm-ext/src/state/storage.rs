@@ -35,9 +35,7 @@ pub enum Error {
 impl From<Error> for umi_shared::error::Error {
     fn from(value: Error) -> Self {
         match value {
-            Error::EthTrie(_) | Error::Rlp(_) => umi_shared::error::Error::InvariantViolation(
-                umi_shared::error::InvariantViolation::DatabaseState,
-            ),
+            Error::EthTrie(_) | Error::Rlp(_) => umi_shared::error::Error::DatabaseState,
             Error::PartialVMError(e) => {
                 umi_shared::error::Error::User(umi_shared::error::UserError::PartialVm(e))
             }

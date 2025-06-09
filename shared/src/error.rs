@@ -35,6 +35,8 @@ pub enum Error {
     InvalidTransaction(InvalidTransactionCause),
     #[error("{0}")]
     InvariantViolation(InvariantViolation),
+    #[error("Error retrieving state from DB")]
+    DatabaseState,
 }
 
 impl Error {

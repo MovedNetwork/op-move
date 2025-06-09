@@ -54,7 +54,7 @@ impl<D: Dependencies> ApplicationReader<D> {
     pub fn block_by_hash(&self, hash: B256, include_transactions: bool) -> Result<BlockResponse> {
         self.block_queries
             .by_hash(&self.storage, hash, include_transactions)
-            .map_err(|_| Error::InvariantViolation(InvariantViolation::DatabaseState))?
+            .map_err(|_| Error::DatabaseState)?
             .ok_or(Error::User(UserError::InvalidBlockHash(hash)))
     }
 
@@ -66,14 +66,14 @@ impl<D: Dependencies> ApplicationReader<D> {
         let resolved_height = self.resolve_height(height)?;
         self.block_queries
             .by_height(&self.storage, resolved_height, include_transactions)
-            .map_err(|_| Error::InvariantViolation(InvariantViolation::DatabaseState))?
+            .map_err(|_| Error::DatabaseState)?
             .ok_or(Error::User(UserError::InvalidBlockHeight(resolved_height)))
     }
 
     pub fn block_number(&self) -> Result<u64> {
         self.block_queries
             .latest(&self.storage)
-            .map_err(|_| Error::InvariantViolation(InvariantViolation::DatabaseState))?
+            .map_err(|_| Error::DatabaseState)?
             .ok_or(Error::InvariantViolation(InvariantViolation::GenesisBlock))
     }
 
@@ -244,14 +244,14 @@ impl<D: Dependencies> ApplicationReader<D> {
     pub fn transaction_receipt(&self, tx_hash: B256) -> Result<TransactionReceipt> {
         self.receipt_queries
             .by_transaction_hash(&self.receipt_memory, tx_hash)
-            .map_err(|_| Error::InvariantViolation(InvariantViolation::DatabaseState))?
+            .map_err(|_| Error::DatabaseState)?
             .ok_or(Error::User(UserError::InvalidBlockHash(tx_hash)))
     }
 
     pub fn transaction_by_hash(&self, tx_hash: B256) -> Result<TransactionResponse> {
         self.transaction_queries
             .by_hash(&self.storage, tx_hash)
-            .map_err(|_| Error::InvariantViolation(InvariantViolation::DatabaseState))?
+            .map_err(|_| Error::DatabaseState)?
             .ok_or(Error::User(UserError::InvalidBlockHash(tx_hash)))
     }
 
@@ -285,7 +285,7 @@ impl<D: Dependencies> ApplicationReader<D> {
         let latest = self
             .block_queries
             .latest(&self.storage)
-            .map_err(|_| Error::InvariantViolation(InvariantViolation::DatabaseState))?
+            .map_err(|_| Error::DatabaseState)?
             .ok_or(Error::InvariantViolation(InvariantViolation::GenesisBlock))?;
         match height {
             Number(height) if height <= latest => Ok(height),
@@ -304,7 +304,7 @@ impl<D: Dependencies> ApplicationReader<D> {
                 let block = self
                     .block_queries
                     .by_hash(&self.storage, h.block_hash, false)
-                    .map_err(|_| Error::InvariantViolation(InvariantViolation::DatabaseState))?
+                    .map_err(|_| Error::DatabaseState)?
                     .ok_or(Error::User(UserError::InvalidBlockHash(h.block_hash)))?;
                 Ok(block.0.header.number)
             }

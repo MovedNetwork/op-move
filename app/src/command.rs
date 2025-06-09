@@ -25,7 +25,7 @@ use {
         transaction::{NormalizedExtendedTxEnvelope, WrapReceipt},
     },
     umi_shared::{
-        error::Error::{InvalidTransaction, InvariantViolation, User},
+        error::Error::{DatabaseState, InvalidTransaction, InvariantViolation, User},
         primitives::{B256, ToEthAddress, U64, U256},
     },
     umi_state::State,
@@ -235,7 +235,7 @@ impl<D: Dependencies> Application<D> {
             let outcome = match execute_transaction(input, &mut self.resolver_cache) {
                 Ok(outcome) => outcome,
                 Err(User(e)) => unreachable!("User errors are handled in execution {e:?}"),
-                Err(InvalidTransaction(_)) => continue,
+                Err(InvalidTransaction(_)) | Err(DatabaseState) => continue,
                 Err(InvariantViolation(e)) => panic!("ERROR: execution error {e:?}"),
             };
 

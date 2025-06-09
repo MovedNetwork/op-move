@@ -11,7 +11,7 @@ pub async fn execute(
 
     let response = app
         .balance_by_height(address, block_number)
-        .ok_or(JsonRpcError::block_not_found(block_number))?;
+        .map_err(|_| JsonRpcError::block_not_found(block_number))?;
 
     // Format the balance as a hex string
     Ok(serde_json::Value::String(format!("0x{response:x}")))

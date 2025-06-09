@@ -471,8 +471,8 @@ fn test_one_payload_can_be_fetched_repeatedly() {
 
     app.start_block_build(Default::default(), payload_id);
 
-    let expected_payload = reader.payload(payload_id);
-    let actual_payload = reader.payload(payload_id);
+    let expected_payload = reader.payload(payload_id).unwrap();
+    let actual_payload = reader.payload(payload_id).unwrap();
 
     assert_eq!(expected_payload, actual_payload);
 }
@@ -497,7 +497,7 @@ fn test_older_payload_can_be_fetched_again_successfully() {
         payload_id,
     );
 
-    let expected_payload = reader.payload(payload_id);
+    let expected_payload = reader.payload(payload_id).unwrap();
 
     let tx = create_transaction(1);
 
@@ -514,11 +514,12 @@ fn test_older_payload_can_be_fetched_again_successfully() {
         payload_2_id,
     );
 
-    reader.payload(payload_2_id);
+    // make sure the newer payload is fetchable
+    let _ = reader.payload(payload_2_id).unwrap();
 
-    let actual_payload = reader.payload(payload_id);
+    let older_payload = reader.payload(payload_id).unwrap();
 
-    assert_eq!(expected_payload, actual_payload);
+    assert_eq!(expected_payload, older_payload);
 }
 
 #[test]
@@ -543,7 +544,7 @@ fn test_txs_from_one_account_have_proper_nonce_ordering() {
         // Get receipt for this transaction
         let receipt = reader.transaction_receipt(*tx_hash);
 
-        let receipt = receipt.unwrap_or_else(|| {
+        let receipt = receipt.unwrap_or_else(|_| {
             panic!(
                 "Transaction with nonce {} and hash {:?} has no receipt",
                 i, tx_hash
@@ -574,18 +575,15 @@ fn test_txs_from_one_account_have_proper_nonce_ordering() {
         );
     }
 
-    let payload = reader.payload(payload_id);
+    let payload = reader.payload(payload_id).unwrap();
     assert!(
-        payload
-            .as_ref()
-            .is_some_and(|p| p.execution_payload.transactions.len() == 10),
-        "Expected {} transactions in block, but found {:?}",
-        10,
-        payload.map(|p| p.execution_payload.transactions.len())
+        payload.execution_payload.transactions.len() == 10,
+        "Expected 10 transactions in block, but found {:?}",
+        payload.execution_payload.transactions.len()
     );
 }
 
-#[test_case(0, None => matches Err(Error::User(UserError::InvalidBlockCount)); "zero block count")]
+#[test_case(0, None => matches Err(Error::User(UserError::InvalidBlockCount(0))); "zero block count")]
 #[test_case(5, None => matches Ok(_); "block count too long")]
 #[test_case(1, Some(vec![0.0; 101]) => matches Err(Error::User(UserError::RewardPercentilesTooLong)); "too many percentiles")]
 #[test_case(1, Some(vec![50.0, 101.0]) => matches Err(Error::User(UserError::InvalidRewardPercentiles)); "percentile out of range")]

@@ -18,7 +18,8 @@ pub async fn execute(
 
     let response = app
         .proof(address, storage_slots, block_number)
-        .ok_or(JsonRpcError::block_not_found(block_number))?;
+        // TODO: more granular mapping
+        .map_err(|_| JsonRpcError::block_not_found(block_number))?;
 
     // Format the balance as a hex string
     Ok(serde_json::to_value(response).expect("Must be able to JSON-serialize response"))
@@ -133,5 +134,33 @@ mod tests {
             // Leaf and extension nodes have length 2; branch nodes have length 17
             assert!(list.len() == 2 || list.len() == 17);
         }
+    }
+
+    #[tokio::test]
+    async fn test_bad_input() {
+        let (reader, _app) = create_app();
+
+        let request: serde_json::Value = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "eth_getProof",
+            "params": [
+                // bad address
+                "0x2200000000000000000000000000000000000016",
+                [],
+                "0xe56ec7ba741931e8c55b7f654a6e56ed61cf8b8279bf5e3ef6ac86a11eb33a9d",
+            ],
+            "id": 1
+        });
+
+        let response = execute(request, &reader).await;
+        let block_hash: BlockId = json_utils::deserialize(&serde_json::json!(
+            "0xe56ec7ba741931e8c55b7f654a6e56ed61cf8b8279bf5e3ef6ac86a11eb33a9d"
+        ))
+        .unwrap();
+
+        assert_eq!(
+            response.unwrap_err(),
+            JsonRpcError::block_not_found(block_hash)
+        );
     }
 }

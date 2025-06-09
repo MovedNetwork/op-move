@@ -42,6 +42,8 @@ pub type Version = u64;
 /// * [`Self::balance_at`] - To fetch an amount of base token in an account read in its smallest
 ///   denomination at given block height.
 /// * [`Self::nonce_at`] - To fetch the nonce value set for an account at given block height.
+/// * [`Self::proof_at`] - To fetch the account and storage values of the specified account
+///   including the Merkle proof.
 pub trait StateQueries {
     /// Queries the blockchain state version corresponding with block `height` for the amount of
     /// base token associated with `account`.
@@ -50,10 +52,10 @@ pub trait StateQueries {
         evm_storage: &impl StorageTrieRepository,
         account: AccountAddress,
         height: BlockHeight,
-    ) -> Option<Balance> {
-        let resolver = self.resolver_at(height);
+    ) -> Result<Balance, state::Error> {
+        let resolver = self.resolver_at(height)?;
 
-        Some(quick_get_eth_balance(&account, &resolver, evm_storage))
+        Ok(quick_get_eth_balance(&account, &resolver, evm_storage))
     }
 
     /// Queries the blockchain state version corresponding with block `height` for the nonce value
@@ -63,21 +65,26 @@ pub trait StateQueries {
         evm_storage: &impl StorageTrieRepository,
         account: AccountAddress,
         height: BlockHeight,
-    ) -> Option<Nonce> {
-        let resolver = self.resolver_at(height);
+    ) -> Result<Nonce, state::Error> {
+        let resolver = self.resolver_at(height)?;
 
-        Some(quick_get_nonce(&account, &resolver, evm_storage))
+        Ok(quick_get_nonce(&account, &resolver, evm_storage))
     }
 
+    /// Queries the blockchain state version corresponding with block `height` for the  
+    /// account and storage proofs associated with `account`.
     fn proof_at(
         &self,
         evm_storage: &impl StorageTrieRepository,
         account: AccountAddress,
         storage_slots: &[U256],
         height: BlockHeight,
-    ) -> Option<ProofResponse>;
+    ) -> Result<ProofResponse, state::Error>;
 
-    fn resolver_at(&self, height: BlockHeight) -> impl MoveResolver + TableResolver + '_;
+    fn resolver_at(
+        &self,
+        height: BlockHeight,
+    ) -> Result<impl MoveResolver + TableResolver + '_, state::Error>;
 }
 
 pub trait HeightToStateRootIndex {
@@ -93,16 +100,17 @@ pub fn proof_from_trie_and_resolver(
     tree: &mut EthTrie<impl DB>,
     resolver: &impl MoveResolver,
     storage_trie: &impl StorageTrieRepository,
-) -> Option<ProofResponse> {
+) -> Result<ProofResponse, state::Error> {
     let evm_db = ResolverBackedDB::new(storage_trie, resolver, &(), 0);
 
     // All L2 contract account data is part of the EVM state
-    let account_info = evm_db.get_account(&address).ok()??;
+    let account_info = evm_db
+        .get_account(&address)?
+        .ok_or(state::Error::AccountNotFound(address))?;
 
     let account_key = TreeKey::Evm(address);
     let account_proof = tree
-        .get_proof(account_key.key_hash().0.as_slice())
-        .ok()?
+        .get_proof(account_key.key_hash().0.as_slice())?
         .into_iter()
         .map(Into::into)
         .collect();
@@ -110,29 +118,26 @@ pub fn proof_from_trie_and_resolver(
     let storage_proof = if storage_slots.is_empty() {
         Vec::new()
     } else {
-        let mut storage = storage_trie
-            .for_account_with_root(&address, &account_info.inner.storage_root)
-            .ok()?;
+        let mut storage =
+            storage_trie.for_account_with_root(&address, &account_info.inner.storage_root)?;
 
         storage_slots
             .iter()
-            .filter_map(|index| {
+            .map(|index| {
                 let key = keccak256::<[u8; 32]>(index.to_be_bytes());
-                storage.proof(key.as_slice()).ok().map(|proof| {
-                    let value = storage.get(index)?.unwrap_or_default();
+                let proof = storage.proof(key.as_slice())?;
+                let value = storage.get(index)?.unwrap_or_default();
 
-                    Ok::<StorageProof, state::Error>(StorageProof {
-                        key: (*index).into(),
-                        value,
-                        proof: proof.into_iter().map(Into::into).collect(),
-                    })
+                Ok(StorageProof {
+                    key: (*index).into(),
+                    value,
+                    proof: proof.into_iter().map(Into::into).collect(),
                 })
             })
-            .collect::<Result<_, _>>()
-            .unwrap()
+            .collect::<Result<Vec<_>, state::Error>>()?
     };
 
-    Some(ProofResponse {
+    Ok(ProofResponse {
         address,
         balance: account_info.inner.balance,
         code_hash: account_info.inner.code_hash,

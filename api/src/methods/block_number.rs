@@ -1,5 +1,8 @@
 use {
-    crate::{json_utils::parse_params_0, jsonrpc::JsonRpcError},
+    crate::{
+        json_utils::{parse_params_0, transaction_error},
+        jsonrpc::JsonRpcError,
+    },
     umi_app::{ApplicationReader, Dependencies},
 };
 
@@ -8,7 +11,8 @@ pub async fn execute(
     app: &ApplicationReader<impl Dependencies>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     parse_params_0(request)?;
-    let response = app.block_number();
+    // this is a generic server error code
+    let response = app.block_number().map_err(transaction_error)?;
 
     // Format the block number as a hex string
     Ok(serde_json::to_value(format!("0x{:x}", response))
@@ -17,7 +21,87 @@ pub async fn execute(
 
 #[cfg(test)]
 mod tests {
-    use {super::*, crate::methods::tests::create_app};
+    use {
+        super::*,
+        crate::methods::tests::create_app,
+        alloy::primitives::ruint::aliases::U256,
+        move_core_types::account_address::AccountAddress,
+        std::sync::Arc,
+        umi_app::{Application, CommandActor, TestDependencies},
+        umi_blockchain::{
+            block::{Eip1559GasFee, InMemoryBlockQueries, InMemoryBlockRepository, UmiBlockHash},
+            in_memory::shared_memory,
+            payload::InMemoryPayloadQueries,
+            receipt::{InMemoryReceiptQueries, InMemoryReceiptRepository, receipt_memory},
+            state::InMemoryStateQueries,
+            transaction::{InMemoryTransactionQueries, InMemoryTransactionRepository},
+        },
+        umi_evm_ext::state::InMemoryStorageTrieRepository,
+        umi_execution::UmiBaseTokenAccounts,
+        umi_genesis::config::GenesisConfig,
+        umi_state::{InMemoryState, InMemoryTrieDb},
+    };
+
+    pub fn create_app_without_genesis() -> (
+        ApplicationReader<TestDependencies>,
+        Application<TestDependencies>,
+    ) {
+        let genesis_config = GenesisConfig::default();
+
+        let (memory_reader, memory) = shared_memory::new();
+        let repository = InMemoryBlockRepository::new();
+
+        let trie_db = Arc::new(InMemoryTrieDb::empty());
+        let state = InMemoryState::empty(trie_db.clone());
+        let state_queries = InMemoryStateQueries::new(
+            memory_reader.clone(),
+            trie_db,
+            genesis_config.initial_state_root,
+        );
+        let evm_storage = InMemoryStorageTrieRepository::new();
+        let (receipt_memory_reader, receipt_memory) = receipt_memory::new();
+
+        (
+            ApplicationReader {
+                genesis_config: genesis_config.clone(),
+                base_token: UmiBaseTokenAccounts::new(AccountAddress::ONE),
+                block_queries: InMemoryBlockQueries,
+                payload_queries: InMemoryPayloadQueries::new(),
+                receipt_queries: InMemoryReceiptQueries::new(),
+                receipt_memory: receipt_memory_reader.clone(),
+                storage: memory_reader.clone(),
+                state_queries: state_queries.clone(),
+                evm_storage: evm_storage.clone(),
+                transaction_queries: InMemoryTransactionQueries::new(),
+            },
+            Application {
+                mem_pool: Default::default(),
+                genesis_config,
+                gas_fee: Eip1559GasFee::default(),
+                base_token: UmiBaseTokenAccounts::new(AccountAddress::ONE),
+                l1_fee: U256::ZERO,
+                l2_fee: U256::ZERO,
+                block_hash: UmiBlockHash,
+                block_queries: InMemoryBlockQueries,
+                block_repository: repository,
+                on_payload: CommandActor::on_payload_in_memory(),
+                on_tx: CommandActor::on_tx_noop(),
+                on_tx_batch: CommandActor::on_tx_batch_noop(),
+                payload_queries: InMemoryPayloadQueries::new(),
+                receipt_queries: InMemoryReceiptQueries::new(),
+                receipt_repository: InMemoryReceiptRepository::new(),
+                receipt_memory,
+                storage: memory,
+                receipt_memory_reader,
+                storage_reader: memory_reader,
+                state,
+                state_queries,
+                evm_storage,
+                transaction_queries: InMemoryTransactionQueries::new(),
+                transaction_repository: InMemoryTransactionRepository::new(),
+            },
+        )
+    }
 
     #[tokio::test]
     async fn test_execute() {
@@ -34,5 +118,29 @@ mod tests {
         let actual_response = execute(request, &reader).await.unwrap();
 
         assert_eq!(actual_response, expected_response);
+    }
+
+    #[tokio::test]
+    async fn test_bad_input() {
+        let (reader, _app) = create_app_without_genesis();
+
+        let request: serde_json::Value = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "eth_blockNumber",
+            "params": [
+            ],
+            "id": 1
+        });
+
+        let response = execute(request, &reader).await;
+
+        assert_eq!(
+            response.unwrap_err(),
+            JsonRpcError {
+                code: -32000,
+                data: serde_json::Value::Null,
+                message: "Execution reverted: InvariantViolation(GenesisBlock)".into()
+            }
+        );
     }
 }

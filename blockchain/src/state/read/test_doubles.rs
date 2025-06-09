@@ -7,7 +7,7 @@ use {
     move_table_extension::TableResolver,
     move_vm_types::resolver::MoveResolver,
     std::{convert::Infallible, sync::Arc},
-    umi_evm_ext::state::StorageTrieRepository,
+    umi_evm_ext::state::{self, StorageTrieRepository},
     umi_shared::primitives::{B256, U256},
     umi_state::EthTrieResolver,
 };
@@ -21,11 +21,11 @@ impl StateQueries for MockStateQueries {
         _evm_storage: &impl StorageTrieRepository,
         account: AccountAddress,
         height: BlockHeight,
-    ) -> Option<Balance> {
+    ) -> Result<Balance, state::Error> {
         assert_eq!(account, self.0);
         assert_eq!(height, self.1);
 
-        Some(U256::from(5))
+        Ok(U256::from(5))
     }
 
     fn nonce_at(
@@ -33,11 +33,11 @@ impl StateQueries for MockStateQueries {
         _evm_storage: &impl StorageTrieRepository,
         account: AccountAddress,
         height: BlockHeight,
-    ) -> Option<Nonce> {
+    ) -> Result<Nonce, state::Error> {
         assert_eq!(account, self.0);
         assert_eq!(height, self.1);
 
-        Some(3)
+        Ok(3)
     }
 
     fn proof_at(
@@ -46,12 +46,17 @@ impl StateQueries for MockStateQueries {
         _account: AccountAddress,
         _storage_slots: &[U256],
         _height: BlockHeight,
-    ) -> Option<ProofResponse> {
-        None
+    ) -> Result<ProofResponse, state::Error> {
+        Ok(ProofResponse::default())
     }
 
-    fn resolver_at(&self, _: BlockHeight) -> impl MoveResolver + TableResolver + '_ {
-        EthTrieResolver::new(EthTrie::new(Arc::new(MemoryDB::new(true))))
+    fn resolver_at(
+        &self,
+        _: BlockHeight,
+    ) -> Result<impl MoveResolver + TableResolver + '_, state::Error> {
+        Ok(EthTrieResolver::new(EthTrie::new(Arc::new(MemoryDB::new(
+            true,
+        )))))
     }
 }
 

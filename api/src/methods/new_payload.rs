@@ -35,13 +35,13 @@ async fn inner_execute_v3(
     // TODO: in theory we should start syncing to learn about this block hash.
     let response = app
         .payload_by_block_hash(execution_payload.block_hash)
-        .ok_or(JsonRpcError {
+        .map(GetPayloadResponseV3::from)
+        .map_err(|_| JsonRpcError {
             code: -1,
             data: serde_json::to_value(execution_payload.block_hash)
                 .expect("Must serialize block hash"),
             message: "Unknown block hash".into(),
-        })?
-        .into();
+        })?;
 
     validate_payload(
         execution_payload,

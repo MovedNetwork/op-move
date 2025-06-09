@@ -17,7 +17,7 @@ pub async fn execute_v3(
     let response = app
         .payload(payload_id.into())
         .map(GetPayloadResponseV3::from)
-        .ok_or_else(|| JsonRpcError {
+        .map_err(|_| JsonRpcError {
             code: -38001,
             data: serde_json::to_value(payload_id).expect("Must serialize payload id"),
             message: "Unknown payload".into(),

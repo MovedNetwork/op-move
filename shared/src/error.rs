@@ -9,7 +9,10 @@
 //! [`Display`] trait, they serve only an informative purpose and a human-readable representation.   
 
 use {
-    alloy::consensus::TxType,
+    alloy::{
+        consensus::TxType,
+        primitives::{Address, B256},
+    },
     move_binary_format::errors::{PartialVMError, VMError},
     move_core_types::language_storage::TypeTag,
     thiserror::Error,
@@ -32,6 +35,8 @@ pub enum Error {
     InvalidTransaction(InvalidTransactionCause),
     #[error("{0}")]
     InvariantViolation(InvariantViolation),
+    #[error("Error retrieving state from DB")]
+    DatabaseState,
 }
 
 impl Error {
@@ -80,14 +85,20 @@ pub enum UserError {
     L2ContractCallFailure,
     #[error("EVM contract creation failure")]
     EvmContractCreationFailure,
-    #[error("Invalid block height requested")]
-    InvalidBlockHeight,
-    #[error("Invalid block count requested")]
-    InvalidBlockCount,
+    #[error("Invalid block height requested: {0}")]
+    InvalidBlockHeight(u64),
+    #[error("Invalid block hash requested: {0}")]
+    InvalidBlockHash(B256),
+    #[error("Invalid block count requested: {0}")]
+    InvalidBlockCount(u64),
+    #[error("Invalid payload id requested: {0}")]
+    InvalidPayloadId(u64),
     #[error("Fee history reward percentiles were malformed")]
     InvalidRewardPercentiles,
     #[error("Fee history reward percentiles vector was too long")]
     RewardPercentilesTooLong,
+    #[error("Invalid address requested: {0}")]
+    InvalidAddress(Address),
 }
 
 /// The error caused by invalid transaction input parameter.
@@ -159,6 +170,10 @@ pub enum InvariantViolation {
     MempoolTransaction,
     #[error("State key must be created to charge gas for change set")]
     StateKey,
+    #[error("Error retrieving state from DB")]
+    DatabaseState,
+    #[error("At least genesis block should exist")]
+    GenesisBlock,
 }
 
 #[derive(Debug, Error)]

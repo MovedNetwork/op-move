@@ -17,7 +17,7 @@ use {
     },
     umi_execution::simulate::{call_transaction, simulate_transaction},
     umi_shared::{
-        error::{Error, Result, UserError},
+        error::{Error, InvariantViolation, Result, UserError},
         primitives::{Address, B256, ToMoveAddress, U256},
     },
 };
@@ -35,44 +35,46 @@ impl<D: Dependencies> ApplicationReader<D> {
         self.genesis_config.chain_id
     }
 
-    pub fn balance_by_height(&self, address: Address, height: BlockNumberOrTag) -> Option<U256> {
-        self.state_queries.balance_at(
+    pub fn balance_by_height(&self, address: Address, height: BlockNumberOrTag) -> Result<U256> {
+        Ok(self.state_queries.balance_at(
             &self.evm_storage,
             address.to_move_address(),
             self.resolve_height(height)?,
-        )
+        )?)
     }
 
-    pub fn nonce_by_height(&self, address: Address, height: BlockNumberOrTag) -> Option<u64> {
-        self.state_queries.nonce_at(
+    pub fn nonce_by_height(&self, address: Address, height: BlockNumberOrTag) -> Result<u64> {
+        Ok(self.state_queries.nonce_at(
             &self.evm_storage,
             address.to_move_address(),
             self.resolve_height(height)?,
-        )
+        )?)
     }
 
-    pub fn block_by_hash(&self, hash: B256, include_transactions: bool) -> Option<BlockResponse> {
+    pub fn block_by_hash(&self, hash: B256, include_transactions: bool) -> Result<BlockResponse> {
         self.block_queries
             .by_hash(&self.storage, hash, include_transactions)
-            .unwrap()
+            .map_err(|_| Error::DatabaseState)?
+            .ok_or(Error::User(UserError::InvalidBlockHash(hash)))
     }
 
     pub fn block_by_height(
         &self,
         height: BlockNumberOrTag,
         include_transactions: bool,
-    ) -> Option<BlockResponse> {
+    ) -> Result<BlockResponse> {
+        let resolved_height = self.resolve_height(height)?;
         self.block_queries
-            .by_height(
-                &self.storage,
-                self.resolve_height(height)?,
-                include_transactions,
-            )
-            .unwrap()
+            .by_height(&self.storage, resolved_height, include_transactions)
+            .map_err(|_| Error::DatabaseState)?
+            .ok_or(Error::User(UserError::InvalidBlockHeight(resolved_height)))
     }
 
-    pub fn block_number(&self) -> u64 {
-        self.block_queries.latest(&self.storage).unwrap().unwrap()
+    pub fn block_number(&self) -> Result<u64> {
+        self.block_queries
+            .latest(&self.storage)
+            .map_err(|_| Error::DatabaseState)?
+            .ok_or(Error::InvariantViolation(InvariantViolation::GenesisBlock))
     }
 
     pub fn fee_history(
@@ -81,9 +83,8 @@ impl<D: Dependencies> ApplicationReader<D> {
         block_number: BlockNumberOrTag,
         reward_percentiles: Option<Vec<f64>>,
     ) -> Result<FeeHistory> {
-        dbg!(self.block_number());
         if block_count < 1 {
-            return Err(Error::User(UserError::InvalidBlockCount));
+            return Err(Error::User(UserError::InvalidBlockCount(block_count)));
         }
         // reward percentiles should be within (0..100) range and non-decreasing, up to a maximum
         // of 100 elements
@@ -99,11 +100,9 @@ impl<D: Dependencies> ApplicationReader<D> {
             }
         }
 
-        let last_block = self
-            .resolve_height(block_number)
-            .ok_or(UserError::InvalidBlockHeight)?;
+        let last_block = self.resolve_height(block_number)?;
 
-        let latest_block_num = self.block_number();
+        let latest_block_num = self.block_number()?;
         // Genesis block is counted as 0
         let block_count = std::cmp::min(block_count, latest_block_num + 1);
         // As block count was clipped above,
@@ -130,7 +129,7 @@ impl<D: Dependencies> ApplicationReader<D> {
                         &mut Vec::new(),
                         current_block_id,
                         |_, _, _| (),
-                    );
+                    )?;
                     if parent_hash.is_zero() || current_block_num == 0 {
                         break;
                     }
@@ -168,7 +167,7 @@ impl<D: Dependencies> ApplicationReader<D> {
                                     .collect::<Vec<_>>(),
                             )
                         },
-                    );
+                    )?;
                     if parent_hash.is_zero() || current_block_num == 0 {
                         break;
                     }
@@ -206,20 +205,12 @@ impl<D: Dependencies> ApplicationReader<D> {
         transaction: TransactionRequest,
         block_number: BlockNumberOrTag,
     ) -> Result<u64> {
-        let height = self.resolve_height(block_number).unwrap();
-        let block_height = match block_number {
-            Number(height) => height,
-            Finalized | Pending | Latest | Safe => self
-                .block_queries
-                .latest(&self.storage)
-                .unwrap()
-                .expect("Blocks should be non-empty"),
-            Earliest => 0,
-        };
+        let height = self.resolve_height(block_number)?;
+        let block_height = self.resolve_height(block_number)?;
         let block_hash_lookup = StorageBasedProvider::new(&self.storage, &self.block_queries);
         let outcome = simulate_transaction(
             transaction,
-            &self.state_queries.resolver_at(height),
+            &self.state_queries.resolver_at(height)?,
             &self.evm_storage,
             &self.genesis_config,
             &self.base_token,
@@ -238,11 +229,11 @@ impl<D: Dependencies> ApplicationReader<D> {
         transaction: TransactionRequest,
         block_number: BlockNumberOrTag,
     ) -> Result<Vec<u8>> {
-        let height = self.resolve_height(block_number).unwrap();
+        let height = self.resolve_height(block_number)?;
         let block_hash_lookup = StorageBasedProvider::new(&self.storage, &self.block_queries);
         call_transaction(
             transaction,
-            &self.state_queries.resolver_at(height),
+            &self.state_queries.resolver_at(height)?,
             &self.evm_storage,
             &self.genesis_config,
             &self.base_token,
@@ -250,17 +241,18 @@ impl<D: Dependencies> ApplicationReader<D> {
         )
     }
 
-    pub fn transaction_receipt(&self, tx_hash: B256) -> Option<TransactionReceipt> {
+    pub fn transaction_receipt(&self, tx_hash: B256) -> Result<TransactionReceipt> {
         self.receipt_queries
             .by_transaction_hash(&self.receipt_memory, tx_hash)
-            .unwrap()
+            .map_err(|_| Error::DatabaseState)?
+            .ok_or(Error::User(UserError::InvalidBlockHash(tx_hash)))
     }
 
-    pub fn transaction_by_hash(&self, tx_hash: B256) -> Option<TransactionResponse> {
+    pub fn transaction_by_hash(&self, tx_hash: B256) -> Result<TransactionResponse> {
         self.transaction_queries
             .by_hash(&self.storage, tx_hash)
-            .ok()
-            .flatten()
+            .map_err(|_| Error::DatabaseState)?
+            .ok_or(Error::User(UserError::InvalidBlockHash(tx_hash)))
     }
 
     pub fn proof(
@@ -268,53 +260,58 @@ impl<D: Dependencies> ApplicationReader<D> {
         address: Address,
         storage_slots: Vec<U256>,
         height: BlockId,
-    ) -> Option<ProofResponse> {
-        self.height_from_block_id(height).and_then(|height| {
-            self.state_queries.proof_at(
-                &self.evm_storage,
-                address.to_move_address(),
-                &storage_slots,
-                height,
-            )
-        })
+    ) -> Result<ProofResponse> {
+        let height = self.height_from_block_id(height)?;
+        Ok(self.state_queries.proof_at(
+            &self.evm_storage,
+            address.to_move_address(),
+            &storage_slots,
+            height,
+        )?)
     }
 
-    pub fn payload(&self, id: PayloadId) -> Option<PayloadResponse> {
-        self.payload_queries.by_id(&self.storage, id).ok().flatten()
+    pub fn payload(&self, id: PayloadId) -> Result<PayloadResponse> {
+        self.payload_queries
+            .by_id(&self.storage, id)
+            .map_err(|_| Error::DatabaseState)?
+            .ok_or(Error::User(UserError::InvalidPayloadId(id.into_limbs()[0])))
     }
 
-    pub fn payload_by_block_hash(&self, block_hash: B256) -> Option<PayloadResponse> {
+    pub fn payload_by_block_hash(&self, block_hash: B256) -> Result<PayloadResponse> {
         self.payload_queries
             .by_hash(&self.storage, block_hash)
-            .ok()
-            .flatten()
+            .map_err(|_| Error::DatabaseState)?
+            .ok_or(Error::User(UserError::InvalidBlockHash(block_hash)))
     }
 
-    // TODO: return a `Result` like geth does
-    fn resolve_height(&self, height: BlockNumberOrTag) -> Option<u64> {
-        self.block_queries
+    fn resolve_height(&self, height: BlockNumberOrTag) -> Result<u64> {
+        let latest = self
+            .block_queries
             .latest(&self.storage)
-            .ok()?
-            .and_then(|latest| match height {
-                Number(height) if height <= latest => Some(height),
-                Finalized | Pending | Latest | Safe => Some(latest),
-                Earliest => Some(0),
-                _ => None,
-            })
+            .map_err(|_| Error::DatabaseState)?
+            .ok_or(Error::InvariantViolation(InvariantViolation::GenesisBlock))?;
+        match height {
+            Number(height) if height <= latest => Ok(height),
+            Finalized | Pending | Latest | Safe => Ok(latest),
+            Earliest => Ok(0),
+            Number(invalid_height) => {
+                Err(Error::User(UserError::InvalidBlockHeight(invalid_height)))
+            }
+        }
     }
 
-    fn height_from_block_id(&self, id: BlockId) -> Option<u64> {
-        Some(match id {
-            BlockId::Number(height) => self.resolve_height(height)?,
+    fn height_from_block_id(&self, id: BlockId) -> Result<u64> {
+        match id {
+            BlockId::Number(height) => Ok(self.resolve_height(height)?),
             BlockId::Hash(h) => {
-                self.block_queries
+                let block = self
+                    .block_queries
                     .by_hash(&self.storage, h.block_hash, false)
-                    .ok()??
-                    .0
-                    .header
-                    .number
+                    .map_err(|_| Error::DatabaseState)?
+                    .ok_or(Error::User(UserError::InvalidBlockHash(h.block_hash)))?;
+                Ok(block.0.header.number)
             }
-        })
+        }
     }
 
     fn collect_fee_history_for_block<F>(
@@ -324,15 +321,15 @@ impl<D: Dependencies> ApplicationReader<D> {
         total_reward: &mut Vec<Vec<u128>>,
         block_id: BlockNumberOrHash,
         mut acc_total_reward: F,
-    ) -> B256
+    ) -> Result<B256>
     where
         F: FnMut(&mut Vec<Vec<u128>>, u64, &[(u128, u64)]),
     {
         let curr_block = match block_id {
-            BlockNumberOrHash::Number(height) => self
-                .block_by_height(BlockNumberOrTag::Number(height), false)
-                .unwrap(),
-            BlockNumberOrHash::Hash(hash) => self.block_by_hash(hash, false).unwrap(),
+            BlockNumberOrHash::Number(height) => {
+                self.block_by_height(BlockNumberOrTag::Number(height), false)?
+            }
+            BlockNumberOrHash::Hash(hash) => self.block_by_hash(hash, false)?,
         };
         let Header {
             gas_limit,
@@ -392,6 +389,6 @@ impl<D: Dependencies> ApplicationReader<D> {
             .collect::<Vec<_>>();
 
         acc_total_reward(total_reward, block_gas_used, &price_and_cum_gas);
-        parent_hash
+        Ok(parent_hash)
     }
 }

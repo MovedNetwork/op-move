@@ -76,6 +76,7 @@ mod tests {
             },
             Application {
                 mem_pool: Default::default(),
+                resolver_cache: Default::default(),
                 genesis_config,
                 gas_fee: Eip1559GasFee::default(),
                 base_token: UmiBaseTokenAccounts::new(AccountAddress::ONE),

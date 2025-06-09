@@ -50,6 +50,10 @@ impl Error {
     pub const fn script_tx_invariant_violation(invariant: ScriptTransaction) -> Self {
         Self::InvariantViolation(InvariantViolation::ScriptTransaction(invariant))
     }
+
+    pub const fn state_key_invariant_violation() -> Self {
+        Self::InvariantViolation(InvariantViolation::StateKey)
+    }
 }
 
 impl<T> From<T> for Error

@@ -385,8 +385,7 @@ fn charge_io_gas(
     if gas_unit_price.is_zero() {
         return Ok(());
     }
-    let invariant_violation =
-        |_| umi_shared::error::Error::InvariantViolation(InvariantViolation::StateKey);
+    let invariant_violation = |_| umi_shared::error::Error::state_key_invariant_violation();
 
     let mut storage_fee: GasQuantity<Octa> = GasQuantity::new(0);
     for (address, struct_tag, op) in changes.resources() {

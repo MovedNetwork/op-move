@@ -49,7 +49,7 @@ impl<R: HeightToStateRootIndex, D: DB> EthTrieStateQueries<R, D> {
                 .index
                 .root_by_height(height)
                 .map_err(|e| state::Error::EthTrie(eth_trie::TrieError::DB(format!("{e:?}"))))?
-                .ok_or(state::Error::EthTrie(eth_trie::TrieError::InvalidStateRoot)),
+                .ok_or(state::Error::UnknownBlockHeight(height)),
         }
     }
 

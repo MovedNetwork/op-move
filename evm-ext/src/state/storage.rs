@@ -30,6 +30,8 @@ pub enum Error {
     PartialVMError(#[from] PartialVMError),
     #[error("Account with address {0} not found")]
     AccountNotFound(Address),
+    #[error("Failed to map height {0} to a state root")]
+    UnknownBlockHeight(u64),
 }
 
 impl From<Error> for umi_shared::error::Error {
@@ -44,6 +46,9 @@ impl From<Error> for umi_shared::error::Error {
                     address,
                 ))
             }
+            Error::UnknownBlockHeight(height) => umi_shared::error::Error::User(
+                umi_shared::error::UserError::InvalidBlockHeight(height),
+            ),
         }
     }
 }

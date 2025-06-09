@@ -1,8 +1,5 @@
 use {
-    crate::{
-        json_utils::{parse_params_0, transaction_error},
-        jsonrpc::JsonRpcError,
-    },
+    crate::{json_utils::parse_params_0, jsonrpc::JsonRpcError},
     umi_app::{ApplicationReader, Dependencies},
 };
 
@@ -12,7 +9,7 @@ pub async fn execute(
 ) -> Result<serde_json::Value, JsonRpcError> {
     parse_params_0(request)?;
     // this is a generic server error code
-    let response = app.block_number().map_err(transaction_error)?;
+    let response = app.block_number()?;
 
     // Format the block number as a hex string
     Ok(serde_json::to_value(format!("0x{:x}", response))
@@ -122,6 +119,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[should_panic = "At least genesis block should exist"]
     async fn test_bad_input() {
         let (reader, _app) = create_app_without_genesis();
 
@@ -133,15 +131,7 @@ mod tests {
             "id": 1
         });
 
-        let response = execute(request, &reader).await;
-
-        assert_eq!(
-            response.unwrap_err(),
-            JsonRpcError {
-                code: -32000,
-                data: serde_json::Value::Null,
-                message: "Execution reverted: InvariantViolation(GenesisBlock)".into()
-            }
-        );
+        // invariant violation causes panic upon conversion into `JsonRpcError`
+        let _ = execute(request, &reader).await;
     }
 }

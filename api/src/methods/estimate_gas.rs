@@ -1,5 +1,5 @@
 use {
-    crate::{json_utils, json_utils::transaction_error, jsonrpc::JsonRpcError},
+    crate::{json_utils, jsonrpc::JsonRpcError},
     alloy::{eips::BlockNumberOrTag, rpc::types::TransactionRequest},
     umi_app::{ApplicationReader, Dependencies},
 };
@@ -11,11 +11,7 @@ pub async fn execute(
     app: &ApplicationReader<impl Dependencies>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let (transaction, block_number) = parse_params(request)?;
-    let response = std::cmp::max(
-        app.estimate_gas(transaction, block_number)
-            .map_err(transaction_error)?,
-        BASE_FEE,
-    );
+    let response = std::cmp::max(app.estimate_gas(transaction, block_number)?, BASE_FEE);
 
     // Format the gas estimate as a hex string
     Ok(serde_json::to_value(format!("0x{:x}", response))
@@ -27,11 +23,7 @@ fn parse_params(
 ) -> Result<(TransactionRequest, BlockNumberOrTag), JsonRpcError> {
     let params = json_utils::get_params_list(&request);
     match params {
-        [] => Err(JsonRpcError {
-            code: -32602,
-            data: request,
-            message: "Not enough params".into(),
-        }),
+        [] => Err(JsonRpcError::not_enough_params_error(request)),
         [a] => {
             let transaction: TransactionRequest = json_utils::deserialize(a)?;
             Ok((transaction, BlockNumberOrTag::Latest))
@@ -41,11 +33,7 @@ fn parse_params(
             let block_number: BlockNumberOrTag = json_utils::deserialize(b)?;
             Ok((transaction, block_number))
         }
-        _ => Err(JsonRpcError {
-            code: -32602,
-            data: request,
-            message: "Too many params".into(),
-        }),
+        _ => Err(JsonRpcError::too_many_params_error(request)),
     }
 }
 

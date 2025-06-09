@@ -585,10 +585,10 @@ fn test_txs_from_one_account_have_proper_nonce_ordering() {
 
 #[test_case(0, None => matches Err(Error::User(UserError::InvalidBlockCount(0))); "zero block count")]
 #[test_case(5, None => matches Ok(_); "block count too long")]
-#[test_case(1, Some(vec![0.0; 101]) => matches Err(Error::User(UserError::RewardPercentilesTooLong)); "too many percentiles")]
-#[test_case(1, Some(vec![50.0, 101.0]) => matches Err(Error::User(UserError::InvalidRewardPercentiles)); "percentile out of range")]
-#[test_case(1, Some(vec![-5.0]) => matches Err(Error::User(UserError::InvalidRewardPercentiles)); "negative percentile")]
-#[test_case(1, Some(vec![75.0, 25.0, 50.0]) => matches Err(Error::User(UserError::InvalidRewardPercentiles)); "unsorted percentiles")]
+#[test_case(1, Some(vec![0.0; 101]) => matches Err(Error::User(UserError::RewardPercentilesTooLong{max: 100, given: 101})); "too many percentiles")]
+#[test_case(1, Some(vec![50.0, 101.0]) => matches Err(Error::User(UserError::InvalidRewardPercentiles(_))); "percentile out of range")]
+#[test_case(1, Some(vec![-5.0]) => matches Err(Error::User(UserError::InvalidRewardPercentiles(_))); "negative percentile")]
+#[test_case(1, Some(vec![75.0, 25.0, 50.0]) => matches Err(Error::User(UserError::InvalidRewardPercentiles(_))); "unsorted percentiles")]
 #[test_case(1, Some(vec![25.0, 50.0, 75.0]) => matches Ok(_); "valid percentiles")]
 #[test_case(1, None => matches Ok(_); "no percentiles")]
 fn test_fee_history_validation(

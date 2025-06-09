@@ -45,11 +45,11 @@ async fn inner_handle_request(
 
     let method: MethodName = json_utils::get_field(&request, "method")
         .as_str()
-        .ok_or(JsonRpcError::without_data(-32601, "Invalid/missing method"))?
+        .ok_or(JsonRpcError::missing_method(request.clone()))?
         .parse()?;
 
     if !is_allowed(&method) {
-        return Err(JsonRpcError::without_data(-32601, "Invalid/missing method"));
+        return Err(JsonRpcError::missing_method(request));
     }
 
     match method {

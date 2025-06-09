@@ -90,13 +90,20 @@ impl<D: Dependencies> ApplicationReader<D> {
         // of 100 elements
         if let Some(reward) = &reward_percentiles {
             if reward.len() > MAX_PERCENTILE_COUNT {
-                return Err(Error::User(UserError::RewardPercentilesTooLong));
+                return Err(Error::User(UserError::RewardPercentilesTooLong {
+                    max: MAX_PERCENTILE_COUNT,
+                    given: reward.len(),
+                }));
             }
             if reward.windows(2).any(|w| w[0] > w[1]) {
-                return Err(Error::User(UserError::InvalidRewardPercentiles));
+                return Err(Error::User(UserError::InvalidRewardPercentiles(
+                    reward.clone(),
+                )));
             }
             if reward.first() < Some(&0.0) || reward.last() > Some(&100.0) {
-                return Err(Error::User(UserError::InvalidRewardPercentiles));
+                return Err(Error::User(UserError::InvalidRewardPercentiles(
+                    reward.clone(),
+                )));
             }
         }
 

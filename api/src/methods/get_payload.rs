@@ -16,12 +16,7 @@ pub async fn execute_v3(
     // Spec: https://github.com/ethereum/execution-apis/blob/main/src/engine/cancun.md#specification-2
     let response = app
         .payload(payload_id.into())
-        .map(GetPayloadResponseV3::from)
-        .map_err(|_| JsonRpcError {
-            code: -38001,
-            data: serde_json::to_value(payload_id).expect("Must serialize payload id"),
-            message: "Unknown payload".into(),
-        })?;
+        .map(GetPayloadResponseV3::from)?;
 
     Ok(serde_json::to_value(response).expect("Must be able to JSON-serialize response"))
 }

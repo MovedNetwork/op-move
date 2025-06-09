@@ -11,8 +11,7 @@ pub async fn execute(
 
     let response = app
         .block_by_height(number, include_transactions)
-        .map(GetBlockResponse::from)
-        .map_err(|_| JsonRpcError::block_not_found(number))?;
+        .map(GetBlockResponse::from)?;
 
     Ok(serde_json::to_value(response).expect("Must be able to JSON-serialize response"))
 }
@@ -90,7 +89,11 @@ mod tests {
 
         let response = execute(request, &reader).await;
 
-        assert_eq!(response.unwrap_err(), JsonRpcError::block_not_found("0x5"));
+        let expected_response = JsonRpcError::block_not_found(umi_shared::error::Error::User(
+            umi_shared::error::UserError::InvalidBlockHeight(5),
+        ));
+
+        assert_eq!(response.unwrap_err(), expected_response);
     }
 
     #[tokio::test]

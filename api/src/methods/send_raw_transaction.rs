@@ -17,26 +17,16 @@ pub async fn execute(
 fn parse_params(request: serde_json::Value) -> Result<TxEnvelope, JsonRpcError> {
     let params = json_utils::get_params_list(&request);
     match params {
-        [] => Err(JsonRpcError {
-            code: -32602,
-            data: request,
-            message: "Not enough params".into(),
-        }),
+        [] => Err(JsonRpcError::not_enough_params_error(request)),
         [x] => {
             let bytes: Bytes = json_utils::deserialize(x)?;
             let mut slice: &[u8] = bytes.as_ref();
-            let tx = TxEnvelope::decode(&mut slice).map_err(|e| JsonRpcError {
-                code: -32602,
-                data: request,
-                message: format!("RLP decode failed: {e:?}"),
+            let tx = TxEnvelope::decode(&mut slice).map_err(|e| {
+                JsonRpcError::parse_error(request, format!("RLP decode failed: {e}"))
             })?;
             Ok(tx)
         }
-        _ => Err(JsonRpcError {
-            code: -32602,
-            data: request,
-            message: "Too many params".into(),
-        }),
+        _ => Err(JsonRpcError::too_many_params_error(request)),
     }
 }
 

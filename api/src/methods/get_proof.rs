@@ -16,10 +16,7 @@ pub async fn execute(
 ) -> Result<serde_json::Value, JsonRpcError> {
     let (address, storage_slots, block_number) = parse_params(request)?;
 
-    let response = app
-        .proof(address, storage_slots, block_number)
-        // TODO: more granular mapping
-        .map_err(|_| JsonRpcError::block_not_found(block_number))?;
+    let response = app.proof(address, storage_slots, block_number)?;
 
     // Format the balance as a hex string
     Ok(serde_json::to_value(response).expect("Must be able to JSON-serialize response"))
@@ -28,11 +25,7 @@ pub async fn execute(
 fn parse_params(request: serde_json::Value) -> Result<(Address, Vec<U256>, BlockId), JsonRpcError> {
     let params = json_utils::get_params_list(&request);
     match params {
-        [] | [_] => Err(JsonRpcError {
-            code: -32602,
-            data: request,
-            message: "Not enough params".into(),
-        }),
+        [] | [_] => Err(JsonRpcError::not_enough_params_error(request)),
         [a, b] => {
             let address: Address = json_utils::deserialize(a)?;
             let storage_slots = json_utils::deserialize(b)?;
@@ -48,11 +41,7 @@ fn parse_params(request: serde_json::Value) -> Result<(Address, Vec<U256>, Block
             let block_number: BlockId = json_utils::deserialize(c)?;
             Ok((address, storage_slots, block_number))
         }
-        _ => Err(JsonRpcError {
-            code: -32602,
-            data: request,
-            message: "Too many params".into(),
-        }),
+        _ => Err(JsonRpcError::too_many_params_error(request)),
     }
 }
 
@@ -140,12 +129,13 @@ mod tests {
     async fn test_bad_input() {
         let (reader, _app) = create_app();
 
+        let bad_address = "0x2200000000000000000000000000000000000016";
+
         let request: serde_json::Value = serde_json::json!({
             "jsonrpc": "2.0",
             "method": "eth_getProof",
             "params": [
-                // bad address
-                "0x2200000000000000000000000000000000000016",
+                bad_address,
                 [],
                 "0xe56ec7ba741931e8c55b7f654a6e56ed61cf8b8279bf5e3ef6ac86a11eb33a9d",
             ],
@@ -153,14 +143,13 @@ mod tests {
         });
 
         let response = execute(request, &reader).await;
-        let block_hash: BlockId = json_utils::deserialize(&serde_json::json!(
-            "0xe56ec7ba741931e8c55b7f654a6e56ed61cf8b8279bf5e3ef6ac86a11eb33a9d"
-        ))
-        .unwrap();
+        let address = Address::from_str(bad_address).unwrap();
 
         assert_eq!(
             response.unwrap_err(),
-            JsonRpcError::block_not_found(block_hash)
+            JsonRpcError::transaction_error(umi_shared::error::Error::User(
+                umi_shared::error::UserError::InvalidAddress(address)
+            ))
         );
     }
 }

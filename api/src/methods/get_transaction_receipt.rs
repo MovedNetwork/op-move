@@ -9,9 +9,7 @@ pub async fn execute(
 ) -> Result<serde_json::Value, JsonRpcError> {
     let tx_hash = parse_params_1(request)?;
 
-    let response = app
-        .transaction_receipt(tx_hash)
-        .map_err(|_| JsonRpcError::block_not_found(tx_hash))?;
+    let response = app.transaction_receipt(tx_hash)?;
 
     Ok(serde_json::to_value(response).expect("Must be able to JSON-serialize response"))
 }
@@ -24,7 +22,8 @@ mod tests {
             methods::{forkchoice_updated, get_payload, send_raw_transaction, tests::create_app},
             schema::{ForkchoiceUpdatedResponseV1, GetPayloadResponseV3},
         },
-        std::iter,
+        alloy::primitives::B256,
+        std::{iter, str::FromStr},
         umi_blockchain::receipt::TransactionReceipt,
     };
 
@@ -44,11 +43,15 @@ mod tests {
 
         let response = execute(request, &reader).await;
 
+        let block_hash =
+            B256::from_str("0xe56ec7ba741931e8c55b7f654a6e56ed61cf8b8279bf5e3ef6ac86a11eb00000")
+                .unwrap();
+
         assert_eq!(
             response.unwrap_err(),
-            JsonRpcError::block_not_found(
-                "0xe56ec7ba741931e8c55b7f654a6e56ed61cf8b8279bf5e3ef6ac86a11eb00000",
-            )
+            JsonRpcError::block_not_found(umi_shared::error::Error::User(
+                umi_shared::error::UserError::InvalidBlockHash(block_hash)
+            ))
         );
     }
 

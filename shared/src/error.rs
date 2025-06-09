@@ -91,6 +91,8 @@ pub enum UserError {
     InvalidBlockHash(B256),
     #[error("Invalid block count requested: {0}")]
     InvalidBlockCount(u64),
+    #[error("Invalid payload id requested: {0}")]
+    InvalidPayloadId(u64),
     #[error("Fee history reward percentiles were malformed")]
     InvalidRewardPercentiles,
     #[error("Fee history reward percentiles vector was too long")]

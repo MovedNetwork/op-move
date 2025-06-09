@@ -270,15 +270,18 @@ impl<D: Dependencies> ApplicationReader<D> {
         )?)
     }
 
-    pub fn payload(&self, id: PayloadId) -> Option<PayloadResponse> {
-        self.payload_queries.by_id(&self.storage, id).ok().flatten()
+    pub fn payload(&self, id: PayloadId) -> Result<PayloadResponse> {
+        self.payload_queries
+            .by_id(&self.storage, id)
+            .map_err(|_| Error::DatabaseState)?
+            .ok_or(Error::User(UserError::InvalidPayloadId(id.into_limbs()[0])))
     }
 
-    pub fn payload_by_block_hash(&self, block_hash: B256) -> Option<PayloadResponse> {
+    pub fn payload_by_block_hash(&self, block_hash: B256) -> Result<PayloadResponse> {
         self.payload_queries
             .by_hash(&self.storage, block_hash)
-            .ok()
-            .flatten()
+            .map_err(|_| Error::DatabaseState)?
+            .ok_or(Error::User(UserError::InvalidBlockHash(block_hash)))
     }
 
     fn resolve_height(&self, height: BlockNumberOrTag) -> Result<u64> {

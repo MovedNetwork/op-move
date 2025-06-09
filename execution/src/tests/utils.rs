@@ -250,6 +250,33 @@ impl TestContext {
         self.evm_storage.apply(outcome.changes.evm).unwrap();
     }
 
+    /// Similar to `execute` above, but allows charging gas.
+    /// Note: Does not automatically increase the signer nonce and does not apply changes.
+    pub fn execute_with_fee<'a>(
+        &self,
+        module_id: &ModuleId,
+        function: &str,
+        args: impl IntoIterator<Item = &'a MoveValue>,
+        gas_price: U256,
+        gas_limit: u64,
+    ) -> TransactionExecutionOutcome {
+        let args = args
+            .into_iter()
+            .map(|arg| bcs::to_bytes(arg).unwrap())
+            .collect();
+        let (tx_hash, tx) = create_test_tx(&mut self.signer.clone(), module_id, function, args);
+
+        let treasury_address = AccountAddress::ONE;
+        let base_token = UmiBaseTokenAccounts::new(treasury_address);
+        let mut transaction = TestTransaction::new(tx, tx_hash);
+        transaction.with_cost_and_token(0, base_token, gas_limit, gas_price);
+
+        let outcome = self.execute_tx(&transaction).unwrap();
+        // Entry function transaction should succeed
+        outcome.vm_outcome.as_ref().unwrap();
+        outcome
+    }
+
     /// Executes a Move entry function expecting it to fail
     ///
     /// # Arguments
@@ -285,7 +312,7 @@ impl TestContext {
     /// # Returns
     /// The transaction execution outcome or error
     pub(crate) fn execute_tx(
-        &mut self,
+        &self,
         tx: &TestTransaction,
     ) -> umi_shared::error::Result<TransactionExecutionOutcome> {
         let l2_fee = CreateUmiL2GasFee.with_default_gas_fee_multiplier();
@@ -294,58 +321,64 @@ impl TestContext {
         let l1_cost = U256::from(tx.l1_cost);
 
         match &tx.base_token {
-            TestBaseToken::Empty => execute_transaction(match &tx.tx {
-                NormalizedExtendedTxEnvelope::Canonical(tx) => CanonicalExecutionInput {
-                    tx,
-                    tx_hash: &tx_hash,
-                    state: self.state.resolver(),
-                    storage_trie: &self.evm_storage,
-                    genesis_config: &self.genesis_config,
-                    l1_cost: U256::ZERO,
-                    l2_fee,
-                    l2_input: l2_gas_input,
-                    base_token: &(),
-                    block_header: Default::default(),
-                    block_hash_lookup: &(),
-                }
-                .into(),
-                NormalizedExtendedTxEnvelope::DepositedTx(tx) => DepositExecutionInput {
-                    tx,
-                    tx_hash: &tx_hash,
-                    state: self.state.resolver(),
-                    storage_trie: &self.evm_storage,
-                    genesis_config: &self.genesis_config,
-                    block_header: Default::default(),
-                    block_hash_lookup: &(),
-                }
-                .into(),
-            }),
-            TestBaseToken::Umi(umi_base_token) => execute_transaction(match &tx.tx {
-                NormalizedExtendedTxEnvelope::Canonical(tx) => CanonicalExecutionInput {
-                    tx,
-                    tx_hash: &tx_hash,
-                    state: self.state.resolver(),
-                    storage_trie: &self.evm_storage,
-                    genesis_config: &self.genesis_config,
-                    l1_cost,
-                    l2_fee,
-                    l2_input: l2_gas_input,
-                    base_token: umi_base_token,
-                    block_header: Default::default(),
-                    block_hash_lookup: &(),
-                }
-                .into(),
-                NormalizedExtendedTxEnvelope::DepositedTx(tx) => DepositExecutionInput {
-                    tx,
-                    tx_hash: &tx_hash,
-                    state: self.state.resolver(),
-                    storage_trie: &self.evm_storage,
-                    genesis_config: &self.genesis_config,
-                    block_header: Default::default(),
-                    block_hash_lookup: &(),
-                }
-                .into(),
-            }),
+            TestBaseToken::Empty => execute_transaction(
+                match &tx.tx {
+                    NormalizedExtendedTxEnvelope::Canonical(tx) => CanonicalExecutionInput {
+                        tx,
+                        tx_hash: &tx_hash,
+                        state: self.state.resolver(),
+                        storage_trie: &self.evm_storage,
+                        genesis_config: &self.genesis_config,
+                        l1_cost: U256::ZERO,
+                        l2_fee,
+                        l2_input: l2_gas_input,
+                        base_token: &(),
+                        block_header: Default::default(),
+                        block_hash_lookup: &(),
+                    }
+                    .into(),
+                    NormalizedExtendedTxEnvelope::DepositedTx(tx) => DepositExecutionInput {
+                        tx,
+                        tx_hash: &tx_hash,
+                        state: self.state.resolver(),
+                        storage_trie: &self.evm_storage,
+                        genesis_config: &self.genesis_config,
+                        block_header: Default::default(),
+                        block_hash_lookup: &(),
+                    }
+                    .into(),
+                },
+                &mut Default::default(),
+            ),
+            TestBaseToken::Umi(umi_base_token) => execute_transaction(
+                match &tx.tx {
+                    NormalizedExtendedTxEnvelope::Canonical(tx) => CanonicalExecutionInput {
+                        tx,
+                        tx_hash: &tx_hash,
+                        state: self.state.resolver(),
+                        storage_trie: &self.evm_storage,
+                        genesis_config: &self.genesis_config,
+                        l1_cost,
+                        l2_fee,
+                        l2_input: l2_gas_input,
+                        base_token: umi_base_token,
+                        block_header: Default::default(),
+                        block_hash_lookup: &(),
+                    }
+                    .into(),
+                    NormalizedExtendedTxEnvelope::DepositedTx(tx) => DepositExecutionInput {
+                        tx,
+                        tx_hash: &tx_hash,
+                        state: self.state.resolver(),
+                        storage_trie: &self.evm_storage,
+                        genesis_config: &self.genesis_config,
+                        block_header: Default::default(),
+                        block_hash_lookup: &(),
+                    }
+                    .into(),
+                },
+                &mut Default::default(),
+            ),
         }
     }
 

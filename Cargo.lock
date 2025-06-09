@@ -12366,6 +12366,7 @@ dependencies = [
  "aptos-types",
  "aptos-vm",
  "bcs 0.1.3",
+ "bytes",
  "move-binary-format 0.0.3 (git+https://github.com/aptos-labs/aptos-core?tag=aptos-node-v1.27.2)",
  "move-compiler 0.0.1 (git+https://github.com/aptos-labs/aptos-core?tag=aptos-node-v1.27.2)",
  "move-compiler-v2",
@@ -12474,8 +12475,10 @@ version = "0.1.0"
 dependencies = [
  "alloy",
  "bcs 0.1.3",
+ "bytes",
  "move-binary-format 0.0.3 (git+https://github.com/aptos-labs/aptos-core?tag=aptos-node-v1.27.2)",
  "move-core-types 0.0.4 (git+https://github.com/aptos-labs/aptos-core?tag=aptos-node-v1.27.2)",
+ "move-vm-types 0.1.0 (git+https://github.com/aptos-labs/aptos-core?tag=aptos-node-v1.27.2)",
  "op-alloy",
  "test-case",
  "thiserror 1.0.69",

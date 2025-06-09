@@ -11,16 +11,6 @@ use {
         primitives::{Address, U256, address},
     },
     anyhow::{Context, Result},
-    bytes::Bytes,
-    move_binary_format::errors::PartialVMResult,
-    move_core_types::{
-        account_address::AccountAddress,
-        effects::ChangeSet,
-        language_storage::{ModuleId, StructTag},
-        metadata::Metadata,
-        value::MoveTypeLayout,
-    },
-    move_vm_types::resolver::{ModuleResolver, ResourceResolver},
     std::{
         fs::{read_dir, read_to_string},
         path::Path,
@@ -30,6 +20,7 @@ use {
         extract_evm_changes_from_native,
         state::{InMemoryStorageTrieRepository, StorageTrieRepository},
     },
+    umi_shared::resolver_utils::ChangesBasedResolver,
 };
 
 const FACTORY_ADDRESS: Address = address!("4200000000000000000000000000000000000012");
@@ -80,9 +71,7 @@ pub fn deploy_bridged_tokens(
     mut l2_changes: Changes,
     tokens: Vec<BridgedToken>,
 ) -> Result<Changes> {
-    let resolver = ChangesBasedResolver {
-        changes: &l2_changes.accounts,
-    };
+    let resolver = ChangesBasedResolver::new(&l2_changes.accounts);
     let trie_storage = InMemoryStorageTrieRepository::new();
     trie_storage.apply(l2_changes.storage.clone())?;
     let block_header = HeaderForExecution::default();
@@ -239,45 +228,6 @@ fn has_optimism_bridge_override(
             .as_object()?
             .contains_key("bridge"),
     )
-}
-
-struct ChangesBasedResolver<'a> {
-    changes: &'a ChangeSet,
-}
-
-impl ResourceResolver for ChangesBasedResolver<'_> {
-    fn get_resource_bytes_with_metadata_and_layout(
-        &self,
-        address: &AccountAddress,
-        struct_tag: &StructTag,
-        _metadata: &[Metadata],
-        _layout: Option<&MoveTypeLayout>,
-    ) -> PartialVMResult<(Option<Bytes>, usize)> {
-        let bytes = self
-            .changes
-            .accounts()
-            .get(address)
-            .and_then(|account| account.resources().get(struct_tag))
-            .and_then(|op| op.clone().ok());
-        let size = bytes.as_ref().map(|b| b.len()).unwrap_or(0);
-        Ok((bytes, size))
-    }
-}
-
-impl ModuleResolver for ChangesBasedResolver<'_> {
-    fn get_module_metadata(&self, _module_id: &ModuleId) -> Vec<Metadata> {
-        Vec::new()
-    }
-
-    fn get_module(&self, id: &ModuleId) -> PartialVMResult<Option<Bytes>> {
-        let bytes = self
-            .changes
-            .accounts()
-            .get(id.address())
-            .and_then(|account| account.modules().get(id.name()))
-            .and_then(|op| op.clone().ok());
-        Ok(bytes)
-    }
 }
 
 // Test to double check `deploy_bridged_tokens` does

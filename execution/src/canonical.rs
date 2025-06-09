@@ -9,6 +9,7 @@ use {
         },
         gas::{new_gas_meter, total_gas_used},
         nonces::check_nonce,
+        resolver_cache::{CachedResolver, ResolverCache},
         session_id::SessionId,
         transaction::{
             Changes, NormalizedEthTransaction, ScriptOrDeployment, TransactionData,
@@ -16,9 +17,18 @@ use {
         },
     },
     alloy::primitives::U256,
+    aptos_framework::natives::event::NativeEventContext,
+    aptos_gas_algebra::{FeePerGasUnit, GasQuantity, NumBytes, NumSlots, Octa},
     aptos_gas_meter::{AptosGasMeter, StandardGasAlgebra, StandardGasMeter},
     aptos_table_natives::TableResolver,
-    move_core_types::{effects::ChangeSet, language_storage::ModuleId},
+    aptos_types::{
+        contract_event::ContractEvent, state_store::state_key::StateKey, write_set::WriteOpSize,
+    },
+    move_core_types::{
+        effects::{ChangeSet, Op},
+        language_storage::ModuleId,
+        value::MoveTypeLayout,
+    },
     move_vm_runtime::{
         AsUnsyncCodeStorage, ModuleStorage,
         module_traversal::{TraversalContext, TraversalStorage},
@@ -34,17 +44,18 @@ use {
     umi_shared::{
         error::{
             Error::{InvalidTransaction, User},
-            EthToken, InvalidTransactionCause, InvariantViolation,
+            EthToken, InvalidTransactionCause,
         },
         primitives::ToMoveAddress,
+        resolver_utils::{ChangesBasedResolver, PairedResolvers},
     },
     umi_state::ResolverBasedModuleBytesStorage,
 };
 
-pub struct CanonicalVerificationInput<'input, 'r, 'l, B, MS> {
+pub struct CanonicalVerificationInput<'input, 'a, 'r, 'l, B, MS> {
     pub tx: &'input NormalizedEthTransaction,
     pub session: &'input mut Session<'r, 'l>,
-    pub traversal_context: &'input mut TraversalContext<'input>,
+    pub traversal_context: &'input mut TraversalContext<'a>,
     pub gas_meter: &'input mut StandardGasMeter<StandardGasAlgebra>,
     pub genesis_config: &'input GenesisConfig,
     pub l1_cost: U256,
@@ -54,7 +65,7 @@ pub struct CanonicalVerificationInput<'input, 'r, 'l, B, MS> {
 }
 
 pub(super) fn verify_transaction<B: BaseTokenAccounts, MS: ModuleStorage>(
-    input: &mut CanonicalVerificationInput<B, MS>,
+    input: CanonicalVerificationInput<B, MS>,
 ) -> umi_shared::error::Result<()> {
     if let Some(chain_id) = input.tx.chain_id {
         if chain_id != input.genesis_config.chain_id {
@@ -125,14 +136,16 @@ pub(super) fn execute_canonical_transaction<
     H: BlockHashLookup,
 >(
     input: CanonicalExecutionInput<S, ST, F, B, H>,
+    resolver_cache: &mut ResolverCache,
 ) -> umi_shared::error::Result<TransactionExecutionOutcome> {
+    resolver_cache.clear();
+    let cached_resolver = CachedResolver::new(input.state, resolver_cache);
     let sender_move_address = input.tx.signer.to_move_address();
 
     let tx_data = TransactionData::parse_from(input.tx)?;
 
     let umi_vm = UmiVm::new(input.genesis_config);
-    let module_bytes_storage: ResolverBasedModuleBytesStorage<'_, S> =
-        ResolverBasedModuleBytesStorage::new(input.state);
+    let module_bytes_storage = ResolverBasedModuleBytesStorage::new(&cached_resolver);
     let code_storage = module_bytes_storage.as_unsync_code_storage(&umi_vm);
     let vm = umi_vm.create_move_vm()?;
     let session_id = SessionId::new_from_canonical(
@@ -146,7 +159,7 @@ pub(super) fn execute_canonical_transaction<
     let eth_transfers_logger = EthTransfersLogger::default();
     let mut session = create_vm_session(
         &vm,
-        input.state,
+        &cached_resolver,
         session_id,
         input.storage_trie,
         &eth_transfers_logger,
@@ -161,9 +174,7 @@ pub(super) fn execute_canonical_transaction<
     // Using l2 input here as test transactions don't set the max limit directly on itself
     let l2_cost = input.l2_fee.l2_fee(input.l2_input.clone()).saturating_to();
 
-    // TODO: use free gas meter for things that shouldn't fail due to
-    // insufficient gas limit, impose a lower bound on the latter
-    let mut verify_input = CanonicalVerificationInput {
+    verify_transaction(CanonicalVerificationInput {
         tx: input.tx,
         session: &mut session,
         traversal_context: &mut traversal_context,
@@ -173,30 +184,29 @@ pub(super) fn execute_canonical_transaction<
         l2_cost,
         base_token: input.base_token,
         module_storage: &code_storage,
-    };
-    verify_transaction(&mut verify_input)?;
+    })?;
 
     let vm_outcome = match tx_data {
         TransactionData::EntryFunction(entry_fn) => execute_entry_function(
             entry_fn,
             &sender_move_address,
-            verify_input.session,
-            verify_input.traversal_context,
-            verify_input.gas_meter,
+            &mut session,
+            &mut traversal_context,
+            &mut gas_meter,
             &code_storage,
         ),
         TransactionData::ScriptOrDeployment(ScriptOrDeployment::Script(script)) => execute_script(
             script,
             &sender_move_address,
-            verify_input.session,
-            verify_input.traversal_context,
-            verify_input.gas_meter,
+            &mut session,
+            &mut traversal_context,
+            &mut gas_meter,
             &code_storage,
         ),
         TransactionData::ScriptOrDeployment(ScriptOrDeployment::Module(module)) => {
             let charge_gas = crate::gas::charge_new_module_processing(
-                verify_input.gas_meter,
-                verify_input.genesis_config,
+                &mut gas_meter,
+                input.genesis_config,
                 &sender_move_address,
                 module.code().len() as u64,
             );
@@ -214,9 +224,9 @@ pub(super) fn execute_canonical_transaction<
                 bytecode,
                 input.tx.value,
                 sender_move_address,
-                verify_input.session,
-                verify_input.traversal_context,
-                verify_input.gas_meter,
+                &mut session,
+                &mut traversal_context,
+                &mut gas_meter,
                 &code_storage,
             );
             address.map(|a| {
@@ -237,9 +247,9 @@ pub(super) fn execute_canonical_transaction<
 
             input.base_token.transfer(
                 args,
-                verify_input.session,
-                verify_input.traversal_context,
-                verify_input.gas_meter,
+                &mut session,
+                &mut traversal_context,
+                &mut gas_meter,
                 &code_storage,
             )
         }
@@ -248,9 +258,9 @@ pub(super) fn execute_canonical_transaction<
             &contract.to_move_address(),
             input.tx.value,
             input.tx.data.to_vec(),
-            verify_input.session,
-            verify_input.traversal_context,
-            verify_input.gas_meter,
+            &mut session,
+            &mut traversal_context,
+            &mut gas_meter,
             &code_storage,
         )
         .map(|_| ()),
@@ -259,9 +269,9 @@ pub(super) fn execute_canonical_transaction<
             &address.to_move_address(),
             input.tx.value,
             data,
-            verify_input.session,
-            verify_input.traversal_context,
-            verify_input.gas_meter,
+            &mut session,
+            &mut traversal_context,
+            &mut gas_meter,
             &code_storage,
         )
         .map(|_| ()),
@@ -271,43 +281,71 @@ pub(super) fn execute_canonical_transaction<
         // Ensure any base token balance changes in EVM are reflected in Move too
         eth_token::replicate_transfers(
             &eth_transfers_logger,
-            verify_input.session,
-            verify_input.traversal_context,
-            verify_input.gas_meter,
+            &mut session,
+            &mut traversal_context,
+            &mut gas_meter,
             &code_storage,
         )
     });
 
-    let gas_used = total_gas_used(verify_input.gas_meter, input.genesis_config);
-    let used_l2_input = L2GasFeeInput::new(gas_used, input.l2_input.effective_gas_price);
-    let used_l2_cost = input.l2_fee.l2_fee(used_l2_input);
-
-    // Refunds should not be metered as they're supposed to always succeed
-    input
-        .base_token
-        .refund_gas_cost(
-            &sender_move_address,
-            l2_cost.saturating_sub(used_l2_cost),
-            verify_input.session,
-            verify_input.traversal_context,
-            &code_storage,
-        )
-        .map_err(|_| {
-            umi_shared::error::Error::InvariantViolation(InvariantViolation::EthToken(
-                EthToken::RefundAlwaysSucceeds,
-            ))
-        })?;
-
-    let (mut changes, mut extensions) = session.finish_with_extensions(&code_storage)?;
-    let logs = extensions.logs();
+    let (mut user_changes, mut extensions) = session.finish_with_extensions(&code_storage)?;
     let evm_changes = umi_evm_ext::extract_evm_changes(&extensions);
-    changes
+    let user_events = extensions.remove::<NativeEventContext>().into_events();
+    extensions.add(NativeEventContext::default());
+    user_changes
         .squash(evm_changes.accounts)
         .expect("EVM changes must merge with other session changes");
-    changes
+    user_changes
         .squash(deploy_changes)
         .expect("Module deploy changes must merge with other session changes");
-    let changes = Changes::new(changes.into(), evm_changes.storage);
+
+    let gas_unit_price = FeePerGasUnit::new(input.l2_input.effective_gas_price.saturating_to());
+    let vm_outcome = vm_outcome.and_then(|_| {
+        charge_io_gas(
+            &cached_resolver.borrow_cache(),
+            &user_changes,
+            &user_events,
+            &mut gas_meter,
+            input.genesis_config,
+            gas_unit_price,
+        )
+    });
+
+    let (changes, logs, gas_used) = {
+        let changes_resolver = ChangesBasedResolver::new(&user_changes);
+        let refund_resolver = PairedResolvers::new(&changes_resolver, &cached_resolver);
+        let mut refund_session = vm.new_session_with_extensions(&refund_resolver, extensions);
+
+        let gas_used = total_gas_used(&gas_meter, input.genesis_config);
+        let used_l2_input = L2GasFeeInput::new(gas_used, input.l2_input.effective_gas_price);
+        let used_l2_cost = input.l2_fee.l2_fee(used_l2_input);
+
+        // Refunds should not be metered as they're supposed to always succeed
+        input
+            .base_token
+            .refund_gas_cost(
+                &sender_move_address,
+                l2_cost.saturating_sub(used_l2_cost),
+                &mut refund_session,
+                &mut traversal_context,
+                &code_storage,
+            )
+            .map_err(|_| {
+                umi_shared::error::Error::eth_token_invariant_violation(
+                    EthToken::RefundAlwaysSucceeds,
+                )
+            })?;
+
+        let (changes, mut extensions) = refund_session.finish_with_extensions(&code_storage)?;
+        let refund_events = extensions.remove::<NativeEventContext>().into_events();
+        let logs = user_events.into_iter().chain(refund_events).logs();
+        (changes, logs, gas_used)
+    };
+
+    user_changes
+        .squash(changes)
+        .expect("User changes must merge with refund session changes");
+    let changes = Changes::new(user_changes.into(), evm_changes.storage);
 
     match vm_outcome {
         Ok(_) => Ok(TransactionExecutionOutcome::new(
@@ -328,5 +366,96 @@ pub(super) fn execute_canonical_transaction<
             None,
         )),
         Err(e) => Err(e),
+    }
+}
+
+fn charge_io_gas(
+    resolver_cache: &ResolverCache,
+    changes: &ChangeSet,
+    user_events: &[(ContractEvent, Option<MoveTypeLayout>)],
+    gas_meter: &mut StandardGasMeter<StandardGasAlgebra>,
+    genesis_config: &GenesisConfig,
+    gas_unit_price: FeePerGasUnit,
+) -> umi_shared::error::Result<()> {
+    // If gas is free then we can't charge storage because the parameters for
+    // storage costs are denominated in base token units and converted to gas via the price.
+    // Putting the early return here also skips the io charges which do not depend
+    // on the gas price, but this is fine because if gas is free then computing the accurate
+    // amount of gas used is not very important (we get zero tokens regardless).
+    if gas_unit_price.is_zero() {
+        return Ok(());
+    }
+    let invariant_violation = |_| umi_shared::error::Error::state_key_invariant_violation();
+
+    let mut storage_fee: GasQuantity<Octa> = GasQuantity::new(0);
+    for (address, struct_tag, op) in changes.resources() {
+        let op_size = to_op_size(op);
+        let key = StateKey::resource(&address, struct_tag).map_err(invariant_violation)?;
+        gas_meter.charge_io_gas_for_write(&key, &op_size)?;
+
+        storage_fee += charge_storage_gas(
+            op_size,
+            || resolver_cache.resource_original_size(&address, struct_tag) as u64,
+            genesis_config,
+        );
+    }
+
+    for (address, id, op) in changes.modules() {
+        let op_size = to_op_size(op);
+        let key = StateKey::module(address, id);
+        gas_meter.charge_io_gas_for_write(&key, &op_size)?;
+
+        let module_id = ModuleId::new(*address, id.clone());
+        storage_fee += charge_storage_gas(
+            op_size,
+            || resolver_cache.module_original_size(&module_id) as u64,
+            genesis_config,
+        );
+    }
+
+    gas_meter.charge_storage_fee(storage_fee, gas_unit_price)?;
+
+    for (event, _) in user_events {
+        gas_meter.charge_io_gas_for_event(event)?;
+    }
+
+    Ok(())
+}
+
+fn charge_storage_gas<F: FnOnce() -> u64>(
+    op: WriteOpSize,
+    get_original_size: F,
+    genesis_config: &GenesisConfig,
+) -> GasQuantity<Octa> {
+    let (slots, bytes) = match op {
+        WriteOpSize::Creation { write_len } => (NumSlots::new(1), NumBytes::new(write_len)),
+        WriteOpSize::Modification { write_len } => {
+            let original_size = get_original_size();
+            if original_size >= write_len {
+                return GasQuantity::new(0);
+            }
+            (
+                NumSlots::new(0),
+                NumBytes::new(write_len.saturating_sub(original_size)),
+            )
+        }
+        WriteOpSize::Deletion => {
+            // No gas charge for deletion.
+            return GasQuantity::new(0);
+        }
+    };
+    genesis_config.gas_costs.vm.txn.storage_fee_per_state_slot * slots
+        + genesis_config.gas_costs.vm.txn.storage_fee_per_state_byte * bytes
+}
+
+fn to_op_size<T: AsRef<[u8]>>(op: Op<&T>) -> WriteOpSize {
+    match op {
+        Op::New(bytes) => WriteOpSize::Creation {
+            write_len: bytes.as_ref().len() as u64,
+        },
+        Op::Modify(bytes) => WriteOpSize::Modification {
+            write_len: bytes.as_ref().len() as u64,
+        },
+        Op::Delete => WriteOpSize::Deletion,
     }
 }

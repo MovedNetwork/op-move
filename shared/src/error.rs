@@ -9,7 +9,10 @@
 //! [`Display`] trait, they serve only an informative purpose and a human-readable representation.   
 
 use {
-    alloy::{consensus::TxType, primitives::Address},
+    alloy::{
+        consensus::TxType,
+        primitives::{Address, B256},
+    },
     move_binary_format::errors::{PartialVMError, VMError},
     move_core_types::language_storage::TypeTag,
     thiserror::Error,
@@ -80,12 +83,12 @@ pub enum UserError {
     L2ContractCallFailure,
     #[error("EVM contract creation failure")]
     EvmContractCreationFailure,
-    #[error("Invalid block height requested")]
-    InvalidBlockHeight,
-    #[error("Invalid block hash requested")]
-    InvalidBlockHash,
-    #[error("Invalid block count requested")]
-    InvalidBlockCount,
+    #[error("Invalid block height requested: {0}")]
+    InvalidBlockHeight(u64),
+    #[error("Invalid block hash requested: {0}")]
+    InvalidBlockHash(B256),
+    #[error("Invalid block count requested: {0}")]
+    InvalidBlockCount(u64),
     #[error("Fee history reward percentiles were malformed")]
     InvalidRewardPercentiles,
     #[error("Fee history reward percentiles vector was too long")]

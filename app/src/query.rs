@@ -55,7 +55,7 @@ impl<D: Dependencies> ApplicationReader<D> {
         self.block_queries
             .by_hash(&self.storage, hash, include_transactions)
             .map_err(|_| Error::InvariantViolation(InvariantViolation::DatabaseState))?
-            .ok_or(Error::User(UserError::InvalidBlockHash))
+            .ok_or(Error::User(UserError::InvalidBlockHash(hash)))
     }
 
     pub fn block_by_height(
@@ -63,14 +63,11 @@ impl<D: Dependencies> ApplicationReader<D> {
         height: BlockNumberOrTag,
         include_transactions: bool,
     ) -> Result<BlockResponse> {
+        let resolved_height = self.resolve_height(height)?;
         self.block_queries
-            .by_height(
-                &self.storage,
-                self.resolve_height(height)?,
-                include_transactions,
-            )
+            .by_height(&self.storage, resolved_height, include_transactions)
             .map_err(|_| Error::InvariantViolation(InvariantViolation::DatabaseState))?
-            .ok_or(Error::User(UserError::InvalidBlockHeight))
+            .ok_or(Error::User(UserError::InvalidBlockHeight(resolved_height)))
     }
 
     pub fn block_number(&self) -> Result<u64> {
@@ -87,7 +84,7 @@ impl<D: Dependencies> ApplicationReader<D> {
         reward_percentiles: Option<Vec<f64>>,
     ) -> Result<FeeHistory> {
         if block_count < 1 {
-            return Err(Error::User(UserError::InvalidBlockCount));
+            return Err(Error::User(UserError::InvalidBlockCount(block_count)));
         }
         // reward percentiles should be within (0..100) range and non-decreasing, up to a maximum
         // of 100 elements
@@ -248,14 +245,14 @@ impl<D: Dependencies> ApplicationReader<D> {
         self.receipt_queries
             .by_transaction_hash(&self.receipt_memory, tx_hash)
             .map_err(|_| Error::InvariantViolation(InvariantViolation::DatabaseState))?
-            .ok_or(Error::User(UserError::InvalidBlockHash))
+            .ok_or(Error::User(UserError::InvalidBlockHash(tx_hash)))
     }
 
     pub fn transaction_by_hash(&self, tx_hash: B256) -> Result<TransactionResponse> {
         self.transaction_queries
             .by_hash(&self.storage, tx_hash)
             .map_err(|_| Error::InvariantViolation(InvariantViolation::DatabaseState))?
-            .ok_or(Error::User(UserError::InvalidBlockHash))
+            .ok_or(Error::User(UserError::InvalidBlockHash(tx_hash)))
     }
 
     pub fn proof(
@@ -294,7 +291,9 @@ impl<D: Dependencies> ApplicationReader<D> {
             Number(height) if height <= latest => Ok(height),
             Finalized | Pending | Latest | Safe => Ok(latest),
             Earliest => Ok(0),
-            _ => Err(Error::User(UserError::InvalidBlockHeight)),
+            Number(invalid_height) => {
+                Err(Error::User(UserError::InvalidBlockHeight(invalid_height)))
+            }
         }
     }
 
@@ -306,7 +305,7 @@ impl<D: Dependencies> ApplicationReader<D> {
                     .block_queries
                     .by_hash(&self.storage, h.block_hash, false)
                     .map_err(|_| Error::InvariantViolation(InvariantViolation::DatabaseState))?
-                    .ok_or(Error::User(UserError::InvalidBlockHeight))?;
+                    .ok_or(Error::User(UserError::InvalidBlockHash(h.block_hash)))?;
                 Ok(block.0.header.number)
             }
         }

@@ -585,7 +585,7 @@ fn test_txs_from_one_account_have_proper_nonce_ordering() {
     );
 }
 
-#[test_case(0, None => matches Err(Error::User(UserError::InvalidBlockCount)); "zero block count")]
+#[test_case(0, None => matches Err(Error::User(UserError::InvalidBlockCount(0))); "zero block count")]
 #[test_case(5, None => matches Ok(_); "block count too long")]
 #[test_case(1, Some(vec![0.0; 101]) => matches Err(Error::User(UserError::RewardPercentilesTooLong)); "too many percentiles")]
 #[test_case(1, Some(vec![50.0, 101.0]) => matches Err(Error::User(UserError::InvalidRewardPercentiles)); "percentile out of range")]

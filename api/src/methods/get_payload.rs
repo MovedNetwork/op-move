@@ -104,6 +104,7 @@ mod tests {
             genesis_config: genesis_config.clone(),
             state,
             block_hash: head_hash,
+            block_hash_lookup: block_hash_cache.clone(),
             block_hash_writer: block_hash_cache.clone(),
             block_repository: repository,
             gas_fee: Eip1559GasFee::default(),

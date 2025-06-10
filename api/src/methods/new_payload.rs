@@ -291,6 +291,7 @@ mod tests {
             )),
 
             block_hash_writer: block_hash_cache.clone(),
+            block_hash_lookup: block_hash_cache.clone(),
             block_queries: InMemoryBlockQueries,
             block_repository: repository,
             on_payload: CommandActor::on_payload_in_memory(),

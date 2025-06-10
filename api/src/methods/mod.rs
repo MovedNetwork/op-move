@@ -119,6 +119,7 @@ pub mod tests {
                 l1_fee: U256::ZERO,
                 l2_fee: U256::ZERO,
                 block_hash: UmiBlockHash,
+                block_hash_lookup: block_hash_cache.clone(),
                 block_hash_writer: block_hash_cache,
                 block_queries: InMemoryBlockQueries,
                 block_repository: repository,
@@ -242,6 +243,8 @@ pub mod tests {
             }
         }
 
+        let block_hash_cache = SharedBlockHashCache::default();
+
         Box::new((
             ApplicationReader::<
                 TestDependencies<
@@ -270,7 +273,7 @@ pub mod tests {
             > {
                 genesis_config: GenesisConfig::default(),
                 base_token: UmiBaseTokenAccounts::new(AccountAddress::ONE),
-                block_hash_lookup: (),
+                block_hash_lookup: block_hash_cache.clone(),
                 block_queries: StubLatest(height),
                 payload_queries: (),
                 receipt_queries: (),
@@ -309,7 +312,8 @@ pub mod tests {
                 l1_fee: U256::ZERO,
                 l2_fee: U256::ZERO,
                 block_hash: UmiBlockHash,
-                block_hash_writer: SharedBlockHashCache::default(),
+                block_hash_writer: block_hash_cache.clone(),
+                block_hash_lookup: block_hash_cache,
                 block_queries: StubLatest(height),
                 block_repository: (),
                 on_payload: CommandActor::on_payload_noop(),

@@ -220,7 +220,8 @@ impl<D: Dependencies> Application<D> {
                     l2_input: l2_gas_input,
                     base_token: &self.base_token,
                     block_header: block_header.clone(),
-                    block_hash_lookup: &self.block_hash_writer,
+                    block_hash_lookup: &self.block_hash_lookup,
+                    block_hash_writer: &self.block_hash_writer,
                 }
                 .into(),
                 NormalizedExtendedTxEnvelope::DepositedTx(tx) => DepositExecutionInput {
@@ -230,7 +231,7 @@ impl<D: Dependencies> Application<D> {
                     storage_trie: &self.evm_storage,
                     genesis_config: &self.genesis_config,
                     block_header: block_header.clone(),
-                    block_hash_lookup: &self.block_hash_writer,
+                    block_hash_lookup: &self.block_hash_lookup,
                 }
                 .into(),
             };

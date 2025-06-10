@@ -219,6 +219,7 @@ impl<D: Dependencies> ApplicationReader<D> {
             &self.base_token,
             block_height,
             &self.block_hash_lookup,
+            &(),
         );
 
         outcome.map(|outcome| {

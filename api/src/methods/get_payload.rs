@@ -164,7 +164,7 @@ mod tests {
         };
         let (queue, state) = umi_app::create(&mut app, 10);
 
-        umi_app::run(state, async move {
+        umi_app::run_with_actor(state, async move {
             // Update the state with an execution payload
             forkchoice_updated::execute_v3(
                 forkchoice_updated::tests::example_request(),

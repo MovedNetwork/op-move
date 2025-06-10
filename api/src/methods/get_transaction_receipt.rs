@@ -51,7 +51,7 @@ mod tests {
         let (reader, mut app) = create_app();
         let (queue, state) = umi_app::create(&mut app, 10);
 
-        umi_app::run(state, async move {
+        umi_app::run_with_actor(state, async move {
             // 1. Send transaction
             let tx_hash = send_raw_transaction::execute(
                 send_raw_transaction::tests::example_request(),

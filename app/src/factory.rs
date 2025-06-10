@@ -67,7 +67,7 @@ impl<
 }
 
 /// Creates and runs the `future`.
-pub async fn run_deferred<D: DependenciesThreadSafe, F, Out, T: ApplicationOnlyFactory<D>>(
+pub async fn run<D: DependenciesThreadSafe, F, Out, T: ApplicationOnlyFactory<D>>(
     factory: impl ApplicationFactory<D, T>,
     buffer: u32,
     future: impl FnOnce(CommandQueue, ApplicationReader<D>) -> F,
@@ -85,14 +85,14 @@ where
             let handle = future(queue, reader);
             let actor = CommandActor::new(rx, &mut app);
 
-            crate::run(actor, handle).await
+            crate::run_with_actor(actor, handle).await
         }
         CreationMethod::Deferred(reader, factory) => {
             let handle = future(queue, reader);
             let mut app = factory.create()();
             let actor = CommandActor::new(rx, &mut app);
 
-            crate::run(actor, handle).await
+            crate::run_with_actor(actor, handle).await
         }
     }
 }

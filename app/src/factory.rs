@@ -26,12 +26,12 @@ pub trait ApplicationFactory<D: DependenciesThreadSafe, F: ApplicationOnlyFactor
 }
 
 pub trait ApplicationOnlyFactory<D: DependenciesThreadSafe> {
-    fn create(self) -> impl FnOnce() -> Application<D>;
+    fn create(self) -> Application<D>;
 }
 
 impl<D: DependenciesThreadSafe> ApplicationOnlyFactory<D> for () {
-    fn create(self) -> impl FnOnce() -> Application<D> {
-        || unimplemented!("Unexpected call to create")
+    fn create(self) -> Application<D> {
+        unimplemented!("Unexpected call to create")
     }
 }
 
@@ -48,8 +48,8 @@ impl<D: DependenciesThreadSafe, F: FnOnce() -> (ApplicationReader<D>, Applicatio
 impl<D: DependenciesThreadSafe + Sized, F: FnOnce() -> Application<D>> ApplicationOnlyFactory<D>
     for F
 {
-    fn create(self) -> impl FnOnce() -> Application<D> {
-        self
+    fn create(self) -> Application<D> {
+        self()
     }
 }
 
@@ -89,7 +89,7 @@ where
         }
         CreationMethod::Deferred(reader, factory) => {
             let handle = future(queue, reader);
-            let mut app = factory.create()();
+            let mut app = factory.create();
             let actor = CommandActor::new(rx, &mut app);
 
             crate::run_with_actor(actor, handle).await

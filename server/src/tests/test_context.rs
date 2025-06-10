@@ -47,7 +47,7 @@ impl TestContext {
             timestamp,
         };
 
-        umi_app::run(state, future(ctx)).await
+        umi_app::run_with_actor(state, future(ctx)).await
     }
 
     pub async fn produce_block(&mut self) -> anyhow::Result<B256> {

@@ -3,7 +3,7 @@ pub use uninit::Uninitialized;
 pub use {
     actor::*,
     dependency::*,
-    factory::{create, run_deferred},
+    factory::{create, run},
     input::*,
     queue::CommandQueue,
 };

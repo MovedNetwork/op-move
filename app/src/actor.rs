@@ -85,7 +85,10 @@ impl<D: Dependencies<PayloadQueries = InMemoryPayloadQueries>> CommandActor<'_, 
 /// the `actor` work loop stops.
 ///
 /// [`CommandQueue`]: crate::CommandQueue
-pub async fn run<D: DependenciesThreadSafe, F, Out>(actor: CommandActor<'_, D>, future: F) -> Out
+pub async fn run_with_actor<D: DependenciesThreadSafe, F, Out>(
+    actor: CommandActor<'_, D>,
+    future: F,
+) -> Out
 where
     F: Future<Output = Out> + Send,
     Out: Send + Debug,

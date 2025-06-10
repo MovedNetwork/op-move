@@ -26,7 +26,7 @@ fn build_1000_blocks(
                 |input| {
                     let (queue, actor) = umi_app::create(app, buffer_size);
 
-                    runtime.block_on(umi_app::run(actor, async {
+                    runtime.block_on(umi_app::run_with_actor(actor, async {
                         for msg in input {
                             queue.send(msg).await;
                         }

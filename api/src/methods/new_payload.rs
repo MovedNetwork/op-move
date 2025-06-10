@@ -350,7 +350,7 @@ mod tests {
         };
         let (queue, state) = umi_app::create(&mut app, 10);
 
-        umi_app::run(state, async move {
+        umi_app::run_with_actor(state, async move {
             let fc_updated_request: serde_json::Value = serde_json::from_str(
                 r#"
                     {

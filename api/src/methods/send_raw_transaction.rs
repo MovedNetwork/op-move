@@ -73,7 +73,7 @@ pub mod tests {
         let (_reader, mut app) = create_app();
         let (queue, state) = umi_app::create(&mut app, 10);
 
-        umi_app::run(state, async move {
+        umi_app::run_with_actor(state, async move {
             let request = example_request();
 
             let expected_response: serde_json::Value = serde_json::from_str(

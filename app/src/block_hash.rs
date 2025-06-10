@@ -55,13 +55,11 @@ impl BlockHashRingBuffer {
         self.latest_block = block_number;
     }
 
-    // TODO: make this a builder method?
-    pub fn initialize_from_storage<S, B>(&mut self, storage: &S, block_query: &B, latest_block: u64)
+    pub fn initialize_from_storage<S, B>(storage: &S, block_query: &B, latest_block: u64) -> Self
     where
         B: BlockQueries<Storage = S>,
     {
-        self.entries.clear();
-        self.latest_block = 0;
+        let mut cache = Self::default();
 
         let start_block = if latest_block >= BLOCKHASH_HISTORY_SIZE as u64 {
             latest_block - BLOCKHASH_HISTORY_SIZE as u64 + 1
@@ -71,9 +69,11 @@ impl BlockHashRingBuffer {
 
         for block_num in start_block..=latest_block {
             if let Ok(Some(block)) = block_query.by_height(storage, block_num, false) {
-                self.push(block_num, block.0.header.hash);
+                cache.push(block_num, block.0.header.hash);
             }
         }
+
+        cache
     }
 }
 
@@ -116,12 +116,14 @@ pub struct SharedBlockHashCache {
 }
 
 impl SharedBlockHashCache {
-    pub fn initialize_from_storage<S, B>(&mut self, storage: &S, block_query: &B, latest_block: u64)
+    pub fn initialize_from_storage<S, B>(storage: &S, block_query: &B, latest_block: u64) -> Self
     where
         B: BlockQueries<Storage = S>,
     {
-        if let Ok(mut cache) = self.inner.write() {
-            cache.initialize_from_storage(storage, block_query, latest_block);
+        let buf = BlockHashRingBuffer::initialize_from_storage(storage, block_query, latest_block);
+
+        Self {
+            inner: Arc::new(RwLock::new(buf)),
         }
     }
 }

@@ -1,3 +1,6 @@
+use umi_app::SharedBlockHashCache;
+#[cfg(test)]
+use umi_blockchain::block::{Block, BlockHash, ExtendedBlock, Header};
 use {
     crate::mirror::MirrorLog,
     clap::Parser,
@@ -188,11 +191,14 @@ impl<D: Dependencies> GenesisStateExt for Application<D> {
             &mut self.evm_storage,
         );
     } else {
-        app.block_hash_writer.initialize_from_storage(
+        let shared_cache = SharedBlockHashCache::initialize_from_storage(
             &app.storage_reader,
             &app.block_queries,
             app_reader.block_number(),
         );
+        app.block_hash_writer = shared_cache.clone();
+        app.block_hash_lookup = shared_cache.clone();
+        app_reader.block_hash_lookup = shared_cache;
     }
 
         let genesis_block = create_genesis_block(&self.block_hash, genesis_config);

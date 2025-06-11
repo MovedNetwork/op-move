@@ -17,7 +17,7 @@ services:
     deploy:
       replicas: 0
     networks:
-      - auth-network
+      - localnet
 
   op-node:
     image: umi-op-node:latest
@@ -27,7 +27,7 @@ services:
     environment:
       JWT_SECRET: "f3099a1d969c4f5aba1a94434c368a84f8d950121feb4a398a67f78453853d1d"
     networks:
-      - auth-network
+      - localnet
     depends_on:
       - optimism
       - foundry
@@ -40,7 +40,7 @@ services:
       context: ./
       dockerfile: ./docker/Dockerfile.op-batcher
     networks:
-      - auth-network
+      - localnet
     depends_on:
       - optimism
       - foundry
@@ -53,7 +53,7 @@ services:
       context: ./
       dockerfile: ./docker/Dockerfile.op-proposer
     networks:
-      - auth-network
+      - localnet
     depends_on:
       - optimism
       - foundry
@@ -68,7 +68,7 @@ services:
     environment:
       JWT_SECRET: "f3099a1d969c4f5aba1a94434c368a84f8d950121feb4a398a67f78453853d1d"
     networks:
-      - auth-network
+      - localnet
     depends_on:
       - optimism
       - foundry
@@ -83,9 +83,9 @@ services:
     environment:
       JWT_SECRET: "f3099a1d969c4f5aba1a94434c368a84f8d950121feb4a398a67f78453853d1d"
       OP_GETH_ADDR: "op-geth"
-      PURGE: ${PURGE:-1}
+      PURGE: ${PURGE:-0}
     networks:
-      - auth-network
+      - localnet
     volumes:
       - ./docker/volumes/shared:/volume/shared
       - ./docker/volumes/db:/volume/db
@@ -120,12 +120,12 @@ services:
       context: ./
       dockerfile: ./docker/Dockerfile.geth
     networks:
-      - auth-network
+      - localnet
     depends_on:
       - foundry
     ports:
       - "58138:58138"
 
 networks:
-  auth-network:
+  localnet:
     external: true

@@ -168,7 +168,7 @@ fn create_db() -> umi_storage_heed::Env {
 
     let env = unsafe {
         EnvOpenOptions::new()
-            .max_readers(20)
+            .max_readers(16348)
             .max_dbs(umi_storage_heed::DATABASES.len() as u32)
             .map_size(1024 * 1024 * 1024 * 1024) // 1 TiB
             .open(path)

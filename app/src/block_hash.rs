@@ -23,20 +23,12 @@ pub struct BlockHashRingBuffer {
     latest_block: u64,
 }
 
-impl Default for BlockHashRingBuffer {
-    fn default() -> Self {
-        Self {
-            entries: VecDeque::with_capacity(BLOCKHASH_HISTORY_SIZE),
-            latest_block: 0,
-        }
-    }
-}
-
 impl BlockHashRingBuffer {
     pub fn push(&mut self, block_number: u64, block_hash: B256) {
         // Ensure blocks are added in sequence (detect potential reorgs)
         if block_number > 0 && self.latest_block > 0 && block_number != self.latest_block + 1 {
-            eprintln!(
+            // TODO: what to do here?
+            println!(
                 "WARN: Block hash buffer - expected block {}, got {}",
                 self.latest_block + 1,
                 block_number
@@ -55,10 +47,12 @@ impl BlockHashRingBuffer {
         self.latest_block = block_number;
     }
 
-    pub fn initialize_from_storage<S, B>(storage: &S, block_query: &B, latest_block: u64) -> Self
+    pub fn initialize_from_storage<S, B>(storage: &S, block_query: &B) -> Self
     where
         B: BlockQueries<Storage = S>,
     {
+        let latest_block = block_query.latest(storage).unwrap().unwrap_or(0);
+
         let mut cache = Self::default();
 
         let start_block = if latest_block >= BLOCKHASH_HISTORY_SIZE as u64 {
@@ -77,6 +71,15 @@ impl BlockHashRingBuffer {
     }
 }
 
+impl Default for BlockHashRingBuffer {
+    fn default() -> Self {
+        Self {
+            entries: VecDeque::with_capacity(BLOCKHASH_HISTORY_SIZE),
+            latest_block: 0,
+        }
+    }
+}
+
 impl BlockHashLookup for BlockHashRingBuffer {
     fn hash_by_number(&self, block_number: u64) -> Option<B256> {
         if block_number > self.latest_block {
@@ -84,23 +87,17 @@ impl BlockHashLookup for BlockHashRingBuffer {
             return None;
         }
 
-        let blocks_ago = self.latest_block - block_number;
-        if blocks_ago > BLOCKHASH_HISTORY_SIZE as u64 {
-            // Too old
+        let blocks_ago = (self.latest_block - block_number) as usize;
+
+        // second condition to guard against cases when the buffer is not full
+        // and starts from non-zero block
+        if blocks_ago > BLOCKHASH_HISTORY_SIZE || blocks_ago >= self.entries.len() {
             return None;
         }
 
-        for entry in self.entries.iter().rev() {
-            if entry.number == block_number {
-                return Some(entry.hash);
-            }
-            // Since we're going backwards chronologically, if we've passed the target block, it's not there
-            if entry.number < block_number {
-                break;
-            }
-        }
+        let block_index = self.entries.len() - 1 - blocks_ago;
 
-        None
+        self.entries.get(block_index).map(|e| e.hash)
     }
 }
 
@@ -116,11 +113,11 @@ pub struct SharedBlockHashCache {
 }
 
 impl SharedBlockHashCache {
-    pub fn initialize_from_storage<S, B>(storage: &S, block_query: &B, latest_block: u64) -> Self
+    pub fn initialize_from_storage<S, B>(storage: &S, block_query: &B) -> Self
     where
         B: BlockQueries<Storage = S>,
     {
-        let buf = BlockHashRingBuffer::initialize_from_storage(storage, block_query, latest_block);
+        let buf = BlockHashRingBuffer::initialize_from_storage(storage, block_query);
 
         Self {
             inner: Arc::new(RwLock::new(buf)),

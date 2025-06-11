@@ -1,4 +1,3 @@
-use umi_app::SharedBlockHashCache;
 #[cfg(test)]
 use umi_blockchain::block::{Block, BlockHash, ExtendedBlock, Header};
 use {
@@ -15,7 +14,9 @@ use {
         time::SystemTime,
     },
     umi_api::method_name::MethodName,
-    umi_app::{Application, ApplicationReader, Command, CommandQueue, Dependencies},
+    umi_app::{
+        Application, ApplicationReader, Command, CommandQueue, Dependencies, SharedBlockHashCache,
+    },
     umi_blockchain::{
         block::{Block, BlockHash, BlockQueries, ExtendedBlock, Header},
         payload::{NewPayloadId, StatePayloadId},
@@ -191,11 +192,8 @@ impl<D: Dependencies> GenesisStateExt for Application<D> {
             &mut self.evm_storage,
         );
     } else {
-        let shared_cache = SharedBlockHashCache::initialize_from_storage(
-            &app.storage_reader,
-            &app.block_queries,
-            app_reader.block_number(),
-        );
+        let shared_cache =
+            SharedBlockHashCache::initialize_from_storage(&app.storage_reader, &app.block_queries);
         app.block_hash_writer = shared_cache.clone();
         app.block_hash_lookup = shared_cache.clone();
         app_reader.block_hash_lookup = shared_cache;

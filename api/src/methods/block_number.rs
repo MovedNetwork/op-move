@@ -24,7 +24,7 @@ mod tests {
         alloy::primitives::ruint::aliases::U256,
         move_core_types::account_address::AccountAddress,
         std::sync::Arc,
-        umi_app::{Application, CommandActor, TestDependencies},
+        umi_app::{Application, CommandActor, SharedBlockHashCache, TestDependencies},
         umi_blockchain::{
             block::{Eip1559GasFee, InMemoryBlockQueries, InMemoryBlockRepository, UmiBlockHash},
             in_memory::shared_memory,
@@ -44,6 +44,7 @@ mod tests {
         Application<TestDependencies>,
     ) {
         let genesis_config = GenesisConfig::default();
+        let block_hash_cache = SharedBlockHashCache::default();
 
         let (memory_reader, memory) = shared_memory::new();
         let repository = InMemoryBlockRepository::new();
@@ -70,6 +71,7 @@ mod tests {
                 state_queries: state_queries.clone(),
                 evm_storage: evm_storage.clone(),
                 transaction_queries: InMemoryTransactionQueries::new(),
+                block_hash_lookup: block_hash_cache.clone(),
             },
             Application {
                 mem_pool: Default::default(),
@@ -97,6 +99,8 @@ mod tests {
                 evm_storage,
                 transaction_queries: InMemoryTransactionQueries::new(),
                 transaction_repository: InMemoryTransactionRepository::new(),
+                block_hash_writer: block_hash_cache.clone(),
+                block_hash_lookup: block_hash_cache,
             },
         )
     }

@@ -149,9 +149,7 @@ mod tests {
         crate::methods::{forkchoice_updated, get_payload},
         alloy::primitives::hex,
         std::sync::Arc,
-        umi_app::{
-            Application, BlockHashRingBuffer, CommandActor, SharedBlockHashCache, TestDependencies,
-        },
+        umi_app::{Application, CommandActor, SharedBlockHashCache, TestDependencies},
         umi_blockchain::{
             block::{
                 Block, BlockRepository, Eip1559GasFee, InMemoryBlockQueries,
@@ -322,7 +320,7 @@ mod tests {
                 _,
                 UmiBlockHash,
                 _,
-                BlockHashRingBuffer,
+                SharedBlockHashCache,
                 _,
                 (),
                 _,

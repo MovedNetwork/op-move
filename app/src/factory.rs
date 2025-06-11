@@ -16,32 +16,32 @@ pub fn create<T: DependenciesThreadSafe>(
     (CommandQueue::new(tx, ktx), CommandActor::new(rx, app))
 }
 
-pub enum CreationMethod<D: DependenciesThreadSafe, F: ApplicationOnlyFactory<D>> {
-    Simultaneous(ApplicationReader<D>, Application<D>),
-    Deferred(ApplicationReader<D>, F),
+pub struct ReaderWithFactory<D: DependenciesThreadSafe, F: ApplicationOnlyFactory<D>> {
+    reader: ApplicationReader<D>,
+    factory: F,
 }
 
 pub trait ApplicationFactory<D: DependenciesThreadSafe, F: ApplicationOnlyFactory<D>> {
-    fn create(self) -> CreationMethod<D, F>;
+    fn create(self) -> ReaderWithFactory<D, F>;
 }
 
 pub trait ApplicationOnlyFactory<D: DependenciesThreadSafe> {
     fn create(self) -> Application<D>;
 }
 
-impl<D: DependenciesThreadSafe> ApplicationOnlyFactory<D> for () {
+impl<D: DependenciesThreadSafe> ApplicationOnlyFactory<D> for Application<D> {
     fn create(self) -> Application<D> {
-        unimplemented!("Unexpected call to create")
+        self
     }
 }
 
 impl<D: DependenciesThreadSafe, F: FnOnce() -> (ApplicationReader<D>, Application<D>)>
-    ApplicationFactory<D, ()> for F
+    ApplicationFactory<D, Application<D>> for F
 {
-    fn create(self) -> CreationMethod<D, ()> {
-        let (app, reader) = self();
+    fn create(self) -> ReaderWithFactory<D, Application<D>> {
+        let (reader, app) = self();
 
-        CreationMethod::Simultaneous(app, reader)
+        ReaderWithFactory::new(reader, app)
     }
 }
 
@@ -59,10 +59,16 @@ impl<
     F2: FnOnce() -> Application<D>,
 > ApplicationFactory<D, F2> for (F1, F2)
 {
-    fn create(self) -> CreationMethod<D, F2> {
+    fn create(self) -> ReaderWithFactory<D, F2> {
         let reader = self.0();
 
-        CreationMethod::Deferred(reader, self.1)
+        ReaderWithFactory::new(reader, self.1)
+    }
+}
+
+impl<D: DependenciesThreadSafe, F: ApplicationOnlyFactory<D>> ReaderWithFactory<D, F> {
+    pub fn new(reader: ApplicationReader<D>, factory: F) -> Self {
+        Self { reader, factory }
     }
 }
 
@@ -79,20 +85,10 @@ where
     let (ktx, _) = broadcast::channel(1);
     let (tx, rx) = mpsc::channel(buffer as usize);
     let queue = CommandQueue::new(tx, ktx);
+    let reader_with_factory = factory.create();
+    let handle = future(queue, reader_with_factory.reader);
+    let mut app = reader_with_factory.factory.create();
+    let actor = CommandActor::new(rx, &mut app);
 
-    match factory.create() {
-        CreationMethod::Simultaneous(reader, mut app) => {
-            let handle = future(queue, reader);
-            let actor = CommandActor::new(rx, &mut app);
-
-            crate::run_with_actor(actor, handle).await
-        }
-        CreationMethod::Deferred(reader, factory) => {
-            let handle = future(queue, reader);
-            let mut app = factory.create();
-            let actor = CommandActor::new(rx, &mut app);
-
-            crate::run_with_actor(actor, handle).await
-        }
-    }
+    crate::run_with_actor(actor, handle).await
 }

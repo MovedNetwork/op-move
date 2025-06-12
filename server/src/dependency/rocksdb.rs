@@ -1,7 +1,7 @@
 use {
     crate::dependency::shared::*,
-    std::sync::Arc,
-    umi_app::{Application, ApplicationReader, CommandActor},
+    std::{sync::Arc, time::Duration},
+    umi_app::{Application, CommandActor},
     umi_blockchain::state::EthTrieStateQueries,
     umi_genesis::config::GenesisConfig,
     umi_state::{EthTrieState, State},
@@ -9,19 +9,18 @@ use {
 
 pub type Dependency = RocksDbDependencies;
 
-pub fn create(
-    genesis_config: &GenesisConfig,
-) -> (
-    Application<RocksDbDependencies>,
-    ApplicationReader<RocksDbDependencies>,
-) {
-    (
-        Application::new(RocksDbDependencies, genesis_config),
-        ApplicationReader::new(RocksDbDependencies, genesis_config),
-    )
+pub fn dependencies() -> crate::dependency::Dependency {
+    RocksDbDependencies
 }
 
 pub struct RocksDbDependencies;
+
+impl RocksDbDependencies {
+    /// Creates a set of dependencies appropriate for usage in reader.
+    pub fn reader(&self) -> Self {
+        RocksDbDependencies
+    }
+}
 
 impl umi_app::Dependencies for RocksDbDependencies {
     type BlockQueries = umi_storage_rocksdb::block::RocksDbBlockQueries<'static>;
@@ -100,7 +99,19 @@ impl umi_app::Dependencies for RocksDbDependencies {
     }
 
     fn state(&self) -> Self::State {
-        EthTrieState::try_new(TRIE_DB.clone()).unwrap()
+        let mut tries = 1..60;
+
+        loop {
+            match EthTrieState::try_new(TRIE_DB.clone()) {
+                Ok(state) => return state,
+                Err(error) if tries.next().is_none() => panic!("{error}"),
+                Err(error) => {
+                    let duration = Duration::from_secs(1);
+                    eprintln!("WARN: Failed to create state {error}, retrying in {duration:?}...");
+                    std::thread::sleep(duration);
+                }
+            }
+        }
     }
 
     fn state_queries(&self, genesis_config: &GenesisConfig) -> Self::StateQueries {

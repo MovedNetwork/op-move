@@ -102,7 +102,7 @@ mod tests {
         let (reader, mut app) = create_app();
         let state: CommandActor<TestDependencies> = CommandActor::new(rx, &mut app);
 
-        umi_app::run(state, async move {
+        umi_app::run_with_actor(state, async move {
             let request = example_request(Latest);
             let response = execute(request, &reader).await.unwrap();
             assert_eq!(get_block_number_from_response(response), "0x0");
@@ -135,7 +135,7 @@ mod tests {
         let (reader, mut app) = create_app();
         let state: CommandActor<TestDependencies> = CommandActor::new(rx, &mut app);
 
-        umi_app::run(state, async move {
+        umi_app::run_with_actor(state, async move {
             let msg = Command::StartBlockBuild {
                 payload_attributes: Default::default(),
                 payload_id: U64::from(0x03421ee50df45cacu64),

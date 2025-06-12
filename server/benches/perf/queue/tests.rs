@@ -26,7 +26,7 @@ fn build_1000_blocks(
                 |input| {
                     let (queue, actor) = umi_app::create(app, buffer_size);
 
-                    runtime.block_on(umi_app::run(actor, async {
+                    runtime.block_on(umi_app::run_with_actor(actor, async {
                         for msg in input {
                             queue.send(msg).await;
                         }
@@ -47,7 +47,7 @@ fn bench_build_1000_blocks_with_queue_size(bencher: &mut Criterion) -> impl Term
         .into_iter()
         .rev()
     {
-        let (mut app, _app_reader) = initialize_app(GenesisConfig::default());
+        let (mut app, _app_reader) = initialize_app(&GenesisConfig::default());
 
         app.genesis_update(input::GENESIS);
 

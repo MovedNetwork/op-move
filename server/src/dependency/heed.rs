@@ -1,7 +1,7 @@
 use {
     crate::dependency::shared::*,
-    std::sync::Arc,
-    umi_app::{Application, ApplicationReader, CommandActor},
+    std::{sync::Arc, time::Duration},
+    umi_app::{Application, CommandActor},
     umi_blockchain::state::EthTrieStateQueries,
     umi_genesis::config::GenesisConfig,
     umi_state::{EthTrieState, State},
@@ -13,19 +13,18 @@ use {
 
 pub type Dependency = HeedDependencies;
 
-pub fn create(
-    genesis_config: &GenesisConfig,
-) -> (
-    Application<HeedDependencies>,
-    ApplicationReader<HeedDependencies>,
-) {
-    (
-        Application::new(HeedDependencies, genesis_config),
-        ApplicationReader::new(HeedDependencies, genesis_config),
-    )
+pub fn dependencies() -> Dependency {
+    HeedDependencies
 }
 
 pub struct HeedDependencies;
+
+impl HeedDependencies {
+    /// Creates a set of dependencies appropriate for usage in reader.
+    pub fn reader(&self) -> Self {
+        HeedDependencies
+    }
+}
 
 impl umi_app::Dependencies for HeedDependencies {
     type BlockQueries = block::HeedBlockQueries<'static>;
@@ -101,7 +100,19 @@ impl umi_app::Dependencies for HeedDependencies {
     }
 
     fn state(&self) -> Self::State {
-        EthTrieState::try_new(TRIE_DB.clone()).unwrap()
+        let mut tries = 1..60;
+
+        loop {
+            match EthTrieState::try_new(TRIE_DB.clone()) {
+                Ok(state) => return state,
+                Err(error) if tries.next().is_none() => panic!("{error}"),
+                Err(error) => {
+                    let duration = Duration::from_secs(1);
+                    eprintln!("WARN: Failed to create state {error}, retrying in {duration:?}...");
+                    std::thread::sleep(duration);
+                }
+            }
+        }
     }
 
     fn state_queries(&self, genesis_config: &GenesisConfig) -> Self::StateQueries {

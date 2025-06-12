@@ -1,25 +1,14 @@
 use {
     crate::dependency::shared::*,
     std::sync::Arc,
-    umi_app::{Application, ApplicationReader, CommandActor},
+    umi_app::{Application, CommandActor},
     umi_genesis::config::GenesisConfig,
 };
 
 pub type Dependency = InMemoryDependencies;
 
-pub fn create(
-    genesis_config: &GenesisConfig,
-) -> (
-    Application<InMemoryDependencies>,
-    ApplicationReader<InMemoryDependencies>,
-) {
-    let deps = InMemoryDependencies::new();
-    let reader_deps = deps.reader();
-
-    (
-        Application::new(deps, genesis_config),
-        ApplicationReader::new(reader_deps, genesis_config),
-    )
+pub fn dependencies() -> Dependency {
+    InMemoryDependencies::new()
 }
 
 pub struct InMemoryDependencies {

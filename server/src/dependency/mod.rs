@@ -4,6 +4,7 @@ pub use heed::*;
 pub use in_memory::*;
 #[cfg(all(feature = "storage-rocksdb", not(feature = "storage-lmdb")))]
 pub use rocksdb::*;
+pub use shared::create;
 
 #[cfg(feature = "storage-lmdb")]
 mod heed;

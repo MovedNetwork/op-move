@@ -30,7 +30,7 @@ impl TestContext {
         FU: FnMut(Self) -> F + Send,
     {
         let genesis_config = GenesisConfig::default();
-        let (mut app, reader) = initialize_app(genesis_config.clone());
+        let (mut app, reader) = initialize_app(&genesis_config);
 
         let genesis_block = create_genesis_block(&app.block_hash, &genesis_config);
         let head = genesis_block.hash;
@@ -47,7 +47,7 @@ impl TestContext {
             timestamp,
         };
 
-        umi_app::run(state, future(ctx)).await
+        umi_app::run_with_actor(state, future(ctx)).await
     }
 
     pub async fn produce_block(&mut self) -> anyhow::Result<B256> {

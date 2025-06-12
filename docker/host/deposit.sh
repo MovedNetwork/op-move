@@ -7,8 +7,8 @@
 
 set -eux
 L1_RPC_URL="http://0.0.0.0:58138"
-FROM_WALLET=$(docker compose exec geth ls l1_datadir/keystore | grep -o '.\{40\}$')
-BRIDGE_ADDRESS=$(docker compose exec op-node cat packages/contracts-bedrock/deployments/1337-deploy.json | jq -r .L1StandardBridgeProxy)
+FROM_WALLET=$(docker exec $(docker ps -q -f name=umi_geth) ls l1_datadir/keystore | grep -o '.\{40\}$')
+BRIDGE_ADDRESS=$(docker exec $(docker ps -q -f name=umi_op-node) cat packages/contracts-bedrock/deployments/1337-deploy.json | jq -r .L1StandardBridgeProxy)
 AMOUNT=1000000000000000000
 
 NONCE=$(curl "${L1_RPC_URL}" \

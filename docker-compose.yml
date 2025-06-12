@@ -1,5 +1,3 @@
-name: umi
-
 services:
   foundry:
     image: umi-foundry:latest
@@ -85,7 +83,7 @@ services:
     environment:
       JWT_SECRET: "f3099a1d969c4f5aba1a94434c368a84f8d950121feb4a398a67f78453853d1d"
       OP_GETH_ADDR: "op-geth"
-      PURGE: ${PURGE:-1}
+      PURGE: ${PURGE:-0}
     networks:
       - localnet
     volumes:
@@ -93,6 +91,28 @@ services:
       - ./docker/volumes/db:/volume/db
     ports:
       - "8545:8545"
+    deploy:
+      replicas: 1
+      update_config:
+        order: start-first
+        failure_action: rollback
+        delay: 10s
+      rollback_config:
+        parallelism: 1
+        order: start-first
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--no-verbose',
+          '--tries=1',
+          '--spider',
+          'http://0.0.0.0:8545/',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
   geth:
     image: umi-geth:latest
@@ -108,4 +128,4 @@ services:
 
 networks:
   localnet:
-    driver: bridge
+    external: true

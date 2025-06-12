@@ -9,8 +9,8 @@ set -eu
 
 # Get the finalized block timestamp and hash
 block=$(cast block finalized --rpc-url "$L1_RPC_URL")
-timestamp=$(echo "$block" | awk '/timestamp/ { print $2 }')
-blockhash=$(echo "$block" | awk '/hash/ { print $2 }')
+timestamp=$(echo "$block" | awk '/^timestamp/ { print $2 }')
+blockhash=$(echo "$block" | awk '/^hash/ { print $2 }')
 
 # Generate the config file
 config=$(cat << EOL

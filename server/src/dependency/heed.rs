@@ -112,7 +112,7 @@ impl umi_app::Dependencies for HeedDependencies {
         )
     }
 
-    fn storage_trie_repository() -> Self::StorageTrieRepository {
+    fn storage_trie_repository(&self) -> Self::StorageTrieRepository {
         evm::HeedStorageTrieRepository::new(Database.clone())
     }
 

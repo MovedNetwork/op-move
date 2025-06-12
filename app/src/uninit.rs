@@ -84,7 +84,7 @@ impl Dependencies for Uninitialized {
         )
     }
 
-    fn storage_trie_repository() -> Self::StorageTrieRepository {}
+    fn storage_trie_repository(&self) -> Self::StorageTrieRepository {}
 
     fn transaction_queries() -> Self::TransactionQueries {}
 

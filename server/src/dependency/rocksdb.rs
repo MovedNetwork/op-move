@@ -111,7 +111,7 @@ impl umi_app::Dependencies for RocksDbDependencies {
         )
     }
 
-    fn storage_trie_repository() -> Self::StorageTrieRepository {
+    fn storage_trie_repository(&self) -> Self::StorageTrieRepository {
         umi_storage_rocksdb::evm::RocksDbStorageTrieRepository::new(Database.clone())
     }
 

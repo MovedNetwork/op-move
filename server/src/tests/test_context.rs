@@ -18,7 +18,7 @@ const DEPOSIT_TX: &[u8] = &hex!("7ef8f8a032595a51f0561028c684fbeeb46c7221a34be9a
 pub struct TestContext {
     pub genesis_config: GenesisConfig,
     pub queue: CommandQueue,
-    pub reader: ApplicationReader<dependency::Dependency>,
+    pub reader: ApplicationReader<dependency::ReaderDependency>,
     head: B256,
     timestamp: u64,
 }

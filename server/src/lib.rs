@@ -14,9 +14,7 @@ use {
         time::SystemTime,
     },
     umi_api::method_name::MethodName,
-    umi_app::{
-        Application, ApplicationReader, Command, CommandQueue, Dependencies, SharedBlockHashCache,
-    },
+    umi_app::{Application, ApplicationReader, Command, CommandQueue, Dependencies},
     umi_blockchain::{
         block::{Block, BlockHash, BlockQueries, ExtendedBlock, Header},
         payload::{NewPayloadId, StatePayloadId},
@@ -107,7 +105,7 @@ pub async fn run(max_buffered_commands: u32) {
 fn serve(
     addr: SocketAddr,
     queue: &CommandQueue,
-    reader: &ApplicationReader<dependency::Dependency>,
+    reader: &ApplicationReader<dependency::ReaderDependency>,
     port: &'static str,
     is_allowed: &'static (impl Fn(&MethodName) -> bool + Send + Sync),
 ) -> impl Future<Output = ()> {
@@ -191,12 +189,6 @@ impl<D: Dependencies> GenesisStateExt for Application<D> {
             &mut self.state,
             &mut self.evm_storage,
         );
-    } else {
-        let shared_cache =
-            SharedBlockHashCache::initialize_from_storage(&app.storage_reader, &app.block_queries);
-        app.block_hash_writer = shared_cache.clone();
-        app.block_hash_lookup = shared_cache.clone();
-        app_reader.block_hash_lookup = shared_cache;
     }
 
         let genesis_block = create_genesis_block(&self.block_hash, genesis_config);

@@ -4,6 +4,7 @@ pub use {
     actor::*,
     dependency::*,
     factory::{create, run},
+    block_hash::{SharedBlockHashCache, SharedHybridBlockHashCache},
     input::*,
     queue::CommandQueue,
 };

@@ -83,7 +83,6 @@ impl Default for BlockHashRingBuffer {
 impl BlockHashLookup for BlockHashRingBuffer {
     fn hash_by_number(&self, block_number: u64) -> Option<B256> {
         if block_number > self.latest_block {
-            // Future block
             return None;
         }
 
@@ -152,8 +151,113 @@ impl BlockHashWriter for SharedBlockHashCache {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct HybridBlockHashCache<'a, S, B> {
+    ring_buffer: BlockHashRingBuffer,
+    storage: &'a S,
+    block_query: &'a B,
+}
+
+impl<'a, S, B> HybridBlockHashCache<'a, S, B>
+where
+    B: BlockQueries<Storage = S>,
+{
+    pub fn initialize_from_storage(storage: &'a S, block_query: &'a B) -> Self {
+        let ring_buffer = BlockHashRingBuffer::initialize_from_storage(storage, block_query);
+
+        Self {
+            ring_buffer,
+            storage,
+            block_query,
+        }
+    }
+}
+
+impl<S, B> BlockHashLookup for HybridBlockHashCache<'_, S, B>
+where
+    B: BlockQueries<Storage = S>,
+{
+    fn hash_by_number(&self, block_number: u64) -> Option<B256> {
+        if let Some(hash) = self.ring_buffer.hash_by_number(block_number) {
+            return Some(hash);
+        }
+
+        if let Ok(Some(block)) = self
+            .block_query
+            .by_height(self.storage, block_number, false)
+        {
+            Some(block.0.header.hash)
+        } else {
+            None
+        }
+    }
+}
+
+impl<S, B> BlockHashWriter for HybridBlockHashCache<'_, S, B>
+where
+    B: BlockQueries<Storage = S>,
+{
+    fn push(&mut self, height: u64, hash: B256) {
+        self.ring_buffer.push(height, hash);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SharedHybridBlockHashCache<'a, S, B> {
+    inner: Arc<RwLock<HybridBlockHashCache<'a, S, B>>>,
+}
+
+impl<'a, S, B> SharedHybridBlockHashCache<'a, S, B>
+where
+    S: Clone,
+    B: Clone + BlockQueries<Storage = S>,
+{
+    pub fn initialize_from_storage(storage: &'a S, block_query: &'a B) -> Self {
+        let cache = HybridBlockHashCache::initialize_from_storage(storage, block_query);
+
+        Self {
+            inner: Arc::new(RwLock::new(cache)),
+        }
+    }
+}
+
+impl<S, B> BlockHashLookup for SharedHybridBlockHashCache<'_, S, B>
+where
+    S: Clone,
+    B: Clone + BlockQueries<Storage = S>,
+{
+    fn hash_by_number(&self, number: u64) -> Option<B256> {
+        if let Ok(cache) = self.inner.read() {
+            cache.hash_by_number(number)
+        } else {
+            // TODO: deal with poisoning?
+            None
+        }
+    }
+}
+
+impl<S, B> BlockHashWriter for SharedHybridBlockHashCache<'_, S, B>
+where
+    S: Clone,
+    B: Clone + BlockQueries<Storage = S>,
+{
+    fn push(&mut self, height: u64, hash: B256) {
+        if let Ok(mut cache) = self.inner.write() {
+            cache.push(height, hash)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use {
+        alloy::{
+            consensus::Header,
+            primitives::{U64, ruint::aliases::U256},
+        },
+        umi_blockchain::block::{Block, BlockResponse, ExtendedBlock},
+    };
+
     use super::*;
 
     #[test]
@@ -219,5 +323,89 @@ mod tests {
 
         // Block 144 right after 143 is still accessible
         assert!(buffer.hash_by_number(144).is_some());
+    }
+
+    #[derive(Debug)]
+    struct MockBlockQueries;
+    #[derive(Debug)]
+    struct MockStorage;
+
+    impl BlockQueries for MockBlockQueries {
+        type Storage = MockStorage;
+        type Err = ();
+
+        fn by_hash(
+            &self,
+            _storage: &Self::Storage,
+            _hash: B256,
+            _include_transactions: bool,
+        ) -> Result<Option<BlockResponse>, Self::Err> {
+            Ok(None)
+        }
+
+        fn by_height(
+            &self,
+            _storage: &Self::Storage,
+            height: u64,
+            _include_transactions: bool,
+        ) -> Result<Option<BlockResponse>, Self::Err> {
+            // Mock storage returns a predictable hash for block numbers >= 1000
+            if height >= 1000 {
+                let hash = B256::from([(height % 256) as u8; 32]);
+                let header = Header::default();
+                let block = Block::new(header, Vec::new());
+                let extended_block = ExtendedBlock::new(hash, U256::ZERO, U64::ZERO, block);
+                let response =
+                    BlockResponse::from_block_with_transactions(extended_block, Vec::new());
+                Ok(Some(response))
+            } else {
+                Ok(None)
+            }
+        }
+
+        fn latest(&self, _storage: &Self::Storage) -> Result<Option<u64>, Self::Err> {
+            Ok(Some(2000))
+        }
+    }
+
+    #[test]
+    fn test_hybrid_cache_ring_buffer_hit() {
+        let mut cache =
+            HybridBlockHashCache::initialize_from_storage(&MockStorage, &MockBlockQueries);
+
+        let hash = B256::from([42u8; 32]);
+        cache.push(100, hash);
+
+        assert_eq!(cache.hash_by_number(100), Some(hash));
+    }
+
+    #[test]
+    fn test_hybrid_cache_storage_fallback() {
+        let cache = HybridBlockHashCache::initialize_from_storage(&MockStorage, &MockBlockQueries);
+
+        // Should fall back to storage for block 1500
+        let expected_hash = B256::from([((1500 % 256) as u8); 32]);
+        assert_eq!(cache.hash_by_number(1500), Some(expected_hash));
+    }
+
+    #[test]
+    fn test_hybrid_cache_storage_miss() {
+        let cache = HybridBlockHashCache::initialize_from_storage(&MockStorage, &MockBlockQueries);
+
+        // Should return None for blocks not in ring buffer or storage
+        assert_eq!(cache.hash_by_number(500), None);
+    }
+
+    #[test]
+    fn test_hybrid_cache_priority() {
+        let mut cache =
+            HybridBlockHashCache::initialize_from_storage(&MockStorage, &MockBlockQueries);
+
+        // Add block 1500 to ring buffer with different hash than storage would return
+        let ring_buffer_hash = B256::from([99u8; 32]);
+        cache.push(1500, ring_buffer_hash);
+
+        // Should prefer ring buffer over storage
+        assert_eq!(cache.hash_by_number(1500), Some(ring_buffer_hash));
     }
 }

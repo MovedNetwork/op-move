@@ -6,6 +6,7 @@ use {
 };
 
 pub type Dependency = InMemoryDependencies;
+pub type ReaderDependency = InMemoryDependencies;
 
 pub fn dependencies() -> Dependency {
     InMemoryDependencies::new()

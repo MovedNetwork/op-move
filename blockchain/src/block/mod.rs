@@ -13,10 +13,7 @@ mod write;
 pub use {
     gas::{BaseGasFee, Eip1559GasFee},
     hash::{BlockHash, UmiBlockHash},
-    in_memory::{
-        BlockMemory, BlockMemoryReader, ReadBlockMemory, ReadHashes, ReadHeights, ReadPayloadIds,
-        WriteHashes, WriteHeights, WritePayloadIds,
-    },
+    in_memory::{BlockMemory, ReadBlockMemory},
     read::{BlockQueries, BlockResponse, in_memory::InMemoryBlockQueries},
     write::{Block, BlockRepository, ExtendedBlock, Header, in_memory::InMemoryBlockRepository},
 };

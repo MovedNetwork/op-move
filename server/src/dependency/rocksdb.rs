@@ -99,24 +99,19 @@ impl umi_app::Dependencies for RocksDbDependencies {
     }
 
     fn state(&self) -> Self::State {
-        let mut result;
         let mut tries = 1..60;
 
         loop {
-            result = EthTrieState::try_new(TRIE_DB.clone());
-
-            match &result {
-                Ok(_) => break,
-                Err(_) if tries.next().is_none() => break,
+            match EthTrieState::try_new(TRIE_DB.clone()) {
+                Ok(state) => return state,
+                Err(error) if tries.next().is_none() => panic!("{error}"),
                 Err(error) => {
                     let duration = Duration::from_secs(1);
                     eprintln!("WARN: Failed to create state {error}, retrying in {duration:?}...");
-                    std::thread::sleep(Duration::from_secs(1));
+                    std::thread::sleep(duration);
                 }
             }
         }
-
-        result.unwrap()
     }
 
     fn state_queries(&self, genesis_config: &GenesisConfig) -> Self::StateQueries {

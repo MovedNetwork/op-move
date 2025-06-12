@@ -50,7 +50,7 @@ impl<D: Dependencies> ApplicationReader<D> {
             receipt_memory: deps.receipt_memory_reader(),
             storage: deps.shared_storage_reader(),
             state_queries: deps.state_queries(genesis_config),
-            evm_storage: D::storage_trie_repository(),
+            evm_storage: deps.storage_trie_repository(),
             transaction_queries: D::transaction_queries(),
         }
     }
@@ -111,7 +111,7 @@ impl<D: Dependencies> Application<D> {
             storage_reader: deps.shared_storage_reader(),
             state: deps.state(),
             state_queries: deps.state_queries(genesis_config),
-            evm_storage: D::storage_trie_repository(),
+            evm_storage: deps.storage_trie_repository(),
             transaction_queries: D::transaction_queries(),
             transaction_repository: D::transaction_repository(),
             resolver_cache: ResolverCache::default(),
@@ -249,7 +249,7 @@ pub trait Dependencies {
 
     fn state_queries(&self, genesis_config: &GenesisConfig) -> Self::StateQueries;
 
-    fn storage_trie_repository() -> Self::StorageTrieRepository;
+    fn storage_trie_repository(&self) -> Self::StorageTrieRepository;
 
     fn transaction_queries() -> Self::TransactionQueries;
 
@@ -444,7 +444,7 @@ mod test_doubles {
             unimplemented!("Dependencies are created manually in tests")
         }
 
-        fn storage_trie_repository() -> Self::StorageTrieRepository {
+        fn storage_trie_repository(&self) -> Self::StorageTrieRepository {
             unimplemented!("Dependencies are created manually in tests")
         }
 

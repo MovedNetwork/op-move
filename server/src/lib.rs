@@ -1,5 +1,3 @@
-#[cfg(test)]
-use umi_blockchain::block::{Block, BlockHash, ExtendedBlock, Header};
 use {
     crate::mirror::MirrorLog,
     clap::Parser,
@@ -16,7 +14,7 @@ use {
     umi_api::method_name::MethodName,
     umi_app::{Application, ApplicationReader, Command, CommandQueue, Dependencies},
     umi_blockchain::{
-        block::BlockQueries,
+        block::{Block, BlockHash, BlockQueries, ExtendedBlock, Header},
         payload::{NewPayloadId, StatePayloadId},
     },
     umi_genesis::config::GenesisConfig,
@@ -166,11 +164,12 @@ pub fn initialize_app(
             &mut app.evm_storage,
         );
     }
+    let genesis_block = create_genesis_block(&app.block_hash, &genesis_config);
+    app.genesis_update(genesis_block);
 
     (app, app_reader)
 }
 
-#[cfg(test)]
 fn create_genesis_block(
     block_hash: &impl BlockHash,
     genesis_config: &GenesisConfig,

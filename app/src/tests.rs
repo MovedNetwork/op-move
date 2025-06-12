@@ -544,7 +544,7 @@ fn test_txs_from_one_account_have_proper_nonce_ordering() {
         // Get receipt for this transaction
         let receipt = reader.transaction_receipt(*tx_hash);
 
-        let receipt = receipt.unwrap_or_else(|_| {
+        let receipt = receipt.expect("Database should work").unwrap_or_else(|| {
             panic!(
                 "Transaction with nonce {} and hash {:?} has no receipt",
                 i, tx_hash

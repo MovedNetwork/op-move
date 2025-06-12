@@ -212,12 +212,11 @@ impl<D: Dependencies> ApplicationReader<D> {
         transaction: TransactionRequest,
         block_number: BlockNumberOrTag,
     ) -> Result<u64> {
-        let height = self.resolve_height(block_number)?;
         let block_height = self.resolve_height(block_number)?;
         let block_hash_lookup = StorageBasedProvider::new(&self.storage, &self.block_queries);
         let outcome = simulate_transaction(
             transaction,
-            &self.state_queries.resolver_at(height)?,
+            &self.state_queries.resolver_at(block_height)?,
             &self.evm_storage,
             &self.genesis_config,
             &self.base_token,
@@ -248,18 +247,16 @@ impl<D: Dependencies> ApplicationReader<D> {
         )
     }
 
-    pub fn transaction_receipt(&self, tx_hash: B256) -> Result<TransactionReceipt> {
+    pub fn transaction_receipt(&self, tx_hash: B256) -> Result<Option<TransactionReceipt>> {
         self.receipt_queries
             .by_transaction_hash(&self.receipt_memory, tx_hash)
-            .map_err(|_| Error::DatabaseState)?
-            .ok_or(Error::User(UserError::InvalidBlockHash(tx_hash)))
+            .map_err(|_| Error::DatabaseState)
     }
 
-    pub fn transaction_by_hash(&self, tx_hash: B256) -> Result<TransactionResponse> {
+    pub fn transaction_by_hash(&self, tx_hash: B256) -> Result<Option<TransactionResponse>> {
         self.transaction_queries
             .by_hash(&self.storage, tx_hash)
-            .map_err(|_| Error::DatabaseState)?
-            .ok_or(Error::User(UserError::InvalidBlockHash(tx_hash)))
+            .map_err(|_| Error::DatabaseState)
     }
 
     pub fn proof(
@@ -382,6 +379,7 @@ impl<D: Dependencies> ApplicationReader<D> {
             .map(|hash| {
                 let rx = self
                     .transaction_receipt(hash)
+                    .expect("Database should work")
                     .expect("Tx receipt should exist");
                 (rx.inner.effective_gas_price, rx.inner.gas_used)
             })

@@ -28,6 +28,7 @@ pub struct InMemoryDependencies {
     receipt_memory_reader: umi_blockchain::receipt::ReceiptMemoryReader,
     receipt_memory: Option<umi_blockchain::receipt::ReceiptMemory>,
     trie_db: Arc<umi_state::InMemoryTrieDb>,
+    evm_storage_tries: umi_evm_ext::state::InMemoryStorageTrieRepository,
 }
 
 impl InMemoryDependencies {
@@ -42,6 +43,7 @@ impl InMemoryDependencies {
             receipt_memory_reader,
             receipt_memory: Some(receipt_memory),
             trie_db: Arc::new(umi_state::InMemoryTrieDb::empty()),
+            evm_storage_tries: umi_evm_ext::state::InMemoryStorageTrieRepository::new(),
         }
     }
 
@@ -55,6 +57,7 @@ impl InMemoryDependencies {
             receipt_memory_reader: self.receipt_memory_reader.clone(),
             receipt_memory: None,
             trie_db: self.trie_db.clone(),
+            evm_storage_tries: self.evm_storage_tries.clone(),
         }
     }
 }
@@ -149,8 +152,8 @@ impl umi_app::Dependencies for InMemoryDependencies {
         )
     }
 
-    fn storage_trie_repository() -> Self::StorageTrieRepository {
-        umi_evm_ext::state::InMemoryStorageTrieRepository::new()
+    fn storage_trie_repository(&self) -> Self::StorageTrieRepository {
+        self.evm_storage_tries.clone()
     }
 
     fn transaction_queries() -> Self::TransactionQueries {

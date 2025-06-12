@@ -212,12 +212,11 @@ impl<D: Dependencies> ApplicationReader<D> {
         transaction: TransactionRequest,
         block_number: BlockNumberOrTag,
     ) -> Result<u64> {
-        let height = self.resolve_height(block_number)?;
         let block_height = self.resolve_height(block_number)?;
         let block_hash_lookup = StorageBasedProvider::new(&self.storage, &self.block_queries);
         let outcome = simulate_transaction(
             transaction,
-            &self.state_queries.resolver_at(height)?,
+            &self.state_queries.resolver_at(block_height)?,
             &self.evm_storage,
             &self.genesis_config,
             &self.base_token,

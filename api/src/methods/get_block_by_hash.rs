@@ -11,15 +11,14 @@ pub async fn execute(
 
     let response = app
         .block_by_hash(block_hash, include_transactions)
-        .map(GetBlockResponse::from)
-        .map_err(|_| JsonRpcError::block_not_found(block_hash))?;
+        .map(GetBlockResponse::from)?;
 
     Ok(serde_json::to_value(response).expect("Must be able to JSON-serialize response"))
 }
 
 #[cfg(test)]
 mod tests {
-    use {super::*, crate::methods::tests::create_app};
+    use {super::*, crate::methods::tests::create_app, alloy::primitives::B256, std::str::FromStr};
 
     pub fn example_request() -> serde_json::Value {
         serde_json::from_str(
@@ -88,11 +87,15 @@ mod tests {
 
         let response = execute(request, &reader).await;
 
+        let block_hash =
+            B256::from_str("0xe56ec7ba741931e8c55b7f654a6e56ed61cf8b8279bf5e3ef6ac86a11eb00000")
+                .unwrap();
+
         assert_eq!(
             response.unwrap_err(),
-            JsonRpcError::block_not_found(
-                "0xe56ec7ba741931e8c55b7f654a6e56ed61cf8b8279bf5e3ef6ac86a11eb00000",
-            )
+            JsonRpcError::block_not_found(umi_shared::error::Error::User(
+                umi_shared::error::UserError::InvalidBlockHash(block_hash)
+            ))
         );
     }
 }

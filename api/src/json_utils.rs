@@ -1,8 +1,4 @@
-use {
-    crate::jsonrpc::JsonRpcError,
-    serde::de::DeserializeOwned,
-    std::{any, fmt},
-};
+use {crate::jsonrpc::JsonRpcError, serde::de::DeserializeOwned, std::any};
 
 pub fn get_field(x: &serde_json::Value, name: &str) -> serde_json::Value {
     x.as_object()
@@ -27,25 +23,20 @@ pub fn deserialize<T: DeserializeOwned>(x: &serde_json::Value) -> Result<T, Json
     })
 }
 
-pub fn transaction_error<E: fmt::Debug>(e: E) -> JsonRpcError {
-    // code as defined in geth's internal/ethapi/errors.go
-    JsonRpcError::without_data(-32000, format!("Execution reverted: {e:?}"))
-}
-
 pub fn parse_params_0(request: serde_json::Value) -> Result<(), JsonRpcError> {
     let params = get_params_list(&request);
     match params {
         [] => Ok(()),
-        _ => Err(JsonRpcError::parse_error(request, "Too many params")),
+        _ => Err(JsonRpcError::too_many_params_error(request)),
     }
 }
 
 pub fn parse_params_1<T: DeserializeOwned>(request: serde_json::Value) -> Result<T, JsonRpcError> {
     let params = get_params_list(&request);
     match params {
-        [] => Err(JsonRpcError::parse_error(request, "Not enough params")),
+        [] => Err(JsonRpcError::not_enough_params_error(request)),
         [x] => Ok(deserialize(x)?),
-        _ => Err(JsonRpcError::parse_error(request, "Too many params")),
+        _ => Err(JsonRpcError::too_many_params_error(request)),
     }
 }
 
@@ -56,9 +47,9 @@ where
 {
     let params = get_params_list(&request);
     match params {
-        [] | [_] => Err(JsonRpcError::parse_error(request, "Not enough params")),
+        [] | [_] => Err(JsonRpcError::not_enough_params_error(request)),
         [a, b] => Ok((deserialize(a)?, deserialize(b)?)),
-        _ => Err(JsonRpcError::parse_error(request, "Too many params")),
+        _ => Err(JsonRpcError::too_many_params_error(request)),
     }
 }
 
@@ -70,8 +61,8 @@ where
 {
     let params = get_params_list(&request);
     match params {
-        [] | [_] | [_, _] => Err(JsonRpcError::parse_error(request, "Not enough params")),
+        [] | [_] | [_, _] => Err(JsonRpcError::not_enough_params_error(request)),
         [a, b, c] => Ok((deserialize(a)?, deserialize(b)?, deserialize(c)?)),
-        _ => Err(JsonRpcError::parse_error(request, "Too many params")),
+        _ => Err(JsonRpcError::too_many_params_error(request)),
     }
 }

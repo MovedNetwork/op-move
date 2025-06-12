@@ -1,6 +1,6 @@
 use {
     crate::{
-        json_utils::{self, transaction_error},
+        json_utils::{self},
         jsonrpc::JsonRpcError,
     },
     alloy::eips::BlockNumberOrTag,
@@ -13,9 +13,7 @@ pub async fn execute(
 ) -> Result<serde_json::Value, JsonRpcError> {
     let (block_count, block_number, reward_percentiles) = parse_params(request)?;
 
-    let response = app
-        .fee_history(block_count, block_number, reward_percentiles)
-        .map_err(transaction_error)?;
+    let response = app.fee_history(block_count, block_number, reward_percentiles)?;
 
     Ok(serde_json::to_value(response).expect("Must be able to JSON-serialize response"))
 }
@@ -25,11 +23,7 @@ fn parse_params(
 ) -> Result<(u64, BlockNumberOrTag, Option<Vec<f64>>), JsonRpcError> {
     let params = json_utils::get_params_list(&request);
     match params {
-        [] | [_] => Err(JsonRpcError {
-            code: -32602,
-            data: request,
-            message: "Not enough params".into(),
-        }),
+        [] | [_] => Err(JsonRpcError::not_enough_params_error(request)),
         [a, b] => {
             let block_count = parse_block_count(a)?;
             let block_number: BlockNumberOrTag = json_utils::deserialize(b)?;
@@ -39,34 +33,17 @@ fn parse_params(
             let block_count = parse_block_count(a)?;
             let block_number: BlockNumberOrTag = json_utils::deserialize(b)?;
             let reward_percentiles: Vec<f64> = json_utils::deserialize(c)?;
-            if reward_percentiles
-                .iter()
-                .any(|reward| *reward < 0.0 || *reward > 100.0)
-            {
-                return Err(JsonRpcError {
-                    code: -32602,
-                    data: 0.into(),
-                    message: "Incorrect reward percentile".into(),
-                });
-            }
             Ok((block_count, block_number, Some(reward_percentiles)))
         }
-        _ => Err(JsonRpcError {
-            code: -32602,
-            data: request,
-            message: "Too many params".into(),
-        }),
+        _ => Err(JsonRpcError::too_many_params_error(request)),
     }
 }
 
 fn parse_block_count(value: &serde_json::Value) -> Result<u64, JsonRpcError> {
     let block_count: String = json_utils::deserialize(value)?;
     let block_count = block_count.trim_start_matches("0x");
-    u64::from_str_radix(block_count, 16).map_err(|_| JsonRpcError {
-        code: -32602,
-        data: 0.into(),
-        message: "Block count parsing error".into(),
-    })
+    u64::from_str_radix(block_count, 16)
+        .map_err(|_| JsonRpcError::parse_error(value.clone(), "Block count parsing error"))
 }
 
 #[cfg(test)]
@@ -140,16 +117,6 @@ mod tests {
         });
         let err = parse_params(request).unwrap_err();
         assert_eq!(err.message, "Block count parsing error");
-
-        // Incorrect reward percentile
-        let request = serde_json::json!({
-            "jsonrpc": "2.0",
-            "method": "eth_feeHistory",
-            "params": ["0x1", "latest", [-10]],
-            "id": 1
-        });
-        let err = parse_params(request).unwrap_err();
-        assert_eq!(err.message, "Incorrect reward percentile");
     }
 
     #[test_case("0x0")]

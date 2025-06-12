@@ -77,7 +77,7 @@ pub enum UserError {
     Vm(#[from] VMError),
     #[error("{0}")]
     PartialVm(#[from] PartialVMError),
-    #[error("{0}")]
+    #[error("Could not recover tx signer: {0}")]
     InvalidSignature(#[from] alloy::primitives::SignatureError),
     #[error("Error during EVM execution for L2 bridge {0:?}")]
     DepositFailure(Vec<u8>),
@@ -94,9 +94,9 @@ pub enum UserError {
     #[error("Invalid payload id requested: {0}")]
     InvalidPayloadId(u64),
     #[error("Fee history reward percentiles were malformed")]
-    InvalidRewardPercentiles,
-    #[error("Fee history reward percentiles vector was too long")]
-    RewardPercentilesTooLong,
+    InvalidRewardPercentiles(Vec<f64>),
+    #[error("Fee history reward percentiles vector was too long: max allowed={max}, given={given}")]
+    RewardPercentilesTooLong { max: usize, given: usize },
     #[error("Invalid address requested: {0}")]
     InvalidAddress(Address),
 }
@@ -140,8 +140,6 @@ pub enum InvalidTransactionCause {
     FailedToPayL1Fee,
     #[error("Failed to pay L2 fee")]
     FailedToPayL2Fee,
-    #[error("Failed to recover tx signer")]
-    FailedToRecoverSigner,
 }
 
 impl From<InvalidTransactionCause> for Error {
@@ -283,7 +281,7 @@ mod tests {
     )]
     #[test_case(
         alloy::primitives::SignatureError::InvalidParity(0),
-        "invalid parity: 0"
+        "Could not recover tx signer: invalid parity: 0"
     )]
     #[test_case(bcs::Error::Eof, "unexpected end of input")]
     #[test_case(

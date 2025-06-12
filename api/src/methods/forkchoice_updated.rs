@@ -27,11 +27,7 @@ fn parse_params_v3(
 ) -> Result<(ForkchoiceStateV1, Option<PayloadAttributesV3>), JsonRpcError> {
     let params = json_utils::get_params_list(&request);
     match params {
-        [] => Err(JsonRpcError {
-            code: -32602,
-            data: request,
-            message: "Not enough params".into(),
-        }),
+        [] => Err(JsonRpcError::not_enough_params_error(request)),
         [x] => {
             let fc_state: ForkchoiceStateV1 = json_utils::deserialize(x)?;
             Ok((fc_state, None))
@@ -41,11 +37,7 @@ fn parse_params_v3(
             let payload_attributes: Option<PayloadAttributesV3> = json_utils::deserialize(y)?;
             Ok((fc_state, payload_attributes))
         }
-        _ => Err(JsonRpcError {
-            code: -32602,
-            data: request,
-            message: "Too many params".into(),
-        }),
+        _ => Err(JsonRpcError::too_many_params_error(request)),
     }
 }
 

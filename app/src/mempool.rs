@@ -66,15 +66,9 @@ impl Mempool {
     /// Recovers the signer of the transaction to use as a mempool key.
     fn get_tx_signer(&self, tx: &PendingTransaction) -> Result<Address, Error> {
         match &tx.inner {
-            OpTxEnvelope::Legacy(signed) => signed
-                .recover_signer()
-                .map_err(|_| InvalidTransactionCause::InvalidSigner.into()),
-            OpTxEnvelope::Eip2930(signed) => signed
-                .recover_signer()
-                .map_err(|_| InvalidTransactionCause::InvalidSigner.into()),
-            OpTxEnvelope::Eip1559(signed) => signed
-                .recover_signer()
-                .map_err(|_| InvalidTransactionCause::InvalidSigner.into()),
+            OpTxEnvelope::Legacy(signed) => Ok(signed.recover_signer()?),
+            OpTxEnvelope::Eip2930(signed) => Ok(signed.recover_signer()?),
+            OpTxEnvelope::Eip1559(signed) => Ok(signed.recover_signer()?),
             // EVM account abstraction not planned to be supported
             OpTxEnvelope::Eip7702(_) => Err(Error::InvalidTransaction(
                 InvalidTransactionCause::UnsupportedType,

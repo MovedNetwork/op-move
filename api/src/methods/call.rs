@@ -1,8 +1,5 @@
 use {
-    crate::{
-        json_utils::{parse_params_2, transaction_error},
-        jsonrpc::JsonRpcError,
-    },
+    crate::{json_utils::parse_params_2, jsonrpc::JsonRpcError},
     umi_app::{ApplicationReader, Dependencies},
 };
 
@@ -12,9 +9,7 @@ pub async fn execute(
 ) -> Result<serde_json::Value, JsonRpcError> {
     let (transaction, block_number) = parse_params_2(request)?;
 
-    let response = app
-        .call(transaction, block_number)
-        .map_err(transaction_error)?;
+    let response = app.call(transaction, block_number)?;
 
     Ok(serde_json::to_value(response).expect("Must be able to JSON-serialize response"))
 }

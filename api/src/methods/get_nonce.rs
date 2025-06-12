@@ -10,9 +10,7 @@ pub async fn execute(
 ) -> Result<serde_json::Value, JsonRpcError> {
     let (address, block_number) = parse_params(request)?;
 
-    let response = app
-        .nonce_by_height(address, block_number)
-        .map_err(|_| JsonRpcError::block_not_found(block_number))?;
+    let response = app.nonce_by_height(address, block_number)?;
 
     // Format the balance as a hex string
     Ok(serde_json::to_value(format!("0x{:x}", response))
@@ -22,11 +20,7 @@ pub async fn execute(
 fn parse_params(request: serde_json::Value) -> Result<(Address, BlockNumberOrTag), JsonRpcError> {
     let params = json_utils::get_params_list(&request);
     match params {
-        [] => Err(JsonRpcError {
-            code: -32602,
-            data: request,
-            message: "Not enough params".into(),
-        }),
+        [] => Err(JsonRpcError::not_enough_params_error(request)),
         [a] => {
             let address: Address = json_utils::deserialize(a)?;
             Ok((address, BlockNumberOrTag::Latest))
@@ -36,11 +30,7 @@ fn parse_params(request: serde_json::Value) -> Result<(Address, BlockNumberOrTag
             let block_number: BlockNumberOrTag = json_utils::deserialize(b)?;
             Ok((address, block_number))
         }
-        _ => Err(JsonRpcError {
-            code: -32602,
-            data: request,
-            message: "Too many params".into(),
-        }),
+        _ => Err(JsonRpcError::too_many_params_error(request)),
     }
 }
 
@@ -118,7 +108,9 @@ mod tests {
             "id": 1
         });
 
-        let expected_response = JsonRpcError::block_not_found("0x5");
+        let expected_response = JsonRpcError::block_not_found(umi_shared::error::Error::User(
+            umi_shared::error::UserError::InvalidBlockHeight(5),
+        ));
         let response = execute(request, &reader).await.unwrap_err();
 
         assert_eq!(response, expected_response);

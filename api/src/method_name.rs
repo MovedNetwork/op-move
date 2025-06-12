@@ -57,10 +57,7 @@ impl FromStr for MethodName {
             "eth_getProof" => Self::GetProof,
             "eth_gasPrice" => Self::GasPrice,
             other => {
-                return Err(JsonRpcError::without_data(
-                    -32601,
-                    format!("Unsupported method: {other}"),
-                ));
+                return Err(JsonRpcError::invalid_method(other));
             }
         })
     }

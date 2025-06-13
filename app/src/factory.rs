@@ -9,7 +9,7 @@ use {
     crate::{
         Application, ApplicationReader, CommandActor, DependenciesThreadSafe, queue::CommandQueue,
     },
-    std::fmt::Debug,
+    std::{fmt::Debug, marker::PhantomData},
     tokio::sync::{broadcast, mpsc},
 };
 
@@ -32,14 +32,22 @@ pub fn create<T: DependenciesThreadSafe>(
 /// The single closure implementation is used when it's possible to create both immediately, while
 /// the second one when the reader is created first but there can be a delay until the [`Application`]
 /// is returned.
-pub trait ApplicationFactory<D: DependenciesThreadSafe, F: ApplicationOnlyFactory<D>> {
-    fn create(self) -> ReaderWithFactory<D, F>;
+pub trait ApplicationFactory<
+    D: DependenciesThreadSafe,
+    RD: DependenciesThreadSafe,
+    F: ApplicationOnlyFactory<D>,
+>
+{
+    fn create(self) -> ReaderWithFactory<D, RD, F>;
 }
 
-impl<D: DependenciesThreadSafe, F: FnOnce() -> (ApplicationReader<D>, Application<D>)>
-    ApplicationFactory<D, Application<D>> for F
+impl<
+    D: DependenciesThreadSafe,
+    RD: DependenciesThreadSafe,
+    F: FnOnce() -> (ApplicationReader<RD>, Application<D>),
+> ApplicationFactory<D, RD, Application<D>> for F
 {
-    fn create(self) -> ReaderWithFactory<D, Application<D>> {
+    fn create(self) -> ReaderWithFactory<D, RD, Application<D>> {
         let (reader, app) = self();
 
         ReaderWithFactory::new(reader, app)
@@ -48,11 +56,12 @@ impl<D: DependenciesThreadSafe, F: FnOnce() -> (ApplicationReader<D>, Applicatio
 
 impl<
     D: DependenciesThreadSafe,
-    Reader: FnOnce() -> ApplicationReader<D>,
+    RD: DependenciesThreadSafe,
+    Reader: FnOnce() -> ApplicationReader<RD>,
     Factory: FnOnce() -> Application<D>,
-> ApplicationFactory<D, Factory> for (Reader, Factory)
+> ApplicationFactory<D, RD, Factory> for (Reader, Factory)
 {
-    fn create(self) -> ReaderWithFactory<D, Factory> {
+    fn create(self) -> ReaderWithFactory<D, RD, Factory> {
         let reader = self.0();
 
         ReaderWithFactory::new(reader, self.1)
@@ -81,16 +90,27 @@ impl<D: DependenciesThreadSafe + Sized, F: FnOnce() -> Application<D>> Applicati
     }
 }
 
-impl<D: DependenciesThreadSafe, F: ApplicationOnlyFactory<D>> ReaderWithFactory<D, F> {
-    pub fn new(reader: ApplicationReader<D>, factory: F) -> Self {
-        Self { reader, factory }
+impl<D: DependenciesThreadSafe, RD: DependenciesThreadSafe, F: ApplicationOnlyFactory<D>>
+    ReaderWithFactory<D, RD, F>
+{
+    pub fn new(reader: ApplicationReader<RD>, factory: F) -> Self {
+        Self {
+            reader,
+            factory,
+            _marker: PhantomData,
+        }
     }
 }
 
 /// Carries `reader` and a `factory` for [`Application`].
-pub struct ReaderWithFactory<D: DependenciesThreadSafe, F: ApplicationOnlyFactory<D>> {
-    reader: ApplicationReader<D>,
+pub struct ReaderWithFactory<
+    D: DependenciesThreadSafe,
+    RD: DependenciesThreadSafe,
+    F: ApplicationOnlyFactory<D>,
+> {
+    reader: ApplicationReader<RD>,
     factory: F,
+    _marker: PhantomData<D>,
 }
 
 /// Creates [`Application`] and runs the `future`.
@@ -103,10 +123,16 @@ pub struct ReaderWithFactory<D: DependenciesThreadSafe, F: ApplicationOnlyFactor
 ///
 /// The provided [`ApplicationFactory`] implementation can expect that the `future` is created after
 /// [`ApplicationReader`] and before [`Application`]
-pub async fn run<D: DependenciesThreadSafe, F, Out, T: ApplicationOnlyFactory<D>>(
-    factory: impl ApplicationFactory<D, T>,
+pub async fn run<
+    D: DependenciesThreadSafe,
+    RD: DependenciesThreadSafe,
+    F,
+    Out,
+    T: ApplicationOnlyFactory<D>,
+>(
+    factory: impl ApplicationFactory<D, RD, T>,
     buffer: u32,
-    future: impl FnOnce(CommandQueue, ApplicationReader<D>) -> F,
+    future: impl FnOnce(CommandQueue, ApplicationReader<RD>) -> F,
 ) -> Out
 where
     F: Future<Output = Out> + Send,

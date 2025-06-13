@@ -103,7 +103,7 @@ pub async fn run(max_buffered_commands: u32) {
 fn serve(
     addr: SocketAddr,
     queue: &CommandQueue,
-    reader: &ApplicationReader<dependency::Dependency>,
+    reader: &ApplicationReader<dependency::ReaderDependency>,
     port: &'static str,
     is_allowed: &'static (impl Fn(&MethodName) -> bool + Send + Sync),
 ) -> impl Future<Output = ()> {
@@ -197,7 +197,7 @@ pub fn initialize_app(
     genesis_config: &GenesisConfig,
 ) -> (
     Application<dependency::Dependency>,
-    ApplicationReader<dependency::Dependency>,
+    ApplicationReader<dependency::ReaderDependency>,
 ) {
     let (app, app_reader) = dependency::create(genesis_config);
     (app.with_genesis(genesis_config), app_reader)

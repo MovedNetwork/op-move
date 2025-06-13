@@ -158,6 +158,7 @@ fn test_solidity_fixed_bytes() {
                 base_token: &(),
                 block_header: HeaderForExecution::default(),
                 block_hash_lookup: &(),
+                block_hash_writer: &(),
             };
             execute_transaction(input.into(), &mut Default::default()).unwrap()
         };

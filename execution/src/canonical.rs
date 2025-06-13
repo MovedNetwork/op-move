@@ -38,7 +38,7 @@ use {
     umi_evm_ext::{
         EVM_NATIVE_ADDRESS, EVM_NATIVE_MODULE,
         events::EthTransfersLogger,
-        state::{BlockHashLookup, StorageTrieRepository},
+        state::{BlockHashLookup, BlockHashWriter, StorageTrieRepository},
     },
     umi_genesis::{CreateMoveVm, UmiVm, config::GenesisConfig},
     umi_shared::{
@@ -134,8 +134,9 @@ pub(super) fn execute_canonical_transaction<
     F: L2GasFee,
     B: BaseTokenAccounts,
     H: BlockHashLookup,
+    W: BlockHashWriter,
 >(
-    input: CanonicalExecutionInput<S, ST, F, B, H>,
+    input: CanonicalExecutionInput<S, ST, F, B, H, W>,
     resolver_cache: &mut ResolverCache,
 ) -> umi_shared::error::Result<TransactionExecutionOutcome> {
     resolver_cache.clear();

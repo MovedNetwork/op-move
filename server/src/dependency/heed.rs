@@ -1,7 +1,10 @@
 use {
     crate::dependency::shared::*,
-    std::{sync::Arc, time::Duration},
-    umi_app::{Application, ApplicationReader, CommandActor, SharedBlockHashCache},
+    std::{
+        sync::{Arc, LazyLock},
+        time::Duration,
+    },
+    umi_app::{Application, CommandActor, SharedBlockHashCache, SharedHybridBlockHashCache},
     umi_blockchain::state::EthTrieStateQueries,
     umi_genesis::config::GenesisConfig,
     umi_state::{EthTrieState, State},
@@ -19,11 +22,12 @@ pub fn dependencies() -> Dependency {
 }
 
 pub struct HeedDependencies;
+pub struct HeedReaderDependencies;
 
 impl HeedDependencies {
     /// Creates a set of dependencies appropriate for usage in reader.
-    pub fn reader(&self) -> Self {
-        HeedDependencies
+    pub fn reader(&self) -> HeedReaderDependencies {
+        HeedReaderDependencies
     }
 }
 
@@ -235,7 +239,19 @@ impl umi_app::Dependencies for HeedReaderDependencies {
     }
 
     fn state(&self) -> Self::State {
-        EthTrieState::try_new(TRIE_DB.clone()).unwrap()
+        let mut tries = 1..60;
+
+        loop {
+            match EthTrieState::try_new(TRIE_DB.clone()) {
+                Ok(state) => return state,
+                Err(error) if tries.next().is_none() => panic!("{error}"),
+                Err(error) => {
+                    let duration = Duration::from_secs(1);
+                    eprintln!("WARN: Failed to create state {error}, retrying in {duration:?}...");
+                    std::thread::sleep(duration);
+                }
+            }
+        }
     }
 
     fn state_queries(&self, genesis_config: &GenesisConfig) -> Self::StateQueries {
@@ -246,7 +262,7 @@ impl umi_app::Dependencies for HeedReaderDependencies {
         )
     }
 
-    fn storage_trie_repository() -> Self::StorageTrieRepository {
+    fn storage_trie_repository(&self) -> Self::StorageTrieRepository {
         evm::HeedStorageTrieRepository::new(Database.clone())
     }
 

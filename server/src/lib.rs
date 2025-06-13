@@ -1,5 +1,3 @@
-#[cfg(test)]
-use umi_blockchain::block::{Block, BlockHash, ExtendedBlock, Header};
 use {
     crate::mirror::MirrorLog,
     clap::Parser,
@@ -189,7 +187,6 @@ impl<D: Dependencies> GenesisStateExt for Application<D> {
             &mut self.state,
             &mut self.evm_storage,
         );
-    }
 
         let genesis_block = create_genesis_block(&self.block_hash, genesis_config);
         self.genesis_update(genesis_block);
@@ -200,7 +197,7 @@ pub fn initialize_app(
     genesis_config: &GenesisConfig,
 ) -> (
     Application<dependency::Dependency>,
-    ApplicationReader<dependency::Dependency>,
+    ApplicationReader<dependency::ReaderDependency>,
 ) {
     let (app, app_reader) = dependency::create(genesis_config);
     (app.with_genesis(genesis_config), app_reader)

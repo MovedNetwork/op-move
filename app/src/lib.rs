@@ -2,9 +2,9 @@
 pub use uninit::Uninitialized;
 pub use {
     actor::*,
+    block_hash::{SharedBlockHashCache, SharedHybridBlockHashCache},
     dependency::*,
     factory::{create, run},
-    block_hash::{SharedBlockHashCache, SharedHybridBlockHashCache},
     input::*,
     queue::CommandQueue,
 };

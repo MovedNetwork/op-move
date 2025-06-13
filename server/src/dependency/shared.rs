@@ -1,4 +1,5 @@
 use {
+    super::ReaderDependency,
     crate::dependency::{dependencies, Dependency},
     umi_app::{Application, ApplicationReader},
     umi_genesis::config::GenesisConfig,
@@ -6,7 +7,7 @@ use {
 
 pub fn create(
     genesis_config: &GenesisConfig,
-) -> (Application<Dependency>, ApplicationReader<Dependency>) {
+) -> (Application<Dependency>, ApplicationReader<ReaderDependency>) {
     let deps = dependencies();
     let reader_deps = deps.reader();
 

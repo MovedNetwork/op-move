@@ -14,6 +14,7 @@ pub fn dependencies() -> crate::dependency::Dependency {
 }
 
 pub struct RocksDbDependencies;
+pub struct RocksDbReaderDependencies;
 
 impl RocksDbDependencies {
     /// Creates a set of dependencies appropriate for usage in reader.
@@ -236,7 +237,19 @@ impl umi_app::Dependencies for RocksDbReaderDependencies {
     }
 
     fn state(&self) -> Self::State {
-        EthTrieState::try_new(TRIE_DB.clone()).unwrap()
+        let mut tries = 1..60;
+
+        loop {
+            match EthTrieState::try_new(TRIE_DB.clone()) {
+                Ok(state) => return state,
+                Err(error) if tries.next().is_none() => panic!("{error}"),
+                Err(error) => {
+                    let duration = Duration::from_secs(1);
+                    eprintln!("WARN: Failed to create state {error}, retrying in {duration:?}...");
+                    std::thread::sleep(duration);
+                }
+            }
+        }
     }
 
     fn state_queries(&self, genesis_config: &GenesisConfig) -> Self::StateQueries {

@@ -1,0 +1,10 @@
+[package]
+name = "umi-server-args"
+description = "Umi execution HTTP server settings"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+toml.workspace = true
+optional_struct.workspace = true
+serde.workspace = true

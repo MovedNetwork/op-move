@@ -35,7 +35,6 @@ mod allow;
 mod dependency;
 mod geth_genesis;
 mod mirror;
-
 #[cfg(test)]
 mod tests;
 

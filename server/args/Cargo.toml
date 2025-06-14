@@ -8,3 +8,4 @@ edition = "2021"
 toml.workspace = true
 optional_struct.workspace = true
 serde.workspace = true
+thiserror.workspace = true

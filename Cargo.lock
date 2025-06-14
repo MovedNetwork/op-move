@@ -12517,6 +12517,7 @@ version = "0.1.0"
 dependencies = [
  "optional_struct",
  "serde",
+ "thiserror 1.0.69",
  "toml 0.8.23",
 ]
 

@@ -7,3 +7,4 @@ edition = "2021"
 [dependencies]
 toml.workspace = true
 serde.workspace = true
+thiserror.workspace = true

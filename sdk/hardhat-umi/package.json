@@ -1,6 +1,6 @@
 {
-  "name": "@umi/hardhat-plugin",
-  "version": "0.1.0",
+  "name": "@moved/hardhat-plugin",
+  "version": "0.1.1",
   "description": "A plugin for Hardhat to support the development of Move smart contracts on the Umi Network.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -31,7 +31,7 @@
     "typescript": "5.8.2"
   },
   "peerDependencies": {
-    "hardhat": "2.22.19"
+    "hardhat": "2"
   },
   "repository": {
     "type": "git",

@@ -8,4 +8,5 @@ edition = "2021"
 clap.workspace = true
 toml.workspace = true
 serde.workspace = true
+serde-env.workspace = true
 thiserror.workspace = true

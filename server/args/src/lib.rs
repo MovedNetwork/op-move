@@ -1,5 +1,5 @@
 pub use {
-    layers::{CliLayer, EnvLayer, FileLayer},
+    layers::{CliLayer, DefaultLayer, EnvLayer, FileLayer},
     stack::{ConfigBuilder, Layer},
 };
 

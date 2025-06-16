@@ -170,7 +170,7 @@ async function movePackageBuild(moveType: MoveType, movePath: string, packagePat
     // Aptos and Sui uses different subcommands to build a package
     // Use the default bytecode version 6 for Aptos repo tag `aptos-node-v1.14.0`
     const cmd = moveType === MoveType.Aptos
-        ? `${movePath} move compile --package-dir ${packagePath} --skip-fetch-latest-git-deps --bytecode-version 6`
+        ? `${movePath} move compile --package-dir ${packagePath} --skip-fetch-latest-git-deps`
         : `${movePath} move build --path ${packagePath} --force --skip-fetch-latest-git-deps`;
 
     const [e, stdout, stderr] = await executeChildProcess(cmd);

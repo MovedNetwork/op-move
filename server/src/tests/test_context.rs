@@ -18,7 +18,7 @@ const DEPOSIT_TX: &[u8] = &hex!("7ef8f8a032595a51f0561028c684fbeeb46c7221a34be9a
 pub struct TestContext {
     pub genesis_config: GenesisConfig,
     pub queue: CommandQueue,
-    pub reader: ApplicationReader<dependency::Dependency>,
+    pub reader: ApplicationReader<dependency::ReaderDependency>,
     head: B256,
     timestamp: u64,
 }
@@ -54,7 +54,7 @@ impl TestContext {
         self.timestamp += 1;
         let head_hash = self.head;
         let timestamp = self.timestamp;
-        let prev_rando = B256::random();
+        let prev_randao = B256::random();
         let request = serde_json::json!({
             "jsonrpc": "2.0",
             "id": 7,
@@ -67,7 +67,7 @@ impl TestContext {
                 },
                 {
                     "timestamp": format!("{timestamp:#x}"),
-                    "prevRandao": format!("{prev_rando}"),
+                    "prevRandao": format!("{prev_randao}"),
                     "suggestedFeeRecipient": "0x4200000000000000000000000000000000000011",
                     "withdrawals": [],
                     "parentBeaconBlockRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",

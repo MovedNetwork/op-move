@@ -1,7 +1,10 @@
 use {
     crate::dependency::shared::*,
-    std::{sync::Arc, time::Duration},
-    umi_app::{Application, CommandActor},
+    std::{
+        sync::{Arc, LazyLock},
+        time::Duration,
+    },
+    umi_app::{Application, CommandActor, SharedBlockHashCache, SharedHybridBlockHashCache},
     umi_blockchain::state::EthTrieStateQueries,
     umi_genesis::config::GenesisConfig,
     umi_state::{EthTrieState, State},
@@ -12,23 +15,27 @@ use {
 };
 
 pub type Dependency = HeedDependencies;
+pub type ReaderDependency = HeedReaderDependencies;
 
 pub fn dependencies() -> Dependency {
     HeedDependencies
 }
 
 pub struct HeedDependencies;
+pub struct HeedReaderDependencies;
 
 impl HeedDependencies {
     /// Creates a set of dependencies appropriate for usage in reader.
-    pub fn reader(&self) -> Self {
-        HeedDependencies
+    pub fn reader(&self) -> HeedReaderDependencies {
+        HeedReaderDependencies
     }
 }
 
 impl umi_app::Dependencies for HeedDependencies {
     type BlockQueries = block::HeedBlockQueries<'static>;
     type BlockRepository = block::HeedBlockRepository<'static>;
+    type BlockHashLookup = umi_app::SharedBlockHashCache;
+    type BlockHashWriter = umi_app::SharedBlockHashCache;
     type OnPayload = umi_app::OnPayload<Application<Self>>;
     type OnTx = umi_app::OnTx<Application<Self>>;
     type OnTxBatch = umi_app::OnTxBatch<Application<Self>>;
@@ -69,6 +76,138 @@ impl umi_app::Dependencies for HeedDependencies {
                 .push_state_root(state.state.state_root())
                 .unwrap()
         }
+    }
+
+    fn block_hash_lookup(&self) -> Self::BlockHashLookup {
+        BLOCK_HASH_CACHE.clone()
+    }
+
+    fn block_hash_writer(&self) -> Self::BlockHashWriter {
+        BLOCK_HASH_CACHE.clone()
+    }
+
+    fn payload_queries() -> Self::PayloadQueries {
+        payload::HeedPayloadQueries::new(db())
+    }
+
+    fn receipt_queries() -> Self::ReceiptQueries {
+        receipt::HeedReceiptQueries::new()
+    }
+
+    fn receipt_repository() -> Self::ReceiptRepository {
+        receipt::HeedReceiptRepository::new()
+    }
+
+    fn receipt_memory(&mut self) -> Self::ReceiptStorage {
+        db()
+    }
+
+    fn shared_storage(&mut self) -> Self::SharedStorage {
+        db()
+    }
+
+    fn receipt_memory_reader(&self) -> Self::ReceiptStorageReader {
+        db()
+    }
+
+    fn shared_storage_reader(&self) -> Self::SharedStorageReader {
+        db()
+    }
+
+    fn state(&self) -> Self::State {
+        let mut tries = 1..60;
+
+        loop {
+            match EthTrieState::try_new(TRIE_DB.clone()) {
+                Ok(state) => return state,
+                Err(error) if tries.next().is_none() => panic!("{error}"),
+                Err(error) => {
+                    let duration = Duration::from_secs(1);
+                    eprintln!("WARN: Failed to create state {error}, retrying in {duration:?}...");
+                    std::thread::sleep(duration);
+                }
+            }
+        }
+    }
+
+    fn state_queries(&self, genesis_config: &GenesisConfig) -> Self::StateQueries {
+        EthTrieStateQueries::new(
+            state::HeedStateRootIndex::new(db()),
+            TRIE_DB.clone(),
+            genesis_config.initial_state_root,
+        )
+    }
+
+    fn storage_trie_repository(&self) -> Self::StorageTrieRepository {
+        evm::HeedStorageTrieRepository::new(Database.clone())
+    }
+
+    fn transaction_queries() -> Self::TransactionQueries {
+        transaction::HeedTransactionQueries::new()
+    }
+
+    fn transaction_repository() -> Self::TransactionRepository {
+        transaction::HeedTransactionRepository::new()
+    }
+
+    impl_shared!();
+}
+
+impl umi_app::Dependencies for HeedReaderDependencies {
+    type BlockQueries = block::HeedBlockQueries<'static>;
+    type BlockRepository = block::HeedBlockRepository<'static>;
+    type BlockHashLookup =
+        umi_app::SharedHybridBlockHashCache<'static, Self::SharedStorageReader, Self::BlockQueries>;
+    type BlockHashWriter =
+        umi_app::SharedHybridBlockHashCache<'static, Self::SharedStorageReader, Self::BlockQueries>;
+    type OnPayload = umi_app::OnPayload<Application<Self>>;
+    type OnTx = umi_app::OnTx<Application<Self>>;
+    type OnTxBatch = umi_app::OnTxBatch<Application<Self>>;
+    type PayloadQueries = payload::HeedPayloadQueries<'static>;
+    type ReceiptQueries = receipt::HeedReceiptQueries<'static>;
+    type ReceiptRepository = receipt::HeedReceiptRepository<'static>;
+    type ReceiptStorage = &'static umi_storage_heed::Env;
+    type SharedStorage = &'static umi_storage_heed::Env;
+    type ReceiptStorageReader = &'static umi_storage_heed::Env;
+    type SharedStorageReader = &'static umi_storage_heed::Env;
+    type State = EthTrieState<trie::HeedEthTrieDb<'static>>;
+    type StateQueries =
+        EthTrieStateQueries<state::HeedStateRootIndex<'static>, trie::HeedEthTrieDb<'static>>;
+    type StorageTrieRepository = evm::HeedStorageTrieRepository;
+    type TransactionQueries = transaction::HeedTransactionQueries<'static>;
+    type TransactionRepository = transaction::HeedTransactionRepository<'static>;
+
+    fn block_queries() -> Self::BlockQueries {
+        block::HeedBlockQueries::new()
+    }
+
+    fn block_repository() -> Self::BlockRepository {
+        block::HeedBlockRepository::new()
+    }
+
+    fn on_payload() -> &'static Self::OnPayload {
+        &|state, id, hash| state.payload_queries.add_block_hash(id, hash).unwrap()
+    }
+
+    fn on_tx() -> &'static Self::OnTx {
+        CommandActor::on_tx_noop()
+    }
+
+    fn on_tx_batch() -> &'static Self::OnTxBatch {
+        &|state| {
+            state
+                .state_queries
+                .push_state_root(state.state.state_root())
+                .unwrap()
+        }
+    }
+
+    fn block_hash_lookup(&self) -> Self::BlockHashLookup {
+        HYBRID_BLOCK_HASH_CACHE.clone()
+    }
+
+    fn block_hash_writer(&self) -> Self::BlockHashWriter {
+        HYBRID_BLOCK_HASH_CACHE.clone()
     }
 
     fn payload_queries() -> Self::PayloadQueries {
@@ -146,6 +285,24 @@ lazy_static::lazy_static! {
         Arc::new(trie::HeedEthTrieDb::new(db()))
     };
 }
+
+pub static BLOCK_HASH_CACHE: LazyLock<SharedBlockHashCache> = LazyLock::new(|| {
+    let queries = Box::leak(Box::new(block::HeedBlockQueries::new()));
+    let db_ref = Box::leak(Box::new(db()));
+    SharedBlockHashCache::initialize_from_storage(db_ref, queries)
+});
+
+pub static HYBRID_BLOCK_HASH_CACHE: LazyLock<
+    SharedHybridBlockHashCache<
+        'static,
+        &'static umi_storage_heed::Env,
+        block::HeedBlockQueries<'static>,
+    >,
+> = LazyLock::new(|| {
+    let queries = Box::leak(Box::new(block::HeedBlockQueries::new()));
+    let db_ref = Box::leak(Box::new(db()));
+    SharedHybridBlockHashCache::initialize_from_storage(db_ref, queries)
+});
 
 fn db() -> &'static umi_storage_heed::Env {
     &Database

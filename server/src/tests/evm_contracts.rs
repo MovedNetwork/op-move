@@ -20,6 +20,7 @@ mod evm_contract {
         // This contract has one function which uses the `BLOCKHASH` EVM opcode
         // to try to get the hash for block number 3. It emits the response
         // as an event.
+        #[derive(Debug)]
         contract BlockHash {
             event TheHash (
                 bytes32 indexed hash

@@ -16,6 +16,8 @@ impl Dependencies for Uninitialized {
     type BaseTokenAccounts = ();
     type BlockHash = B256;
     type BlockQueries = ();
+    type BlockHashLookup = ();
+    type BlockHashWriter = ();
     type BlockRepository = ();
     type OnPayload = crate::OnPayload<Application<Self>>;
     type OnTx = crate::OnTx<Application<Self>>;
@@ -43,6 +45,10 @@ impl Dependencies for Uninitialized {
     }
 
     fn block_queries() -> Self::BlockQueries {}
+
+    fn block_hash_lookup(&self) -> Self::BlockHashLookup {}
+
+    fn block_hash_writer(&self) -> Self::BlockHashWriter {}
 
     fn block_repository() -> Self::BlockRepository {}
 

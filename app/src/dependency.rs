@@ -11,6 +11,7 @@ pub struct ApplicationReader<D: Dependencies> {
     pub genesis_config: GenesisConfig,
     pub base_token: D::BaseTokenAccounts,
     pub block_queries: D::BlockQueries,
+    pub block_hash_lookup: D::BlockHashLookup,
     pub payload_queries: D::PayloadQueries,
     pub receipt_queries: D::ReceiptQueries,
     pub receipt_memory: D::ReceiptStorageReader,
@@ -28,6 +29,7 @@ impl<D: Dependencies> Clone for ApplicationReader<D> {
             genesis_config: self.genesis_config.clone(),
             base_token: self.base_token.clone(),
             block_queries: self.block_queries.clone(),
+            block_hash_lookup: self.block_hash_lookup.clone(),
             payload_queries: self.payload_queries.clone(),
             receipt_queries: self.receipt_queries.clone(),
             receipt_memory: self.receipt_memory.clone(),
@@ -44,6 +46,7 @@ impl<D: Dependencies> ApplicationReader<D> {
         Self {
             genesis_config: genesis_config.clone(),
             base_token: D::base_token_accounts(genesis_config),
+            block_hash_lookup: deps.block_hash_lookup(),
             block_queries: D::block_queries(),
             payload_queries: D::payload_queries(),
             receipt_queries: D::receipt_queries(),
@@ -59,6 +62,8 @@ impl<D: Dependencies> ApplicationReader<D> {
 pub struct Application<D: Dependencies> {
     pub genesis_config: GenesisConfig,
     pub mem_pool: Mempool,
+    pub block_hash_writer: D::BlockHashWriter,
+    pub block_hash_lookup: D::BlockHashLookup,
     pub gas_fee: D::BaseGasFee,
     pub base_token: D::BaseTokenAccounts,
     pub l1_fee: D::CreateL1GasFee,
@@ -92,6 +97,8 @@ impl<D: Dependencies> Application<D> {
         Self {
             genesis_config: genesis_config.clone(),
             mem_pool: Mempool::default(),
+            block_hash_writer: deps.block_hash_writer(),
+            block_hash_lookup: deps.block_hash_lookup(),
             gas_fee: D::base_gas_fee(),
             base_token: D::base_token_accounts(genesis_config),
             l1_fee: D::create_l1_gas_fee(),
@@ -127,6 +134,8 @@ pub trait DependenciesThreadSafe:
     Dependencies<
         BaseTokenAccounts: Send + 'static,
         BlockHash: Send + 'static,
+        BlockHashLookup: Send + 'static,
+        BlockHashWriter: Send + 'static,
         BlockQueries: Send + 'static,
         BlockRepository: Send + 'static,
         OnPayload: Send + Sync + 'static,
@@ -156,6 +165,8 @@ impl<
     T: Dependencies<
             BaseTokenAccounts: Send + 'static,
             BlockHash: Send + 'static,
+            BlockHashLookup: Send + 'static,
+            BlockHashWriter: Send + 'static,
             BlockQueries: Send + 'static,
             BlockRepository: Send + 'static,
             OnPayload: Send + Sync + 'static,
@@ -185,6 +196,8 @@ impl<
 pub trait Dependencies {
     type BaseTokenAccounts: umi_execution::BaseTokenAccounts + Clone;
     type BlockHash: umi_blockchain::block::BlockHash;
+    type BlockHashLookup: umi_evm_ext::state::BlockHashLookup + Clone;
+    type BlockHashWriter: umi_evm_ext::state::BlockHashWriter + Clone;
     type BlockQueries: umi_blockchain::block::BlockQueries<Storage = Self::SharedStorageReader>
         + Clone;
     type BlockRepository: umi_blockchain::block::BlockRepository<Storage = Self::SharedStorage>;
@@ -220,6 +233,10 @@ pub trait Dependencies {
     fn base_token_accounts(genesis_config: &GenesisConfig) -> Self::BaseTokenAccounts;
 
     fn block_hash() -> Self::BlockHash;
+
+    fn block_hash_lookup(&self) -> Self::BlockHashLookup;
+
+    fn block_hash_writer(&self) -> Self::BlockHashWriter;
 
     fn block_queries() -> Self::BlockQueries;
 
@@ -265,7 +282,7 @@ pub trait Dependencies {
 #[cfg(any(feature = "test-doubles", test))]
 mod test_doubles {
     use {
-        crate::{Application, Dependencies},
+        crate::{Application, Dependencies, SharedBlockHashCache},
         umi_blockchain::state::StateQueries,
         umi_genesis::config::GenesisConfig,
         umi_shared::primitives::U256,
@@ -277,6 +294,8 @@ mod test_doubles {
         S = umi_state::InMemoryState,
         BT = umi_execution::UmiBaseTokenAccounts,
         BH = umi_blockchain::block::UmiBlockHash,
+        BHL = SharedBlockHashCache,
+        BHW = SharedBlockHashCache,
         BQ = umi_blockchain::block::InMemoryBlockQueries,
         BR = umi_blockchain::block::InMemoryBlockRepository,
         PQ = umi_blockchain::payload::InMemoryPayloadQueries,
@@ -297,6 +316,8 @@ mod test_doubles {
         S,
         BT,
         BH,
+        BHL,
+        BHW,
         BQ,
         BR,
         PQ,
@@ -319,6 +340,8 @@ mod test_doubles {
         S: State + Send + 'static,
         BT: umi_execution::BaseTokenAccounts + Clone + Send + 'static,
         BH: umi_blockchain::block::BlockHash + Send + 'static,
+        BHL: umi_evm_ext::state::BlockHashLookup + Clone + Send + 'static,
+        BHW: umi_evm_ext::state::BlockHashWriter + Clone + Send + 'static,
         BQ: umi_blockchain::block::BlockQueries<Storage = BMR> + Clone + Send + 'static,
         BR: umi_blockchain::block::BlockRepository<Storage = B> + Send + 'static,
         PQ: umi_blockchain::payload::PayloadQueries<Storage = BMR> + Clone + Send + 'static,
@@ -340,6 +363,8 @@ mod test_doubles {
             S,
             BT,
             BH,
+            BHL,
+            BHW,
             BQ,
             BR,
             PQ,
@@ -359,6 +384,8 @@ mod test_doubles {
     {
         type BaseTokenAccounts = BT;
         type BlockHash = BH;
+        type BlockHashLookup = BHL;
+        type BlockHashWriter = BHW;
         type BlockQueries = BQ;
         type BlockRepository = BR;
         type OnPayload = crate::OnPayload<Application<Self>>;
@@ -385,6 +412,14 @@ mod test_doubles {
         }
 
         fn block_hash() -> Self::BlockHash {
+            unimplemented!("Dependencies are created manually in tests")
+        }
+
+        fn block_hash_lookup(&self) -> Self::BlockHashLookup {
+            unimplemented!("Dependencies are created manually in tests")
+        }
+
+        fn block_hash_writer(&self) -> Self::BlockHashWriter {
             unimplemented!("Dependencies are created manually in tests")
         }
 

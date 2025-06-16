@@ -1,18 +1,18 @@
 use {serde::Deserialize, std::net::SocketAddr};
 
-#[derive(Deserialize, PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Config {
     pub auth: AuthSocket,
     pub http: HttpSocket,
 }
 
-#[derive(Deserialize, PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct AuthSocket {
     pub addr: SocketAddr,
     pub jwt_secret: String,
 }
 
-#[derive(Deserialize, PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct HttpSocket {
     pub addr: SocketAddr,
 }

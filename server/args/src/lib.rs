@@ -1,4 +1,4 @@
-pub use stack::{ConfigBuilder, Layer, MissingField};
+pub use stack::{ConfigBuilder, Layer};
 
 mod declaration;
 mod stack;

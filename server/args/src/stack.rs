@@ -1,6 +1,5 @@
 use {
     crate::declaration::{Config, OptionalConfig},
-    optional_struct::Applicable,
     std::{convert::Infallible, error::Error as StdError},
     thiserror::Error,
 };
@@ -62,20 +61,12 @@ impl<L> ConfigBuilder<L> {
     }
 }
 
-#[derive(Debug, Clone, Error)]
-#[error("Missing field")]
-pub struct MissingField;
-
 impl<L: Layer> ConfigBuilder<L> {
     pub fn try_build(self) -> Result<Config, Box<dyn StdError>>
     where
         <L as Layer>::Err: 'static,
     {
-        Ok(self
-            .0
-            .try_load()?
-            .try_into()
-            .map_err(|_| Box::new(MissingField))?)
+        Ok(self.0.try_load()?.try_into()?)
     }
 }
 

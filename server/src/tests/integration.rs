@@ -251,6 +251,7 @@ fn generate_jwt() -> Result<()> {
 }
 
 async fn start_geth() -> Result<Child> {
+    let geth_logs = File::create("geth.log").unwrap();
     let geth_process = Command::new("geth")
         .current_dir("src/tests/optimism/")
         .args([
@@ -270,6 +271,7 @@ async fn start_geth() -> Result<Child> {
             "--http.api",
             "web3,debug,eth,txpool,net,engine",
         ])
+        .stderr(geth_logs)
         .spawn()?;
     // Give a second to settle geth
     pause(Some(Duration::from_secs(GETH_START_IN_SECS)));

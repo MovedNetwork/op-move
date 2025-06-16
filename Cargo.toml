@@ -74,6 +74,7 @@ umi-evm-ext = { path = "evm-ext" }
 umi-execution = { path = "execution" }
 umi-genesis = { path = "genesis" }
 umi-genesis-image = { path = "genesis-image" }
+umi-server-args = { path = "server/args" }
 umi-shared = { path = "shared" }
 umi-state = { path = "state" }
 umi-storage-rocksdb = { path = "storage/rocksdb" }

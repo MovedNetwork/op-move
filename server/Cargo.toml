@@ -34,6 +34,7 @@ umi-storage-heed.optional = true
 umi-storage-heed.workspace = true
 umi-storage-rocksdb.optional = true
 umi-storage-rocksdb.workspace = true
+umi-server-args.workspace = true
 once_cell.workspace = true
 serde.workspace = true
 serde_json.workspace = true

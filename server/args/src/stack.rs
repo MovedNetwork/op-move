@@ -101,12 +101,14 @@ mod tests {
                 http: Some(OptionalHttpSocket {
                     addr: Some(overridden_http_addr),
                 }),
+                max_buffered_commands: Some(1),
             }))
             .layer(StubLayer(OptionalConfig {
                 auth: None,
                 http: Some(OptionalHttpSocket {
                     addr: Some(http_addr),
                 }),
+                max_buffered_commands: Some(10),
             }))
             .try_build()
             .unwrap();
@@ -116,6 +118,7 @@ mod tests {
                 jwt_secret: String::new(),
             },
             http: HttpSocket { addr: http_addr },
+            max_buffered_commands: 10,
         };
 
         assert_eq!(actual_config, expected_config);

@@ -37,6 +37,7 @@ mod tests {
             http: Some(OptionalHttpSocket {
                 addr: "0.0.0.0:1".parse().ok(),
             }),
+            ..Default::default()
         };
         let layer = DefaultLayer(expected_config.clone());
         let actual_config = layer.try_load().unwrap();

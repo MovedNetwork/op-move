@@ -21,6 +21,7 @@ fn test_config_parses_from_toml_successfully() {
         http: Some(OptionalHttpSocket {
             addr: Some("127.0.0.1:445".parse().unwrap()),
         }),
+        ..Default::default()
     };
 
     assert_eq!(actual_config, expected_config);

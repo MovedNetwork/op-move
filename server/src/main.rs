@@ -1,7 +1,17 @@
+use {
+    umi_server::DEFAULTS,
+    umi_server_args::{CliLayer, ConfigBuilder, EnvLayer, FileLayer},
+};
+
 #[tokio::main]
 async fn main() {
-    // TODO: think about channel size bound
-    let max_buffered_commands = 1_000;
+    let args = ConfigBuilder::new()
+        .layer(DEFAULTS)
+        .layer(FileLayer::toml())
+        .layer(EnvLayer::new())
+        .layer(CliLayer::new())
+        .try_build()
+        .unwrap();
 
-    umi_server::run(max_buffered_commands).await;
+    umi_server::run(args).await;
 }

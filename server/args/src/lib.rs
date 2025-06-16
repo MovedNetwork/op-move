@@ -1,4 +1,5 @@
 pub use {
+    declaration::*,
     layers::{CliLayer, DefaultLayer, EnvLayer, FileLayer},
     stack::{ConfigBuilder, Layer},
 };

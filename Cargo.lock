@@ -12492,6 +12492,7 @@ dependencies = [
  "umi-execution",
  "umi-genesis",
  "umi-genesis-image",
+ "umi-server-args",
  "umi-shared",
  "umi-state",
  "umi-storage-heed",

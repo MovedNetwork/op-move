@@ -9,6 +9,7 @@ use {
 pub struct Config {
     pub auth: AuthSocket,
     pub http: HttpSocket,
+    pub max_buffered_commands: u32,
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -28,6 +29,8 @@ pub struct OptionalConfig {
     pub auth: Option<OptionalAuthSocket>,
     #[command(flatten)]
     pub http: Option<OptionalHttpSocket>,
+    #[arg(long)]
+    pub max_buffered_commands: Option<u32>,
 }
 
 #[derive(Deserialize, Args, PartialEq, Debug, Clone, Default)]
@@ -55,6 +58,9 @@ impl TryFrom<OptionalConfig> for Config {
         Ok(Self {
             auth: value.auth.ok_or(MissingField("auth"))?.try_into()?,
             http: value.http.ok_or(MissingField("http"))?.try_into()?,
+            max_buffered_commands: value
+                .max_buffered_commands
+                .ok_or(MissingField("max_buffered_commands"))?,
         })
     }
 }
@@ -90,6 +96,7 @@ impl OptionalConfig {
             (Some(ours), Some(theirs)) => Some(ours.apply(theirs)),
             (ours, theirs) => theirs.or(ours),
         };
+        self.max_buffered_commands = other.max_buffered_commands.or(self.max_buffered_commands);
         self
     }
 }

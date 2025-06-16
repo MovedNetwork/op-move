@@ -43,6 +43,7 @@ mod tests {
             http: Some(OptionalHttpSocket {
                 addr: "0.0.0.0:1".parse().ok(),
             }),
+            ..Default::default()
         };
 
         assert_eq!(actual_config, expected_config);

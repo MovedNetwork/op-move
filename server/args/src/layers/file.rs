@@ -1,6 +1,12 @@
 use {
     crate::{declaration::OptionalConfig, stack::Layer},
-    std::{error::Error as StdError, path::Path},
+    serde::de::Error,
+    std::{
+        error::Error as StdError,
+        fs::File,
+        io::{self, Read},
+        path::Path,
+    },
 };
 
 #[derive(Debug, Clone)]
@@ -15,6 +21,21 @@ impl<Parser> FileLayer<Parser> {
             path: path.as_ref().into(),
             parser,
         }
+    }
+}
+
+impl FileLayer<()> {
+    pub fn toml() -> FileLayer<impl FnOnce(Box<Path>) -> Result<OptionalConfig, toml::de::Error>> {
+        FileLayer::new("Config.toml", |path| match File::open(path) {
+            Ok(mut file) => {
+                let mut toml = String::new();
+                file.read_to_string(&mut toml)
+                    .map_err(toml::de::Error::custom)?;
+                toml::from_str(toml.as_str())
+            }
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(OptionalConfig::default()),
+            Err(e) => Err(toml::de::Error::custom(e)),
+        })
     }
 }
 

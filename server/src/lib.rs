@@ -1,9 +1,7 @@
 use {
     crate::mirror::MirrorLog,
-    clap::Parser,
     flate2::read::GzDecoder,
     jsonwebtoken::{DecodingKey, Validation},
-    once_cell::sync::Lazy,
     std::{
         fs,
         future::Future,
@@ -41,12 +39,6 @@ mod mirror;
 #[cfg(test)]
 mod tests;
 
-#[derive(Parser)]
-struct Args {
-    #[arg(short, long)]
-    jwtsecret: String,
-}
-
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 struct Claims {
     iat: u64,
@@ -74,16 +66,6 @@ const EIP1559_ELASTICITY_MULTIPLIER: u64 = 6;
 const EIP1559_BASE_FEE_MAX_CHANGE_DENOMINATOR: U256 = U256::from_limbs([250, 0, 0, 0]);
 const JWT_VALID_DURATION_IN_SECS: u64 = 60;
 
-/// JWT secret key is either passed in as an env var `JWT_SECRET` or file path arg `--jwtsecret`
-static JWTSECRET: Lazy<Vec<u8>> = Lazy::new(|| {
-    let mut jwt = std::env::var("JWT_SECRET").unwrap_or_default();
-    if jwt.is_empty() {
-        let args = Args::parse();
-        jwt = fs::read_to_string(args.jwtsecret).expect("JWT file should exist");
-    }
-    hex::decode(jwt).expect("JWT secret should be a hex string")
-});
-
 pub async fn run(args: Config) {
     // TODO: genesis should come from a file (path specified by CLI)
     let genesis_config = GenesisConfig {
@@ -105,6 +87,7 @@ pub async fn run(args: Config) {
         move || ApplicationReader::new(deps, &genesis_config)
     };
     let app = move || Application::new(deps, &genesis_config).with_genesis(&genesis_config);
+    let jwt = DecodingKey::from_secret(hex::decode(args.auth.jwt_secret).unwrap().as_slice());
 
     umi_app::run(
         (reader, app),
@@ -112,8 +95,15 @@ pub async fn run(args: Config) {
         |queue, reader| {
             tokio::spawn(async move {
                 tokio::join!(
-                    serve(args.http.addr, &queue, &reader, "9545", &allow::http),
-                    serve(args.auth.addr, &queue, &reader, "9551", &allow::auth),
+                    serve(args.http.addr, &queue, &reader, "9545", &allow::http, None),
+                    serve(
+                        args.auth.addr,
+                        &queue,
+                        &reader,
+                        "9551",
+                        &allow::auth,
+                        Some(jwt)
+                    ),
                 );
             })
         },
@@ -128,6 +118,7 @@ fn serve(
     reader: &ApplicationReader<dependency::ReaderDependency>,
     port: &'static str,
     is_allowed: &'static (impl Fn(&MethodName) -> bool + Send + Sync),
+    jwt: Option<DecodingKey>,
 ) -> impl Future<Output = ()> {
     let services = (queue.clone(), reader.clone());
     let content_type =
@@ -136,16 +127,19 @@ fn serve(
     let route = warp::any()
         .map(move || services.clone())
         .and(extract_request_data_filter())
-        .and_then(move |(queue, reader), path, query, method, headers, body| {
-            mirror(
-                queue,
-                (path, query, method, headers, body),
-                port,
-                is_allowed,
-                &StatePayloadId,
-                reader,
-            )
-        })
+        .and(validate_jwt(jwt))
+        .and_then(
+            move |(queue, reader), path, query, method, headers, body, _| {
+                mirror(
+                    queue,
+                    (path, query, method, headers, body),
+                    port,
+                    is_allowed,
+                    &StatePayloadId,
+                    reader,
+                )
+            },
+        )
         .with(warp::reply::with::headers(content_type))
         .with(warp::cors().allow_any_origin());
 
@@ -239,28 +233,44 @@ fn create_genesis_block(
     genesis_block.with_hash(hash).with_value(U256::ZERO)
 }
 
-pub fn validate_jwt() -> impl Filter<Extract = (String,), Error = Rejection> + Clone {
-    warp::header::<String>("authorization").and_then(|token: String| async move {
-        // Token is embedded as a string in the form of `Bearer the.actual.token`
-        let token = token.trim_start_matches("Bearer ").to_string();
-        let mut validation = Validation::default();
-        // OP node only sends `issued at` claims in the JWT token
-        validation.set_required_spec_claims(&["iat"]);
-        let decoded = jsonwebtoken::decode::<Claims>(
-            &token,
-            &DecodingKey::from_secret(&JWTSECRET),
-            &validation,
-        );
-        let iat = decoded.map_err(|_| warp::reject::reject())?.claims.iat;
-        let now = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .expect("Current system time should be available")
-            .as_secs();
-        if now > iat + JWT_VALID_DURATION_IN_SECS {
-            return Err(warp::reject::reject());
-        }
-        Ok(token)
-    })
+pub fn validate_jwt(
+    secret: Option<DecodingKey>,
+) -> impl Filter<Extract = (Option<String>,), Error = Rejection> + Clone {
+    let is_unprotected = secret.is_none();
+
+    warp::header::<String>("authorization")
+        .map(Some)
+        .or_else(move |err| async move {
+            if is_unprotected {
+                Ok((None,))
+            } else {
+                Err(err)
+            }
+        })
+        .and_then(move |token: Option<String>| {
+            let secret = secret.clone();
+
+            async move {
+                let Some((secret, token)) = secret.zip(token) else {
+                    return Ok(None);
+                };
+                // Token is embedded as a string in the form of `Bearer the.actual.token`
+                let token = token.trim_start_matches("Bearer ").to_string();
+                let mut validation = Validation::default();
+                // OP node only sends `issued at` claims in the JWT token
+                validation.set_required_spec_claims(&["iat"]);
+                let decoded = jsonwebtoken::decode::<Claims>(&token, &secret, &validation);
+                let iat = decoded.map_err(|_| warp::reject::reject())?.claims.iat;
+                let now = SystemTime::now()
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .expect("Current system time should be available")
+                    .as_secs();
+                if now > iat + JWT_VALID_DURATION_IN_SECS {
+                    return Err(warp::reject::reject());
+                }
+                Ok(Some(token))
+            }
+        })
 }
 
 async fn mirror(

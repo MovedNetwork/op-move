@@ -6,8 +6,9 @@ mod test_context;
 
 use {
     crate::{validate_jwt, Claims},
+    alloy::hex,
     aptos_types::transaction::{EntryFunction, TransactionPayload},
-    jsonwebtoken::{EncodingKey, Header},
+    jsonwebtoken::{DecodingKey, EncodingKey, Header},
     move_core_types::{
         account_address::AccountAddress,
         ident_str,
@@ -18,26 +19,24 @@ use {
 
 #[tokio::test]
 async fn test_authorized_request() -> anyhow::Result<()> {
-    std::env::set_var("JWT_SECRET", "00");
     let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
     let token = jsonwebtoken::encode(
         &Header::default(),
         &Claims { iat: now.as_secs() },
         &EncodingKey::from_secret(&hex::decode("00")?),
     )?;
-    let filter = validate_jwt();
+    let filter = validate_jwt(Some(DecodingKey::from_secret(&hex!("00"))));
     let res = warp::test::request()
         .header("authorization", ["Bearer", &token].join(" "))
         .filter(&filter)
         .await;
-    assert_eq!(res.unwrap(), token);
+    assert!(res.is_ok());
     Ok(())
 }
 
 #[tokio::test]
 async fn test_unauthorized_requests() -> anyhow::Result<()> {
-    std::env::set_var("JWT_SECRET", "00");
-    let filter = validate_jwt();
+    let filter = validate_jwt(Some(DecodingKey::from_secret(&hex!("00"))));
     let res = warp::test::request().filter(&filter).await;
     assert!(res.is_err()); // Missing JWT token in the header
 

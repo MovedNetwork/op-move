@@ -6,5 +6,4 @@ edition = "2021"
 
 [dependencies]
 toml.workspace = true
-optional_struct.workspace = true
 serde.workspace = true

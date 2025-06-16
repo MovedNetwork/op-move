@@ -1,25 +1,35 @@
-use {optional_struct::Applicable, serde::Deserialize, std::net::SocketAddr};
+use {serde::Deserialize, std::net::SocketAddr};
 
-#[optional_struct::optional_struct]
 #[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct Config {
-    #[optional_rename(OptionalAuthSocket)]
-    #[optional_wrap]
     pub auth: AuthSocket,
-    #[optional_rename(OptionalHttpSocket)]
-    #[optional_wrap]
     pub http: HttpSocket,
 }
 
-#[optional_struct::optional_struct]
+#[derive(Deserialize, PartialEq, Debug, Clone)]
+pub struct AuthSocket {
+    pub addr: SocketAddr,
+    pub jwt_secret: String,
+}
+
 #[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct HttpSocket {
     pub addr: SocketAddr,
 }
 
-#[optional_struct::optional_struct]
 #[derive(Deserialize, PartialEq, Debug, Clone)]
-pub struct AuthSocket {
-    pub addr: SocketAddr,
-    pub jwt_secret: String,
+pub struct OptionalConfig {
+    pub auth: Option<OptionalAuthSocket>,
+    pub http: Option<OptionalHttpSocket>,
+}
+
+#[derive(Deserialize, PartialEq, Debug, Clone)]
+pub struct OptionalAuthSocket {
+    pub addr: Option<SocketAddr>,
+    pub jwt_secret: Option<String>,
+}
+
+#[derive(Deserialize, PartialEq, Debug, Clone)]
+pub struct OptionalHttpSocket {
+    pub addr: Option<SocketAddr>,
 }

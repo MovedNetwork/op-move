@@ -101,7 +101,6 @@ warp = "0.3"
 warp-reverse-proxy = "1"
 evmap = "10"
 toml = "0.8"
-optional_struct = "0.5"
 
 [patch.crates-io]
 merlin = { git = "https://github.com/aptos-labs/merlin" }

@@ -12494,6 +12494,7 @@ dependencies = [
 name = "umi-server-args"
 version = "0.1.0"
 dependencies = [
+ "clap 4.5.39",
  "serde",
  "thiserror 1.0.69",
  "toml 0.8.23",

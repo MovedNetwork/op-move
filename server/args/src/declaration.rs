@@ -1,4 +1,9 @@
-use {serde::Deserialize, std::net::SocketAddr, thiserror::Error};
+use {
+    clap::{Args, Parser},
+    serde::Deserialize,
+    std::net::SocketAddr,
+    thiserror::Error,
+};
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct Config {
@@ -17,20 +22,25 @@ pub struct HttpSocket {
     pub addr: SocketAddr,
 }
 
-#[derive(Deserialize, PartialEq, Debug, Clone, Default)]
+#[derive(Deserialize, Parser, PartialEq, Debug, Clone, Default)]
 pub struct OptionalConfig {
+    #[command(flatten)]
     pub auth: Option<OptionalAuthSocket>,
+    #[command(flatten)]
     pub http: Option<OptionalHttpSocket>,
 }
 
-#[derive(Deserialize, PartialEq, Debug, Clone, Default)]
+#[derive(Deserialize, Args, PartialEq, Debug, Clone, Default)]
 pub struct OptionalAuthSocket {
+    #[arg(long = "auth.addr", id = "auth.addr")]
     pub addr: Option<SocketAddr>,
+    #[arg(long = "auth.jwt-secret", id = "auth.jwt-secret")]
     pub jwt_secret: Option<String>,
 }
 
-#[derive(Deserialize, PartialEq, Debug, Clone, Default)]
+#[derive(Deserialize, Args, PartialEq, Debug, Clone, Default)]
 pub struct OptionalHttpSocket {
+    #[arg(long = "http.addr", id = "http.addr")]
     pub addr: Option<SocketAddr>,
 }
 

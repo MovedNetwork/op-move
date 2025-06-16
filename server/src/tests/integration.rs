@@ -1,4 +1,5 @@
 use {
+    crate::DEFAULTS,
     alloy::{
         contract::CallBuilder,
         dyn_abi::EventExt,
@@ -28,6 +29,7 @@ use {
     },
     tokio::{fs, runtime::Runtime},
     umi_execution::transaction::{ScriptOrDeployment, TransactionData},
+    umi_server_args::{ConfigBuilder, DefaultLayer, OptionalAuthSocket, OptionalConfig},
     umi_shared::primitives::ToMoveAddress,
 };
 
@@ -66,7 +68,7 @@ async fn test_on_ethereum() -> Result<()> {
 
     // 6. Generate genesis and jwt files and copy under deployments
     generate_genesis();
-    generate_jwt()?;
+    let jwt_secret = generate_jwt()?;
 
     // Background task to send transactions to L1 at regular intervals.
     // This ensures the L1 will consistently be producing blocks which
@@ -78,7 +80,19 @@ async fn test_on_ethereum() -> Result<()> {
 
     // 8. Start op-move to accept requests from the sequencer
     let op_move_runtime = Runtime::new()?;
-    op_move_runtime.spawn(crate::run(1_000));
+    op_move_runtime.spawn(crate::run(
+        ConfigBuilder::new()
+            .layer(DEFAULTS)
+            .layer(DefaultLayer::new(OptionalConfig {
+                auth: Some(OptionalAuthSocket {
+                    jwt_secret: Some(jwt_secret),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }))
+            .try_build()
+            .unwrap(),
+    ));
 
     // 9. In separate threads run op-node, op-batcher, op-proposer
     let (op_node, op_batcher, op_proposer) = run_op()?;
@@ -240,14 +254,15 @@ fn generate_genesis() {
     check_output(output);
 }
 
-fn generate_jwt() -> Result<()> {
+fn generate_jwt() -> Result<String> {
     let mut jwt = [0; 32]; // 32 byte, u256 random authentication key
     rand_bytes(&mut jwt).unwrap();
     let mut f = File::create("src/tests/optimism/packages/contracts-bedrock/deployments/jwt.txt")?;
     f.write_all(hex::encode(jwt).as_bytes())?;
     // Set the env var to read the same secret key from the op-move main method
-    set_var("JWT_SECRET", hex::encode(jwt));
-    Ok(())
+    let jwt_secret = hex::encode(jwt);
+    set_var("JWT_SECRET", &jwt_secret);
+    Ok(jwt_secret)
 }
 
 async fn start_geth() -> Result<Child> {

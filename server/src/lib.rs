@@ -18,6 +18,9 @@ use {
         payload::{NewPayloadId, StatePayloadId},
     },
     umi_genesis::config::GenesisConfig,
+    umi_server_args::{
+        Config, DefaultLayer, OptionalAuthSocket, OptionalConfig, OptionalHttpSocket,
+    },
     umi_shared::primitives::U256,
     warp::{
         http::{header::CONTENT_TYPE, HeaderMap, HeaderValue, StatusCode},
@@ -49,9 +52,28 @@ struct Claims {
     iat: u64,
 }
 
+pub const DEFAULTS: DefaultLayer = DefaultLayer::new(OptionalConfig {
+    auth: Some(OptionalAuthSocket {
+        addr: Some(SocketAddr::V4(SocketAddrV4::new(
+            Ipv4Addr::new(0, 0, 0, 0),
+            8551,
+        ))),
+        jwt_secret: None,
+    }),
+    http: Some(OptionalHttpSocket {
+        addr: Some(SocketAddr::V4(SocketAddrV4::new(
+            Ipv4Addr::new(0, 0, 0, 0),
+            8545,
+        ))),
+    }),
+    // TODO: think about channel size bound
+    max_buffered_commands: Some(1_000),
+});
+
 const EIP1559_ELASTICITY_MULTIPLIER: u64 = 6;
 const EIP1559_BASE_FEE_MAX_CHANGE_DENOMINATOR: U256 = U256::from_limbs([250, 0, 0, 0]);
 const JWT_VALID_DURATION_IN_SECS: u64 = 60;
+
 /// JWT secret key is either passed in as an env var `JWT_SECRET` or file path arg `--jwtsecret`
 static JWTSECRET: Lazy<Vec<u8>> = Lazy::new(|| {
     let mut jwt = std::env::var("JWT_SECRET").unwrap_or_default();
@@ -62,7 +84,7 @@ static JWTSECRET: Lazy<Vec<u8>> = Lazy::new(|| {
     hex::decode(jwt).expect("JWT secret should be a hex string")
 });
 
-pub async fn run(max_buffered_commands: u32) {
+pub async fn run(args: Config) {
     // TODO: genesis should come from a file (path specified by CLI)
     let genesis_config = GenesisConfig {
         chain_id: 42069,
@@ -84,17 +106,18 @@ pub async fn run(max_buffered_commands: u32) {
     };
     let app = move || Application::new(deps, &genesis_config).with_genesis(&genesis_config);
 
-    umi_app::run((reader, app), max_buffered_commands, |queue, reader| {
-        tokio::spawn(async move {
-            let auth = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 8551));
-            let http = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), 8545));
-
-            tokio::join!(
-                serve(http, &queue, &reader, "9545", &allow::http),
-                serve(auth, &queue, &reader, "9551", &allow::auth),
-            );
-        })
-    })
+    umi_app::run(
+        (reader, app),
+        args.max_buffered_commands,
+        |queue, reader| {
+            tokio::spawn(async move {
+                tokio::join!(
+                    serve(args.http.addr, &queue, &reader, "9545", &allow::http),
+                    serve(args.auth.addr, &queue, &reader, "9551", &allow::auth),
+                );
+            })
+        },
+    )
     .await
     .unwrap();
 }

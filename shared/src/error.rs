@@ -79,6 +79,8 @@ pub enum UserError {
     PartialVm(#[from] PartialVMError),
     #[error("Could not recover tx signer: {0}")]
     InvalidSignature(#[from] alloy::primitives::SignatureError),
+    #[error("Could not decode RLP bytes: {0}")]
+    RLPError(#[from] alloy::rlp::Error),
     #[error("Error during EVM execution for L2 bridge {0:?}")]
     DepositFailure(Vec<u8>),
     #[error("L2 contract call failure")]
@@ -164,8 +166,6 @@ pub enum InvariantViolation {
     EntryFunctionValue(EntryFunctionValue),
     #[error("Script transaction invariant violation: {0}")]
     ScriptTransaction(ScriptTransaction),
-    #[error("Mempool admitted transactions cannot be deposited")]
-    MempoolTransaction,
     #[error("State key must be created to charge gas for change set")]
     StateKey,
     #[error("Error retrieving state from DB")]

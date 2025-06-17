@@ -57,7 +57,7 @@ impl PayloadQueries for HeedPayloadQueries {
                 let transactions = block
                     .transaction_hashes()
                     .filter_map(|hash| db.get(&transaction, &hash).transpose())
-                    .map(|v| v.map(|v| v.inner))
+                    .map(|v| v.map(|v| v.inner.into()))
                     .collect::<Result<Vec<_>, _>>()?;
 
                 Ok(PayloadResponse::from_block_with_transactions(

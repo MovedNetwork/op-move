@@ -1,23 +1,25 @@
 use {
-    alloy::eips::eip2718::Encodable2718,
-    op_alloy::consensus::{OpTxEnvelope, TxDeposit},
+    alloy::primitives::Address,
+    op_alloy::consensus::TxDeposit,
+    serde::{Deserialize, Serialize},
     std::fmt::Debug,
+    umi_execution::transaction::NormalizedExtendedTxEnvelope,
     umi_shared::primitives::{B256, U256},
 };
 
-#[derive(Debug, Clone, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ExtendedTransaction {
-    pub inner: OpTxEnvelope,
+    pub inner: NormalizedExtendedTxEnvelope,
     pub block_number: u64,
     pub block_hash: B256,
     pub transaction_index: u64,
-    pub effective_gas_price: u128,
+    pub effective_gas_price: U256,
 }
 
 impl ExtendedTransaction {
     pub fn new(
-        effective_gas_price: u128,
-        inner: OpTxEnvelope,
+        effective_gas_price: U256,
+        inner: NormalizedExtendedTxEnvelope,
         block_number: u64,
         block_hash: B256,
         transaction_index: u64,
@@ -31,20 +33,11 @@ impl ExtendedTransaction {
         }
     }
 
-    pub fn from(
-        &self,
-    ) -> Result<umi_shared::primitives::Address, alloy::primitives::SignatureError> {
-        match self.inner() {
-            OpTxEnvelope::Legacy(tx) => tx.recover_signer(),
-            OpTxEnvelope::Eip1559(tx) => tx.recover_signer(),
-            OpTxEnvelope::Eip2930(tx) => tx.recover_signer(),
-            OpTxEnvelope::Eip7702(tx) => tx.recover_signer(),
-            OpTxEnvelope::Deposit(tx) => Ok(tx.from),
+    pub fn from(&self) -> Address {
+        match &self.inner {
+            NormalizedExtendedTxEnvelope::Canonical(tx) => tx.signer,
+            NormalizedExtendedTxEnvelope::DepositedTx(tx) => tx.from,
         }
-    }
-
-    pub fn inner(&self) -> &OpTxEnvelope {
-        &self.inner
     }
 
     pub fn hash(&self) -> B256 {
@@ -52,8 +45,8 @@ impl ExtendedTransaction {
     }
 
     pub fn deposit_nonce(&self) -> Option<VersionedNonce> {
-        if let OpTxEnvelope::Deposit(tx) = self.inner() {
-            inner_get_deposit_nonce(tx)
+        if let NormalizedExtendedTxEnvelope::DepositedTx(tx) = &self.inner {
+            inner_get_deposit_nonce(tx.inner())
         } else {
             None
         }

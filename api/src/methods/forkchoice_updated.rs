@@ -7,7 +7,7 @@ use {
             PayloadStatusV1, Status,
         },
     },
-    umi_app::{Command, CommandQueue, Payload, ToPayloadIdInput},
+    umi_app::{Command, CommandQueue, Payload, PayloadForExecution, ToPayloadIdInput},
     umi_blockchain::payload::NewPayloadId,
 };
 
@@ -24,7 +24,7 @@ pub async fn execute_v3(
 
 fn parse_params_v3(
     request: serde_json::Value,
-) -> Result<(ForkchoiceStateV1, Option<PayloadAttributesV3>), JsonRpcError> {
+) -> Result<(ForkchoiceStateV1, Option<PayloadForExecution>), JsonRpcError> {
     let params = json_utils::get_params_list(&request);
     match params {
         [] => Err(JsonRpcError::not_enough_params_error(request)),
@@ -35,7 +35,10 @@ fn parse_params_v3(
         [x, y] => {
             let fc_state: ForkchoiceStateV1 = json_utils::deserialize(x)?;
             let payload_attributes: Option<PayloadAttributesV3> = json_utils::deserialize(y)?;
-            Ok((fc_state, payload_attributes))
+            let exec_payload = payload_attributes
+                .map(|attrs| Payload::from(attrs).try_into())
+                .transpose()?;
+            Ok((fc_state, exec_payload))
         }
         _ => Err(JsonRpcError::too_many_params_error(request)),
     }
@@ -43,7 +46,7 @@ fn parse_params_v3(
 
 async fn inner_execute_v3(
     forkchoice_state: ForkchoiceStateV1,
-    payload_attributes: Option<PayloadAttributesV3>,
+    payload_attributes: Option<PayloadForExecution>,
     queue: CommandQueue,
     payload_id_generator: &impl NewPayloadId,
 ) -> Result<ForkchoiceUpdatedResponseV1, JsonRpcError> {
@@ -59,12 +62,10 @@ async fn inner_execute_v3(
 
     // If `payload_attributes` are present then tell state to start producing a new block
     let payload_id = if let Some(attrs) = payload_attributes {
-        let payload_attributes = Payload::from(attrs);
-        let payload_id = payload_id_generator.new_payload_id(
-            payload_attributes.to_payload_id_input(&forkchoice_state.head_block_hash),
-        );
+        let payload_id = payload_id_generator
+            .new_payload_id(attrs.to_payload_id_input(&forkchoice_state.head_block_hash));
         let msg = Command::StartBlockBuild {
-            payload_attributes,
+            payload_attributes: attrs,
             payload_id,
         };
         queue.send(msg).await;

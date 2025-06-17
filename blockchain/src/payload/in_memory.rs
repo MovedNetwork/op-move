@@ -28,7 +28,7 @@ impl InMemoryPayloadQueries {
             .transaction_memory
             .by_hashes(block.transaction_hashes())
             .into_iter()
-            .map(|v| v.inner);
+            .map(|v| v.inner.into());
 
         PayloadResponse::from_block_with_transactions(block, transactions)
     }

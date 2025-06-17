@@ -93,7 +93,8 @@ async fn test_on_ethereum() -> Result<()> {
     // 12. Cleanup generated files and folders
     hb.shutdown();
     cleanup_files();
-    cleanup_processes(op_move, vec![geth, op_geth, op_node, op_batcher, op_proposer])
+    op_move.shutdown_background();
+    cleanup_processes(vec![geth, op_geth, op_node, op_batcher, op_proposer])
 }
 
 fn check_env_vars() {
@@ -611,8 +612,7 @@ fn cleanup_files() {
     std::fs::remove_dir_all("src/tests/optimism/datadir").ok();
 }
 
-fn cleanup_processes(op_move: Runtime, processes: Vec<Child>) -> Result<()> {
-    op_move.shutdown_background();
+fn cleanup_processes(processes: Vec<Child>) -> Result<()> {
     for mut process in processes {
         process.kill()?;
     }

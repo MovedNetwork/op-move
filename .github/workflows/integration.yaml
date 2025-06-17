@@ -1,0 +1,24 @@
+name: Integration
+
+on:
+  schedule:
+    - cron: '0 4 * * *' # Run at 4 am UTC or around midnight EST
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  integration:
+    name: Integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1
+        with:
+          default: true
+          toolchain: stable
+      - name: Free up disk space
+        run: rm -rf /opt/hostedtoolcache
+      - name: Test
+        run: cargo test test_on_ethereum

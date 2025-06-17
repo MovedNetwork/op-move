@@ -1,15 +1,19 @@
 use {
     crate::dependency::shared::*,
-    std::{sync::Arc, time::Duration},
-    umi_app::{Application, ApplicationReader, CommandActor, SharedBlockHashCache},
+    std::{
+        sync::{Arc, LazyLock},
+        time::Duration,
+    },
+    umi_app::{Application, CommandActor, SharedBlockHashCache},
     umi_blockchain::state::EthTrieStateQueries,
     umi_genesis::config::GenesisConfig,
     umi_state::{EthTrieState, State},
 };
 
 pub type Dependency = RocksDbDependencies;
+pub type ReaderDependency = RocksDbReaderDependencies;
 
-pub fn dependencies() -> crate::dependency::Dependency {
+pub fn dependencies() -> Dependency {
     RocksDbDependencies
 }
 
@@ -18,8 +22,8 @@ pub struct RocksDbReaderDependencies;
 
 impl RocksDbDependencies {
     /// Creates a set of dependencies appropriate for usage in reader.
-    pub fn reader(&self) -> Self {
-        RocksDbDependencies
+    pub fn reader(&self) -> ReaderDependency {
+        RocksDbReaderDependencies
     }
 }
 
@@ -260,7 +264,7 @@ impl umi_app::Dependencies for RocksDbReaderDependencies {
         )
     }
 
-    fn storage_trie_repository() -> Self::StorageTrieRepository {
+    fn storage_trie_repository(&self) -> Self::StorageTrieRepository {
         umi_storage_rocksdb::evm::RocksDbStorageTrieRepository::new(Database.clone())
     }
 
@@ -285,21 +289,25 @@ lazy_static::lazy_static! {
 }
 
 pub static BLOCK_HASH_CACHE: LazyLock<SharedBlockHashCache> = LazyLock::new(|| {
-    let queries = Box::leak(Box::new(block::HeedBlockQueries::new()));
+    let queries = Box::leak(Box::new(
+        umi_storage_rocksdb::block::RocksDbBlockQueries::new(),
+    ));
     let db_ref = Box::leak(Box::new(db()));
     SharedBlockHashCache::initialize_from_storage(db_ref, queries)
 });
 
 pub static HYBRID_BLOCK_HASH_CACHE: LazyLock<
-    SharedHybridBlockHashCache<
+    umi_app::SharedHybridBlockHashCache<
         'static,
-        &'static umi_storage_heed::Env,
-        block::HeedBlockQueries<'static>,
+        &'static umi_storage_rocksdb::RocksDb,
+        umi_storage_rocksdb::block::RocksDbBlockQueries<'static>,
     >,
 > = LazyLock::new(|| {
-    let queries = Box::leak(Box::new(block::HeedBlockQueries::new()));
+    let queries = Box::leak(Box::new(
+        umi_storage_rocksdb::block::RocksDbBlockQueries::new(),
+    ));
     let db_ref = Box::leak(Box::new(db()));
-    SharedHybridBlockHashCache::initialize_from_storage(db_ref, queries)
+    umi_app::SharedHybridBlockHashCache::initialize_from_storage(db_ref, queries)
 });
 
 fn db() -> &'static umi_storage_rocksdb::RocksDb {

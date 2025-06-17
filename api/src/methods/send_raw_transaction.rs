@@ -1,7 +1,10 @@
 use {
     crate::{json_utils, jsonrpc::JsonRpcError},
-    alloy::{consensus::transaction::TxEnvelope, rlp::Decodable},
+    alloy::rlp::Decodable,
     umi_app::{Command, CommandQueue},
+    umi_execution::transaction::{
+        NormalizedEthTransaction, UmiTxEnvelope,
+    },
     umi_shared::primitives::{B256, Bytes},
 };
 
@@ -14,24 +17,34 @@ pub async fn execute(
     Ok(serde_json::to_value(response).expect("Must be able to JSON-serialize response"))
 }
 
-fn parse_params(request: serde_json::Value) -> Result<TxEnvelope, JsonRpcError> {
+fn parse_params(request: serde_json::Value) -> Result<NormalizedEthTransaction, JsonRpcError> {
     let params = json_utils::get_params_list(&request);
     match params {
         [] => Err(JsonRpcError::not_enough_params_error(request)),
         [x] => {
             let bytes: Bytes = json_utils::deserialize(x)?;
             let mut slice: &[u8] = bytes.as_ref();
-            let tx = TxEnvelope::decode(&mut slice).map_err(|e| {
-                JsonRpcError::parse_error(request, format!("RLP decode failed: {e}"))
-            })?;
-            Ok(tx)
+
+            // First decode to UmiTxEnvelope to reject unsupported types early
+            let umi_tx: UmiTxEnvelope = UmiTxEnvelope::decode(&mut slice)
+                .map_err(|e| {
+                    JsonRpcError::parse_error(
+                        request,
+                        format!("Unsupported or invalid transaction type: {e}"),
+                    )
+                })?;
+
+            // Normalize transaction at API border
+            let normalized_tx: NormalizedEthTransaction = umi_tx.try_into()?;
+
+            Ok(normalized_tx)
         }
         _ => Err(JsonRpcError::too_many_params_error(request)),
     }
 }
 
-async fn inner_execute(tx: TxEnvelope, queue: CommandQueue) -> Result<B256, JsonRpcError> {
-    let tx_hash = tx.tx_hash().0.into();
+async fn inner_execute(tx: NormalizedEthTransaction, queue: CommandQueue) -> Result<B256, JsonRpcError> {
+    let tx_hash = tx.tx_hash;
 
     let msg = Command::AddTransaction { tx };
     queue.send(msg).await;

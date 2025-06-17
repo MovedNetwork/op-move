@@ -1,11 +1,15 @@
 use {
+    crate::L1GasFeeInput,
     alloy::{
         consensus::{
-            Receipt, ReceiptWithBloom, Signed, Transaction, TxEip1559, TxEip2930, TxEnvelope,
-            TxLegacy,
+            Receipt, ReceiptWithBloom, Sealed, Signed, Transaction, TxEip1559, TxEip2930,
+            TxEnvelope, TxLegacy,
         },
         eips::eip2930::AccessList,
-        primitives::{Address, B256, Bloom, Bytes, Log, LogData, TxKind, U256, address},
+        primitives::{
+            Address, B256, Bloom, Bytes, Log, LogData, PrimitiveSignature, TxKind, U256, address,
+        },
+        rlp::{Decodable, Encodable},
         rpc::types::TransactionRequest,
     },
     aptos_types::transaction::{EntryFunction, Module, Script},
@@ -24,6 +28,79 @@ use {
 pub const L2_LOWEST_ADDRESS: Address = address!("4200000000000000000000000000000000000000");
 pub const L2_HIGHEST_ADDRESS: Address = address!("42000000000000000000000000000000000000ff");
 pub const DEPOSIT_RECEIPT_VERSION: u64 = 1;
+
+/// Custom canonical transaction envelope that only holds transaction types we support.
+/// This excludes EIP-4844 (blob transactions) and EIP-7702 (account abstraction).
+/// Otherwise derived straight from alloy's `TxEnvelope`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum UmiTxEnvelope {
+    Legacy(Signed<TxLegacy>),
+    Eip2930(Signed<TxEip2930>),
+    Eip1559(Signed<TxEip1559>),
+}
+
+impl TryFrom<TxEnvelope> for UmiTxEnvelope {
+    type Error = Error;
+
+    fn try_from(envelope: TxEnvelope) -> Result<Self, Self::Error> {
+        match envelope {
+            TxEnvelope::Legacy(tx) => Ok(Self::Legacy(tx)),
+            TxEnvelope::Eip2930(tx) => Ok(Self::Eip2930(tx)),
+            TxEnvelope::Eip1559(tx) => Ok(Self::Eip1559(tx)),
+            TxEnvelope::Eip4844(_) | TxEnvelope::Eip7702(_) => {
+                Err(InvalidTransactionCause::UnsupportedType)?
+            }
+        }
+    }
+}
+
+impl From<UmiTxEnvelope> for TxEnvelope {
+    fn from(supported: UmiTxEnvelope) -> Self {
+        match supported {
+            UmiTxEnvelope::Legacy(tx) => TxEnvelope::Legacy(tx),
+            UmiTxEnvelope::Eip2930(tx) => TxEnvelope::Eip2930(tx),
+            UmiTxEnvelope::Eip1559(tx) => TxEnvelope::Eip1559(tx),
+        }
+    }
+}
+
+impl TryFrom<UmiTxEnvelope> for NormalizedEthTransaction {
+    type Error = Error;
+
+    fn try_from(envelope: UmiTxEnvelope) -> Result<Self, Self::Error> {
+        match envelope {
+            UmiTxEnvelope::Legacy(tx) => tx.try_into(),
+            UmiTxEnvelope::Eip2930(tx) => tx.try_into(),
+            UmiTxEnvelope::Eip1559(tx) => tx.try_into(),
+        }
+    }
+}
+
+impl Decodable for UmiTxEnvelope {
+    fn decode(buf: &mut &[u8]) -> alloy::rlp::Result<Self> {
+        let envelope = TxEnvelope::decode(buf)?;
+        envelope
+            .try_into()
+            .map_err(|_| alloy::rlp::Error::Custom("Unsupported transaction type"))
+    }
+}
+
+impl Encodable for UmiTxEnvelope {
+    fn encode(&self, out: &mut dyn alloy::rlp::BufMut) {
+        let envelope: TxEnvelope = self.clone().into();
+        envelope.encode(out);
+    }
+}
+
+impl UmiTxEnvelope {
+    pub fn recover_signer(&self) -> Result<Address, Error> {
+        match self {
+            UmiTxEnvelope::Legacy(tx) => Ok(tx.recover_signer()?),
+            UmiTxEnvelope::Eip2930(tx) => Ok(tx.recover_signer()?),
+            UmiTxEnvelope::Eip1559(tx) => Ok(tx.recover_signer()?),
+        }
+    }
+}
 
 pub trait WrapReceipt {
     fn wrap_receipt(&self, receipt: Receipt, bloom: Bloom) -> OpReceiptEnvelope;
@@ -60,10 +137,10 @@ impl WrapReceipt for OpTxEnvelope {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub enum NormalizedExtendedTxEnvelope {
     Canonical(NormalizedEthTransaction),
-    DepositedTx(TxDeposit),
+    DepositedTx(Sealed<TxDeposit>),
 }
 
 impl TryFrom<OpTxEnvelope> for NormalizedExtendedTxEnvelope {
@@ -74,9 +151,15 @@ impl TryFrom<OpTxEnvelope> for NormalizedExtendedTxEnvelope {
             OpTxEnvelope::Eip1559(tx) => NormalizedExtendedTxEnvelope::Canonical(tx.try_into()?),
             OpTxEnvelope::Eip2930(tx) => NormalizedExtendedTxEnvelope::Canonical(tx.try_into()?),
             OpTxEnvelope::Legacy(tx) => NormalizedExtendedTxEnvelope::Canonical(tx.try_into()?),
-            OpTxEnvelope::Deposit(tx) => NormalizedExtendedTxEnvelope::DepositedTx(tx.unseal()),
+            OpTxEnvelope::Deposit(tx) => NormalizedExtendedTxEnvelope::DepositedTx(tx),
             _ => Err(InvalidTransactionCause::UnsupportedType)?,
         })
+    }
+}
+
+impl From<NormalizedEthTransaction> for NormalizedExtendedTxEnvelope {
+    fn from(tx: NormalizedEthTransaction) -> Self {
+        NormalizedExtendedTxEnvelope::Canonical(tx)
     }
 }
 
@@ -86,6 +169,13 @@ impl NormalizedExtendedTxEnvelope {
             Some(tx)
         } else {
             None
+        }
+    }
+
+    pub fn as_deposit(&self) -> Option<&TxDeposit> {
+        match self {
+            Self::DepositedTx(tx) => Some(tx),
+            _ => None,
         }
     }
 
@@ -108,6 +198,81 @@ impl NormalizedExtendedTxEnvelope {
             Self::DepositedTx(..) => U256::ZERO,
             Self::Canonical(tx) => tx.effective_gas_price(base_fee),
         }
+    }
+
+    pub fn tx_hash(&self) -> B256 {
+        match self {
+            Self::Canonical(tx) => tx.tx_hash,
+            Self::DepositedTx(tx) => B256::from(*tx.hash()),
+        }
+    }
+
+    pub fn l1_gas_fee_input(&self) -> L1GasFeeInput {
+        match self {
+            Self::Canonical(tx) => tx.l1_gas_fee_input.clone(),
+            Self::DepositedTx(_) => L1GasFeeInput::default(),
+        }
+    }
+
+    pub fn inner(&self) -> OpTxEnvelope {
+        match self {
+            Self::Canonical(tx) => {
+                // For canonical transactions, we create a basic EIP-1559 envelope
+                // This is used for storage only and may not contain the exact original envelope
+                use alloy::consensus::{SignableTransaction, TxEip1559};
+                use alloy::signers::Signature;
+
+                let inner_tx = TxEip1559 {
+                    chain_id: tx.chain_id.unwrap_or(1),
+                    nonce: tx.nonce,
+                    gas_limit: tx.gas_limit(),
+                    max_fee_per_gas: tx.max_fee_per_gas.to::<u128>(),
+                    max_priority_fee_per_gas: tx.max_priority_fee_per_gas.to::<u128>(),
+                    to: tx.to,
+                    value: tx.value,
+                    access_list: tx.access_list.clone(),
+                    input: tx.data.clone(),
+                };
+
+                // Create a dummy signature since we only need this for storage
+                let signature = Signature::test_signature();
+                let signed = inner_tx.into_signed(signature);
+                OpTxEnvelope::Eip1559(signed)
+            }
+            Self::DepositedTx(tx) => OpTxEnvelope::Deposit(tx.clone()),
+        }
+    }
+
+    pub fn wrap_receipt(&self, receipt: Receipt, bloom: Bloom) -> OpReceiptEnvelope {
+        match self {
+            Self::Canonical(_) => {
+                // For canonical transactions, we use EIP-1559 receipt format
+                OpReceiptEnvelope::Eip1559(ReceiptWithBloom {
+                    receipt,
+                    logs_bloom: bloom,
+                })
+            }
+            Self::DepositedTx(dep) => OpReceiptEnvelope::Deposit(OpDepositReceiptWithBloom {
+                receipt: OpDepositReceipt {
+                    inner: receipt,
+                    deposit_nonce: Some(dep.nonce()),
+                    deposit_receipt_version: Some(DEPOSIT_RECEIPT_VERSION),
+                },
+                logs_bloom: bloom,
+            }),
+        }
+    }
+
+    pub fn trie_hash(&self) -> B256 {
+        // Return the transaction hash for trie calculation
+        self.tx_hash()
+    }
+}
+
+impl Encodable for NormalizedExtendedTxEnvelope {
+    fn encode(&self, out: &mut dyn alloy::rlp::BufMut) {
+        // For trie calculation, we encode the transaction hash
+        self.tx_hash().encode(out);
     }
 }
 
@@ -174,9 +339,10 @@ impl TransactionExecutionOutcome {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub struct NormalizedEthTransaction {
     pub signer: Address,
+    pub tx_hash: B256,
     pub to: TxKind,
     pub nonce: u64,
     pub value: U256,
@@ -186,6 +352,8 @@ pub struct NormalizedEthTransaction {
     pub max_priority_fee_per_gas: U256,
     pub max_fee_per_gas: U256,
     pub access_list: AccessList,
+    pub l1_gas_fee_input: L1GasFeeInput,
+    pub signature: PrimitiveSignature,
 }
 
 impl NormalizedEthTransaction {
@@ -199,30 +367,21 @@ impl NormalizedEthTransaction {
     }
 }
 
-impl TryFrom<TxEnvelope> for NormalizedEthTransaction {
-    type Error = Error;
-
-    fn try_from(tx: TxEnvelope) -> Result<Self, Self::Error> {
-        Ok(match tx {
-            TxEnvelope::Eip1559(tx) => tx.try_into()?,
-            TxEnvelope::Eip2930(tx) => tx.try_into()?,
-            TxEnvelope::Legacy(tx) => tx.try_into()?,
-            TxEnvelope::Eip4844(_) | TxEnvelope::Eip7702(_) => {
-                Err(InvalidTransactionCause::UnsupportedType)?
-            }
-        })
-    }
-}
-
 impl TryFrom<Signed<TxEip1559>> for NormalizedEthTransaction {
     type Error = Error;
 
     fn try_from(value: Signed<TxEip1559>) -> Result<Self, Self::Error> {
         let address = value.recover_signer()?;
-        let tx = value.strip_signature();
+
+        let mut encoded = Vec::new();
+        value.rlp_encode(&mut encoded);
+        let l1_gas_fee_input = encoded.as_slice().into();
+
+        let (tx, signature, tx_hash) = value.into_parts();
 
         Ok(Self {
             signer: address,
+            tx_hash,
             to: tx.to,
             nonce: tx.nonce,
             value: tx.value,
@@ -232,6 +391,8 @@ impl TryFrom<Signed<TxEip1559>> for NormalizedEthTransaction {
             max_fee_per_gas: U256::from(tx.max_fee_per_gas),
             data: tx.input,
             access_list: tx.access_list,
+            l1_gas_fee_input,
+            signature,
         })
     }
 }
@@ -241,10 +402,16 @@ impl TryFrom<Signed<TxEip2930>> for NormalizedEthTransaction {
 
     fn try_from(value: Signed<TxEip2930>) -> Result<Self, Self::Error> {
         let address = value.recover_signer()?;
-        let tx = value.strip_signature();
+
+        let mut encoded = Vec::new();
+        value.rlp_encode(&mut encoded);
+        let l1_gas_fee_input = encoded.as_slice().into();
+
+        let (tx, signature, tx_hash) = value.into_parts();
 
         Ok(Self {
             signer: address,
+            tx_hash,
             to: tx.to,
             nonce: tx.nonce,
             value: tx.value,
@@ -254,6 +421,8 @@ impl TryFrom<Signed<TxEip2930>> for NormalizedEthTransaction {
             max_fee_per_gas: U256::from(tx.gas_price),
             data: tx.input,
             access_list: tx.access_list,
+            l1_gas_fee_input,
+            signature,
         })
     }
 }
@@ -263,11 +432,17 @@ impl TryFrom<Signed<TxLegacy>> for NormalizedEthTransaction {
 
     fn try_from(value: Signed<TxLegacy>) -> Result<Self, Self::Error> {
         let address = value.recover_signer()?;
-        let tx = value.strip_signature();
+
+        let mut encoded = Vec::new();
+        value.rlp_encode(&mut encoded);
+        let l1_gas_fee_input = encoded.as_slice().into();
+
+        let (tx, signature, tx_hash) = value.into_parts();
 
         Ok(Self {
             signer: address,
             to: tx.to,
+            tx_hash,
             nonce: tx.nonce,
             value: tx.value,
             chain_id: tx.chain_id(),
@@ -276,10 +451,82 @@ impl TryFrom<Signed<TxLegacy>> for NormalizedEthTransaction {
             max_fee_per_gas: U256::from(tx.gas_price),
             data: tx.input,
             access_list: AccessList(Vec::new()),
+            l1_gas_fee_input,
+            signature,
         })
     }
 }
 
+impl From<NormalizedEthTransaction> for OpTxEnvelope {
+    fn from(normalized: NormalizedEthTransaction) -> Self {
+        if normalized.max_fee_per_gas > U256::ZERO
+            || normalized.max_priority_fee_per_gas > U256::ZERO
+        {
+            let tx_eip1559 = TxEip1559 {
+                chain_id: normalized
+                    .chain_id
+                    .expect("Chain ID can be unset only for legacy txds"),
+                nonce: normalized.nonce,
+                gas_limit: normalized.gas_limit.saturating_to(),
+                max_fee_per_gas: normalized.max_fee_per_gas.saturating_to(),
+                max_priority_fee_per_gas: normalized.max_priority_fee_per_gas.saturating_to(),
+                to: normalized.to,
+                value: normalized.value,
+                access_list: normalized.access_list,
+                input: normalized.data,
+            };
+
+            let signed_tx =
+                Signed::new_unchecked(tx_eip1559, normalized.signature, normalized.tx_hash);
+
+            OpTxEnvelope::Eip1559(signed_tx)
+        } else if !normalized.access_list.is_empty() {
+            let tx_eip2930 = TxEip2930 {
+                chain_id: normalized
+                    .chain_id
+                    .expect("Chain ID can be unset only for legacy txds"),
+                nonce: normalized.nonce,
+                gas_price: normalized.max_fee_per_gas.saturating_to(),
+                gas_limit: normalized.gas_limit.saturating_to(),
+                to: normalized.to,
+                value: normalized.value,
+                access_list: normalized.access_list,
+                input: normalized.data,
+            };
+
+            let signed_tx =
+                Signed::new_unchecked(tx_eip2930, normalized.signature, normalized.tx_hash);
+
+            OpTxEnvelope::Eip2930(signed_tx)
+        } else {
+            let tx_legacy = TxLegacy {
+                chain_id: normalized.chain_id,
+                nonce: normalized.nonce,
+                gas_price: normalized.max_fee_per_gas.saturating_to(),
+                gas_limit: normalized.gas_limit.saturating_to(),
+                to: normalized.to,
+                value: normalized.value,
+                input: normalized.data,
+            };
+
+            let signed_tx =
+                Signed::new_unchecked(tx_legacy, normalized.signature, normalized.tx_hash);
+
+            OpTxEnvelope::Legacy(signed_tx)
+        }
+    }
+}
+
+impl From<NormalizedExtendedTxEnvelope> for OpTxEnvelope {
+    fn from(normalized_envelope: NormalizedExtendedTxEnvelope) -> Self {
+        match normalized_envelope {
+            NormalizedExtendedTxEnvelope::Canonical(normalized_tx) => normalized_tx.into(),
+            NormalizedExtendedTxEnvelope::DepositedTx(sealed_deposit) => {
+                OpTxEnvelope::Deposit(sealed_deposit)
+            }
+        }
+    }
+}
 #[derive(Debug, PartialEq, Eq, Clone, Deserialize, Serialize)]
 pub enum ScriptOrDeployment {
     Script(Script),
@@ -378,6 +625,10 @@ impl From<TransactionRequest> for NormalizedEthTransaction {
             max_fee_per_gas: U256::from(value.max_fee_per_gas.unwrap_or_default()),
             data: value.input.into_input().unwrap_or_default(),
             access_list: value.access_list.unwrap_or_default(),
+            // As it's exclusively for simulation, we can get away with this
+            tx_hash: B256::random(),
+            l1_gas_fee_input: L1GasFeeInput::default(),
+            signature: PrimitiveSignature::new(U256::ZERO, U256::ZERO, false),
         }
     }
 }

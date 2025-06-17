@@ -1,8 +1,12 @@
 use {
-    alloy::{consensus::transaction::TxEnvelope, primitives::Bloom},
+    alloy::{primitives::Bloom, rlp::Decodable},
+    op_alloy::consensus::OpTxEnvelope,
     umi_blockchain::{
         block::{ExtendedBlock, Header},
         payload::{NewPayloadIdInput, PayloadId},
+    },
+    umi_execution::transaction::{
+        NormalizedExtendedTxEnvelope, NormalizedEthTransaction,
     },
     umi_shared::primitives::{Address, B256, B2048, Bytes, ToU64, U64, U256},
 };
@@ -18,16 +22,53 @@ pub struct Payload {
     pub gas_limit: U64,
 }
 
+/// Internal representation of [`Payload`] that has its `transactions`
+/// field parsed and normalized.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct PayloadForExecution {
+    pub timestamp: U64,
+    pub prev_randao: B256,
+    pub suggested_fee_recipient: Address,
+    pub withdrawals: Vec<Withdrawal>,
+    pub parent_beacon_block_root: B256,
+    pub transactions: Vec<NormalizedExtendedTxEnvelope>,
+    pub gas_limit: U64,
+}
+
+impl TryFrom<Payload> for PayloadForExecution {
+    type Error = umi_shared::error::Error;
+
+    fn try_from(value: Payload) -> Result<Self, Self::Error> {
+        let mut transactions = Vec::new();
+
+        for raw_tx in value.transactions {
+            let mut slice: &[u8] = &raw_tx.as_ref();
+            let tx = OpTxEnvelope::decode(&mut slice)?;
+            transactions.push(tx.try_into()?);
+        }
+
+        Ok(Self {
+            timestamp: value.timestamp,
+            prev_randao: value.prev_randao,
+            suggested_fee_recipient: value.suggested_fee_recipient,
+            withdrawals: value.withdrawals,
+            parent_beacon_block_root: value.parent_beacon_block_root,
+            transactions,
+            gas_limit: value.gas_limit,
+        })
+    }
+}
+
 pub type Withdrawal = alloy::rpc::types::Withdrawal;
 
 #[derive(Debug)]
 pub enum Command {
     StartBlockBuild {
-        payload_attributes: Payload,
+        payload_attributes: PayloadForExecution,
         payload_id: PayloadId,
     },
     AddTransaction {
-        tx: TxEnvelope,
+        tx: NormalizedEthTransaction,
     },
     GenesisUpdate {
         block: ExtendedBlock,
@@ -66,7 +107,7 @@ pub trait ToPayloadIdInput<'a> {
     fn to_payload_id_input(&'a self, head: &'a B256) -> NewPayloadIdInput<'a>;
 }
 
-impl<'a> ToPayloadIdInput<'a> for Payload {
+impl<'a> ToPayloadIdInput<'a> for PayloadForExecution {
     fn to_payload_id_input(&'a self, head: &'a B256) -> NewPayloadIdInput<'a> {
         NewPayloadIdInput::new_v3(
             head,
@@ -100,11 +141,11 @@ impl ToWithdrawal for Withdrawal {
 }
 
 pub(crate) trait WithPayloadAttributes {
-    fn with_payload_attributes(self, payload: Payload) -> Self;
+    fn with_payload_attributes(self, payload: PayloadForExecution) -> Self;
 }
 
 impl WithPayloadAttributes for Header {
-    fn with_payload_attributes(self, payload: Payload) -> Self {
+    fn with_payload_attributes(self, payload: PayloadForExecution) -> Self {
         Self {
             beneficiary: payload.suggested_fee_recipient,
             gas_limit: payload.gas_limit.to_u64(),

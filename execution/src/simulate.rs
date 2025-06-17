@@ -15,7 +15,7 @@ use {
             TransactionExecutionOutcome,
         },
     },
-    alloy::rpc::types::TransactionRequest,
+    alloy::{consensus::TxEnvelope, rpc::types::TransactionRequest},
     move_table_extension::TableResolver,
     move_vm_runtime::{
         AsUnsyncCodeStorage,

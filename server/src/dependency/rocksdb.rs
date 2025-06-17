@@ -261,13 +261,8 @@ lazy_static::lazy_static! {
     };
 }
 
-pub static BLOCK_HASH_CACHE: LazyLock<SharedBlockHashCache> = LazyLock::new(|| {
-    let queries = Box::leak(Box::new(
-        umi_storage_rocksdb::block::RocksDbBlockQueries::new(),
-    ));
-    let db_ref = Box::leak(Box::new(db()));
-    SharedBlockHashCache::initialize_from_storage(db_ref, queries)
-});
+pub static BLOCK_HASH_CACHE: LazyLock<SharedBlockHashCache> =
+    LazyLock::new(SharedBlockHashCache::new);
 
 pub static HYBRID_BLOCK_HASH_CACHE: LazyLock<
     umi_app::SharedHybridBlockHashCache<
@@ -280,7 +275,7 @@ pub static HYBRID_BLOCK_HASH_CACHE: LazyLock<
         umi_storage_rocksdb::block::RocksDbBlockQueries::new(),
     ));
     let db_ref = Box::leak(Box::new(db()));
-    umi_app::SharedHybridBlockHashCache::initialize_from_storage(db_ref, queries)
+    umi_app::SharedHybridBlockHashCache::new(db_ref, queries)
 });
 
 fn db() -> &'static umi_storage_rocksdb::RocksDb {

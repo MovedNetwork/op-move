@@ -259,11 +259,8 @@ lazy_static::lazy_static! {
     };
 }
 
-pub static BLOCK_HASH_CACHE: LazyLock<SharedBlockHashCache> = LazyLock::new(|| {
-    let queries = Box::leak(Box::new(block::HeedBlockQueries::new()));
-    let db_ref = Box::leak(Box::new(db()));
-    SharedBlockHashCache::initialize_from_storage(db_ref, queries)
-});
+pub static BLOCK_HASH_CACHE: LazyLock<SharedBlockHashCache> =
+    LazyLock::new(SharedBlockHashCache::new);
 
 pub static HYBRID_BLOCK_HASH_CACHE: LazyLock<
     SharedHybridBlockHashCache<
@@ -274,7 +271,7 @@ pub static HYBRID_BLOCK_HASH_CACHE: LazyLock<
 > = LazyLock::new(|| {
     let queries = Box::leak(Box::new(block::HeedBlockQueries::new()));
     let db_ref = Box::leak(Box::new(db()));
-    SharedHybridBlockHashCache::initialize_from_storage(db_ref, queries)
+    SharedHybridBlockHashCache::new(db_ref, queries)
 });
 
 fn db() -> &'static umi_storage_heed::Env {

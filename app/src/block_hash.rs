@@ -24,6 +24,13 @@ pub struct BlockHashRingBuffer {
 }
 
 impl BlockHashRingBuffer {
+    pub const fn new() -> Self {
+        Self {
+            entries: VecDeque::new(),
+            latest_block: 0,
+        }
+    }
+
     pub fn push(&mut self, block_number: u64, block_hash: B256) {
         // Ensure blocks are added in sequence (detect potential reorgs)
         if block_number > 0 && self.latest_block > 0 && block_number != self.latest_block + 1 {
@@ -47,11 +54,11 @@ impl BlockHashRingBuffer {
         self.latest_block = block_number;
     }
 
-    pub fn initialize_from_storage<S, B>(storage: &S, block_query: &B) -> Self
+    pub fn try_from_storage<S, B>(storage: &S, block_query: &B) -> Result<Self, B::Err>
     where
         B: BlockQueries<Storage = S>,
     {
-        let latest_block = block_query.latest(storage).unwrap().unwrap_or(0);
+        let latest_block = block_query.latest(storage)?.unwrap_or(0);
 
         let mut cache = Self::default();
 
@@ -67,7 +74,7 @@ impl BlockHashRingBuffer {
             }
         }
 
-        cache
+        Ok(cache)
     }
 }
 
@@ -112,15 +119,21 @@ pub struct SharedBlockHashCache {
 }
 
 impl SharedBlockHashCache {
-    pub fn initialize_from_storage<S, B>(storage: &S, block_query: &B) -> Self
+    pub fn new() -> Self {
+        Self {
+            inner: Arc::new(RwLock::new(BlockHashRingBuffer::new())),
+        }
+    }
+
+    pub fn try_from_storage<S, B>(storage: &S, block_query: &B) -> Result<Self, B::Err>
     where
         B: BlockQueries<Storage = S>,
     {
-        let buf = BlockHashRingBuffer::initialize_from_storage(storage, block_query);
+        let buf = BlockHashRingBuffer::try_from_storage(storage, block_query)?;
 
-        Self {
+        Ok(Self {
             inner: Arc::new(RwLock::new(buf)),
-        }
+        })
     }
 }
 
@@ -162,14 +175,22 @@ impl<'a, S, B> HybridBlockHashCache<'a, S, B>
 where
     B: BlockQueries<Storage = S>,
 {
-    pub fn initialize_from_storage(storage: &'a S, block_query: &'a B) -> Self {
-        let ring_buffer = BlockHashRingBuffer::initialize_from_storage(storage, block_query);
-
+    pub const fn new(storage: &'a S, block_query: &'a B) -> Self {
         Self {
-            ring_buffer,
+            ring_buffer: BlockHashRingBuffer::new(),
             storage,
             block_query,
         }
+    }
+
+    pub fn try_from_storage(storage: &'a S, block_query: &'a B) -> Result<Self, B::Err> {
+        let ring_buffer = BlockHashRingBuffer::try_from_storage(storage, block_query)?;
+
+        Ok(Self {
+            ring_buffer,
+            storage,
+            block_query,
+        })
     }
 }
 
@@ -212,12 +233,18 @@ where
     S: Clone,
     B: Clone + BlockQueries<Storage = S>,
 {
-    pub fn initialize_from_storage(storage: &'a S, block_query: &'a B) -> Self {
-        let cache = HybridBlockHashCache::initialize_from_storage(storage, block_query);
-
+    pub fn new(storage: &'a S, block_query: &'a B) -> Self {
         Self {
-            inner: Arc::new(RwLock::new(cache)),
+            inner: Arc::new(RwLock::new(HybridBlockHashCache::new(storage, block_query))),
         }
+    }
+
+    pub fn try_from_storage(storage: &'a S, block_query: &'a B) -> Result<Self, B::Err> {
+        let cache = HybridBlockHashCache::try_from_storage(storage, block_query)?;
+
+        Ok(Self {
+            inner: Arc::new(RwLock::new(cache)),
+        })
     }
 }
 
@@ -371,7 +398,7 @@ mod tests {
     #[test]
     fn test_hybrid_cache_ring_buffer_hit() {
         let mut cache =
-            HybridBlockHashCache::initialize_from_storage(&MockStorage, &MockBlockQueries);
+            HybridBlockHashCache::try_from_storage(&MockStorage, &MockBlockQueries).unwrap();
 
         let hash = B256::from([42u8; 32]);
         cache.push(100, hash);
@@ -381,7 +408,8 @@ mod tests {
 
     #[test]
     fn test_hybrid_cache_storage_fallback() {
-        let cache = HybridBlockHashCache::initialize_from_storage(&MockStorage, &MockBlockQueries);
+        let cache =
+            HybridBlockHashCache::try_from_storage(&MockStorage, &MockBlockQueries).unwrap();
 
         // Should fall back to storage for block 1500
         let expected_hash = B256::from([((1500 % 256) as u8); 32]);
@@ -390,7 +418,8 @@ mod tests {
 
     #[test]
     fn test_hybrid_cache_storage_miss() {
-        let cache = HybridBlockHashCache::initialize_from_storage(&MockStorage, &MockBlockQueries);
+        let cache =
+            HybridBlockHashCache::try_from_storage(&MockStorage, &MockBlockQueries).unwrap();
 
         // Should return None for blocks not in ring buffer or storage
         assert_eq!(cache.hash_by_number(500), None);
@@ -399,7 +428,7 @@ mod tests {
     #[test]
     fn test_hybrid_cache_priority() {
         let mut cache =
-            HybridBlockHashCache::initialize_from_storage(&MockStorage, &MockBlockQueries);
+            HybridBlockHashCache::try_from_storage(&MockStorage, &MockBlockQueries).unwrap();
 
         // Add block 1500 to ring buffer with different hash than storage would return
         let ring_buffer_hash = B256::from([99u8; 32]);

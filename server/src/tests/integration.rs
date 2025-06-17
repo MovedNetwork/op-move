@@ -79,20 +79,7 @@ async fn test_on_ethereum() -> Result<()> {
     let op_geth = init_and_start_op_geth()?;
 
     // 8. Start op-move to accept requests from the sequencer
-    let op_move_runtime = Runtime::new()?;
-    op_move_runtime.spawn(crate::run(
-        ConfigBuilder::new()
-            .layer(DEFAULTS)
-            .layer(DefaultLayer::new(OptionalConfig {
-                auth: Some(OptionalAuthSocket {
-                    jwt_secret: Some(jwt_secret),
-                    ..Default::default()
-                }),
-                ..Default::default()
-            }))
-            .try_build()
-            .unwrap(),
-    ));
+    let op_move = run_op_move(jwt_secret);
 
     // 9. In separate threads run op-node, op-batcher, op-proposer
     let (op_node, op_batcher, op_proposer) = run_op()?;
@@ -106,7 +93,7 @@ async fn test_on_ethereum() -> Result<()> {
     // 12. Cleanup generated files and folders
     hb.shutdown();
     cleanup_files();
-    op_move_runtime.shutdown_background();
+    op_move.shutdown_background();
     cleanup_processes(vec![geth, op_geth, op_node, op_batcher, op_proposer])
 }
 
@@ -355,6 +342,24 @@ fn init_and_start_op_geth() -> Result<Child> {
     // Give some time for op-geth to settle
     pause(Some(Duration::from_secs(GETH_START_IN_SECS)));
     Ok(op_geth_process)
+}
+
+fn run_op_move(jwt_secret: String) -> Runtime {
+    let op_move_runtime = Runtime::new().unwrap();
+    op_move_runtime.spawn(crate::run(
+        ConfigBuilder::new()
+            .layer(DEFAULTS)
+            .layer(DefaultLayer::new(OptionalConfig {
+                auth: Some(OptionalAuthSocket {
+                    jwt_secret: Some(jwt_secret),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }))
+            .try_build()
+            .unwrap(),
+    ));
+    op_move_runtime
 }
 
 fn run_op() -> Result<(Child, Child, Child)> {

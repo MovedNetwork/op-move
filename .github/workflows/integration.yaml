@@ -21,4 +21,4 @@ jobs:
       - name: Free up disk space
         run: rm -rf /opt/hostedtoolcache
       - name: Test
-        run: cargo test test_on_ethereum
+        run: cargo test --release test_on_ethereum

@@ -1,9 +1,6 @@
 use {
     crate::dependency::shared::*,
-    std::{
-        sync::{Arc, LazyLock},
-        time::Duration,
-    },
+    std::sync::{Arc, LazyLock},
     umi_app::{Application, CommandActor, SharedBlockHashCache},
     umi_blockchain::state::EthTrieStateQueries,
     umi_genesis::config::GenesisConfig,
@@ -114,19 +111,7 @@ impl umi_app::Dependencies for RocksDbDependencies {
     }
 
     fn state(&self) -> Self::State {
-        let mut tries = 1..60;
-
-        loop {
-            match EthTrieState::try_new(TRIE_DB.clone()) {
-                Ok(state) => return state,
-                Err(error) if tries.next().is_none() => panic!("{error}"),
-                Err(error) => {
-                    let duration = Duration::from_secs(1);
-                    eprintln!("WARN: Failed to create state {error}, retrying in {duration:?}...");
-                    std::thread::sleep(duration);
-                }
-            }
-        }
+        fallible::retry(|| EthTrieState::try_new(TRIE_DB.clone()))
     }
 
     fn state_queries(&self, genesis_config: &GenesisConfig) -> Self::StateQueries {
@@ -241,19 +226,7 @@ impl umi_app::Dependencies for RocksDbReaderDependencies {
     }
 
     fn state(&self) -> Self::State {
-        let mut tries = 1..60;
-
-        loop {
-            match EthTrieState::try_new(TRIE_DB.clone()) {
-                Ok(state) => return state,
-                Err(error) if tries.next().is_none() => panic!("{error}"),
-                Err(error) => {
-                    let duration = Duration::from_secs(1);
-                    eprintln!("WARN: Failed to create state {error}, retrying in {duration:?}...");
-                    std::thread::sleep(duration);
-                }
-            }
-        }
+        fallible::retry(|| EthTrieState::try_new(TRIE_DB.clone()))
     }
 
     fn state_queries(&self, genesis_config: &GenesisConfig) -> Self::StateQueries {

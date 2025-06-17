@@ -51,3 +51,27 @@ macro_rules! impl_shared {
 }
 
 pub(crate) use impl_shared;
+
+#[cfg(any(feature = "storage-lmdb", feature = "storage-rocksdb"))]
+pub(super) mod fallible {
+    use std::{
+        fmt::{Debug, Display},
+        time::Duration,
+    };
+
+    pub(crate) fn retry<T, Err: Debug + Display>(f: impl Fn() -> Result<T, Err>) -> T {
+        let mut tries = 1..60;
+
+        loop {
+            match f() {
+                Ok(state) => return state,
+                Err(error) if tries.next().is_none() => panic!("{error}"),
+                Err(error) => {
+                    let duration = Duration::from_secs(1);
+                    eprintln!("WARN: Failed to create state {error}, retrying in {duration:?}...");
+                    std::thread::sleep(duration);
+                }
+            }
+        }
+    }
+}

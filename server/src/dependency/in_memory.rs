@@ -1,7 +1,7 @@
 use {
     crate::dependency::shared::*,
     std::sync::Arc,
-    umi_app::{Application, ApplicationReader, CommandActor, SharedBlockHashCache},
+    umi_app::{Application, CommandActor, SharedBlockHashCache},
     umi_genesis::config::GenesisConfig,
 };
 

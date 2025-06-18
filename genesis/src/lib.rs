@@ -52,7 +52,7 @@ pub fn build(
         .squash(changes_l2.accounts)
         .expect("L2 contract changes should not be in conflict");
 
-    (changes.into(), changes_l2.storage)
+    (Changes::without_tables(changes), changes_l2.storage)
 }
 
 pub fn apply(

@@ -65,7 +65,9 @@ fn mint_one_eth(state: &mut impl State, addr: AccountAddress) -> ChangeSet {
 
     let changes = session.finish(&code_storage).unwrap();
 
-    state.apply(changes.clone().into()).unwrap();
+    state
+        .apply(Changes::without_tables(changes.clone()))
+        .unwrap();
 
     changes
 }
@@ -253,7 +255,9 @@ fn inc_one_nonce(old_nonce: u64, state: &mut impl State, addr: AccountAddress) -
 
     let changes = session.finish(&code_storage).unwrap();
 
-    state.apply(changes.clone().into()).unwrap();
+    state
+        .apply(Changes::without_tables(changes.clone()))
+        .unwrap();
 
     changes
 }

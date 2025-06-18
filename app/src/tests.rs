@@ -39,7 +39,7 @@ use {
         error::{Error, UserError},
         primitives::{Address, B256, ToMoveAddress, U64, U256},
     },
-    umi_state::{InMemoryState, InMemoryTrieDb, ResolverBasedModuleBytesStorage, State},
+    umi_state::{Changes, InMemoryState, InMemoryTrieDb, ResolverBasedModuleBytesStorage, State},
 };
 
 /// The address corresponding to this private key is 0x8fd379246834eac74B8419FfdA202CF8051F7A03
@@ -219,7 +219,9 @@ fn create_app_with_fake_queries(
     state.apply(genesis_changes).unwrap();
     evm_storage.apply(evm_storage_changes).unwrap();
     let changes_addition = mint_eth(&state, &evm_storage, addr, initial_balance);
-    state.apply(changes_addition.clone().into()).unwrap();
+    state
+        .apply(Changes::without_tables(changes_addition))
+        .unwrap();
 
     let (receipt_reader, receipt_memory) = receipt_memory::new();
 

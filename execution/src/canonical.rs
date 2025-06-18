@@ -346,7 +346,11 @@ pub(super) fn execute_canonical_transaction<
     user_changes
         .squash(changes)
         .expect("User changes must merge with refund session changes");
-    let changes = Changes::new(user_changes.into(), evm_changes.storage);
+    // TODO(#384): We need to extract tables changes and include them too.
+    let changes = Changes::new(
+        umi_state::Changes::without_tables(user_changes),
+        evm_changes.storage,
+    );
 
     match vm_outcome {
         Ok(_) => Ok(TransactionExecutionOutcome::new(

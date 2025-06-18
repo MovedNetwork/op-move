@@ -28,8 +28,15 @@ impl Changes {
         }
     }
 
-    pub fn new(accounts: ChangeSet, tables: TableChangeSet) -> Self {
+    pub const fn new(accounts: ChangeSet, tables: TableChangeSet) -> Self {
         Self { accounts, tables }
+    }
+
+    pub fn without_tables(accounts: ChangeSet) -> Self {
+        Self {
+            accounts,
+            tables: TableChangeSet::default(),
+        }
     }
 }
 
@@ -112,15 +119,6 @@ impl Clone for Changes {
                     })
                     .collect(),
             },
-        }
-    }
-}
-
-impl From<ChangeSet> for Changes {
-    fn from(accounts: ChangeSet) -> Self {
-        Self {
-            accounts,
-            tables: Default::default(),
         }
     }
 }

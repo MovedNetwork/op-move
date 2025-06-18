@@ -2,8 +2,9 @@ use {
     crate::{create_genesis_block, dependency, initialize_app},
     alloy::{
         consensus::transaction::TxEnvelope,
-        eips::Encodable2718,
+        eips::{BlockNumberOrTag, Encodable2718},
         primitives::{hex, B256},
+        rpc::types::TransactionRequest,
     },
     serde::de::DeserializeOwned,
     std::future::Future,
@@ -127,6 +128,24 @@ impl TestContext {
         });
         let receipt = handle_request(request, &self.queue, self.reader.clone()).await?;
         Ok(receipt)
+    }
+
+    pub async fn eth_call(
+        &self,
+        tx: TransactionRequest,
+        block: BlockNumberOrTag,
+    ) -> anyhow::Result<Vec<u8>> {
+        let request = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 11,
+            "method": "eth_call",
+            "params": [
+                tx,
+                block,
+            ]
+        });
+        let result = handle_request(request, &self.queue, self.reader.clone()).await?;
+        Ok(result)
     }
 
     pub async fn execute_transaction(

@@ -8,6 +8,7 @@ use {
     umi_execution::transaction::{ScriptOrDeployment, TransactionData},
 };
 
+mod account_storage;
 mod blockhash;
 
 fn deploy_evm_contract(chain_id: u64, bytecode: &[u8]) -> TxEnvelope {

@@ -1,15 +1,12 @@
 use {
     self::evm_contract::BlockHash::{getBlockHashCall, BlockHashEvents},
+    super::*,
     crate::tests::test_context::TestContext,
     alloy::{
-        consensus::{SignableTransaction, TxEip1559, TxEnvelope},
-        network::TxSignerSync,
-        primitives::{Address, TxKind, B256},
-        signers::local::PrivateKeySigner,
+        primitives::B256,
         sol_types::{SolCall, SolEventInterface},
     },
     umi_blockchain::receipt::TransactionReceipt,
-    umi_execution::transaction::{ScriptOrDeployment, TransactionData},
 };
 
 mod evm_contract {
@@ -33,7 +30,7 @@ mod evm_contract {
 }
 
 #[tokio::test]
-async fn test_evm_contracts() -> anyhow::Result<()> {
+async fn test_blockhash_evm_contract() -> anyhow::Result<()> {
     TestContext::run(|mut ctx| async move {
         let chain_id = ctx.genesis_config.chain_id;
 
@@ -91,50 +88,4 @@ fn get_logged_hash(receipt: &TransactionReceipt) -> B256 {
     let BlockHashEvents::TheHash(hash) =
         BlockHashEvents::decode_raw_log(log.topics(), &log.data().data, true).unwrap();
     hash.hash
-}
-
-fn deploy_evm_contract(chain_id: u64, bytecode: &[u8]) -> TxEnvelope {
-    let signer = PrivateKeySigner::random();
-    let input = ScriptOrDeployment::EvmContract(bytecode.to_vec());
-    sign_transaction(
-        chain_id,
-        TxKind::Create,
-        || bcs::to_bytes(&input).unwrap(),
-        &signer,
-    )
-}
-
-fn call_contract(chain_id: u64, to: Address, selector: [u8; 4]) -> TxEnvelope {
-    let signer = PrivateKeySigner::random();
-    let input = TransactionData::EvmContract {
-        address: to,
-        data: selector.to_vec(),
-    };
-    sign_transaction(
-        chain_id,
-        TxKind::Call(to),
-        || input.to_bytes().unwrap(),
-        &signer,
-    )
-}
-
-fn sign_transaction<F: FnOnce() -> Vec<u8>>(
-    chain_id: u64,
-    to: TxKind,
-    input: F,
-    signer: &PrivateKeySigner,
-) -> TxEnvelope {
-    let mut tx = TxEip1559 {
-        chain_id,
-        nonce: 0,
-        gas_limit: u64::MAX,
-        max_fee_per_gas: 0,
-        max_priority_fee_per_gas: 0,
-        to,
-        value: Default::default(),
-        access_list: Default::default(),
-        input: input().into(),
-    };
-    let signature = signer.sign_transaction_sync(&mut tx).unwrap();
-    TxEnvelope::Eip1559(tx.into_signed(signature))
 }

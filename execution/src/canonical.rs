@@ -20,7 +20,7 @@ use {
     aptos_framework::natives::event::NativeEventContext,
     aptos_gas_algebra::{FeePerGasUnit, GasQuantity, NumBytes, NumSlots, Octa},
     aptos_gas_meter::{AptosGasMeter, StandardGasAlgebra, StandardGasMeter},
-    aptos_table_natives::TableResolver,
+    aptos_table_natives::{TableChangeSet, TableResolver},
     aptos_types::{
         contract_event::ContractEvent, state_store::state_key::StateKey, write_set::WriteOpSize,
     },
@@ -291,6 +291,10 @@ pub(super) fn execute_canonical_transaction<
 
     let (mut user_changes, mut extensions) = session.finish_with_extensions(&code_storage)?;
     let evm_changes = umi_evm_ext::extract_evm_changes(&extensions);
+    let table_changes = crate::table_changes::extract_table_changes(
+        &mut extensions,
+        code_storage.module_storage(),
+    )?;
     let user_events = extensions.remove::<NativeEventContext>().into_events();
     extensions.add(NativeEventContext::default());
     user_changes
@@ -305,6 +309,7 @@ pub(super) fn execute_canonical_transaction<
         charge_io_gas(
             &cached_resolver.borrow_cache(),
             &user_changes,
+            &table_changes,
             &user_events,
             &mut gas_meter,
             input.genesis_config,
@@ -346,9 +351,8 @@ pub(super) fn execute_canonical_transaction<
     user_changes
         .squash(changes)
         .expect("User changes must merge with refund session changes");
-    // TODO(#384): We need to extract tables changes and include them too.
     let changes = Changes::new(
-        umi_state::Changes::without_tables(user_changes),
+        umi_state::Changes::new(user_changes, table_changes),
         evm_changes.storage,
     );
 
@@ -377,6 +381,7 @@ pub(super) fn execute_canonical_transaction<
 fn charge_io_gas(
     resolver_cache: &ResolverCache,
     changes: &ChangeSet,
+    table_changes: &TableChangeSet,
     user_events: &[(ContractEvent, Option<MoveTypeLayout>)],
     gas_meter: &mut StandardGasMeter<StandardGasAlgebra>,
     genesis_config: &GenesisConfig,
@@ -416,6 +421,20 @@ fn charge_io_gas(
             || resolver_cache.module_original_size(&module_id) as u64,
             genesis_config,
         );
+    }
+
+    for (handle, changes) in table_changes.changes.iter() {
+        for (id, change) in changes.entries.iter() {
+            let op_size = to_op_size(change.as_ref().map(|(bytes, _)| bytes));
+            let key = StateKey::table_item(&handle.into(), id);
+            gas_meter.charge_io_gas_for_write(&key, &op_size)?;
+
+            storage_fee += charge_storage_gas(
+                op_size,
+                || resolver_cache.table_entry_original_size(handle, id) as u64,
+                genesis_config,
+            );
+        }
     }
 
     gas_meter.charge_storage_fee(storage_fee, gas_unit_price)?;

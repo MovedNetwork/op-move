@@ -21,6 +21,7 @@ use {
 pub struct ResolverCache {
     resource_cache: HashMap<(AccountAddress, StructTag), Option<Bytes>>,
     modules_cache: HashMap<ModuleId, Option<Bytes>>,
+    tables_cache: HashMap<(TableHandle, Vec<u8>), Option<Bytes>>,
 }
 
 impl ResolverCache {
@@ -37,9 +38,15 @@ impl ResolverCache {
         bytes_len(id, &self.modules_cache)
     }
 
+    pub fn table_entry_original_size(&self, handle: &TableHandle, key: &[u8]) -> usize {
+        let cache_key = (*handle, key.to_vec());
+        bytes_len(&cache_key, &self.tables_cache)
+    }
+
     pub fn clear(&mut self) {
         self.resource_cache.clear();
         self.modules_cache.clear();
+        self.tables_cache.clear();
     }
 }
 
@@ -129,8 +136,20 @@ where
         key: &[u8],
         maybe_layout: Option<&MoveTypeLayout>,
     ) -> PartialVMResult<Option<Bytes>> {
-        self.inner
-            .resolve_table_entry_bytes_with_layout(handle, key, maybe_layout)
+        let cache_key = (*handle, key.to_vec());
+        match self.cache.borrow_mut().tables_cache.entry(cache_key) {
+            Entry::Occupied(entry) => {
+                let cache_hit = entry.get();
+                Ok(cache_hit.clone())
+            }
+            Entry::Vacant(entry) => {
+                let bytes =
+                    self.inner
+                        .resolve_table_entry_bytes_with_layout(handle, key, maybe_layout)?;
+                let bytes = entry.insert(bytes);
+                Ok(bytes.clone())
+            }
+        }
     }
 }
 

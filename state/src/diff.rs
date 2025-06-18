@@ -1,7 +1,7 @@
 use {
+    aptos_table_natives::{TableChange, TableChangeSet},
     core::fmt,
     move_core_types::effects::ChangeSet,
-    move_table_extension::{TableChange, TableChangeSet},
     std::fmt::{Debug, DebugStruct, Formatter},
 };
 

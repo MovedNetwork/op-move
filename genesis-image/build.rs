@@ -1,6 +1,6 @@
 use {
+    aptos_table_natives::TableChangeSet,
     move_core_types::effects::ChangeSet,
-    move_table_extension::TableChangeSet,
     std::io::Write,
     umi_evm_ext::state::{InMemoryStorageTrieRepository, StorageTrieRepository},
     umi_genesis::{

@@ -10,6 +10,7 @@ test-doubles = []
 
 [dependencies]
 alloy.workspace = true
+aptos-table-natives.workspace = true
 aptos-types.workspace = true
 bcs.workspace = true
 bytes.workspace = true

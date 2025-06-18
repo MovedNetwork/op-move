@@ -198,7 +198,12 @@ impl DatabaseRef for ResolverBackedDB<'_> {
     }
 
     fn storage_ref(&self, address: Address, index: U256) -> Result<U256, Self::Error> {
-        let storage = self.storage_trie.for_account(&address)?;
+        let Some(account) = self.get_account(&address)? else {
+            return Ok(U256::ZERO);
+        };
+        let storage = self
+            .storage_trie
+            .for_account_with_root(&address, &account.inner.storage_root)?;
         let value = storage.get(&index)?;
         Ok(value.unwrap_or_default())
     }

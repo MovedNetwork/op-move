@@ -24,7 +24,7 @@ fn build_1000_blocks<'app>(
             b.iter_batched(
                 input::blocks_1000,
                 |input| {
-                    let (queue, actor) = umi_app::create(&mut app, buffer_size);
+                    let (queue, actor) = umi_app::create(app, buffer_size);
 
                     runtime.block_on(umi_app::run_with_actor(actor, async {
                         for msg in input {

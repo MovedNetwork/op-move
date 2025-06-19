@@ -68,13 +68,13 @@ async fn test_storage_evm_contract() -> anyhow::Result<()> {
             .eth_call(view_request.clone(), BlockNumberOrTag::Number(2))
             .await
             .unwrap();
-        assert_eq!(height_2[31], 2);
+        assert_eq!(U256::from_be_slice(&height_2), U256::from(2));
 
         let height_3 = ctx
             .eth_call(view_request, BlockNumberOrTag::Number(3))
             .await
             .unwrap();
-        assert_eq!(height_3[31], 3);
+        assert_eq!(U256::from_be_slice(&height_3), U256::from(3));
 
         ctx.shutdown().await;
 

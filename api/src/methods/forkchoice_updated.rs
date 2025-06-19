@@ -160,7 +160,7 @@ pub(super) mod tests {
                     "2c7cb7e2f79c2fa31f2b4280e96c34f7de981c6ccf5d0e998b51f5dc798fa53d"
                 )),
             },
-            Some(PayloadAttributesV3 {
+            Some(Payload::from(PayloadAttributesV3 {
                 timestamp: U64::from_be_slice(&hex!("6660737b")),
                 prev_randao: B256::new(hex!(
                     "bde07f5d381bb84700433fe6c0ae077aa40eaad3a5de7abd298f0e3e27e6e4c9"
@@ -176,7 +176,7 @@ pub(super) mod tests {
                     "7ef8f8a0de86bef815fc910df65a9459ccb2b9a35fa8596dfcfed1ff01bbf28891d86d5e94deaddeaddeaddeaddeaddeaddeaddeaddead00019442000000000000000000000000000000000000158080830f424080b8a4440a5e2000000558000c5fc50000000000000000000000006660735b00000000000001a9000000000000000000000000000000000000000000000000000000000000000700000000000000000000000000000000000000000000000000000000000000017ae3f74f0134521a7d62a387ac75a5153bcd1aab1c7e003e9b9e15a5d8846363000000000000000000000000e25583099ba105d9ec0a67f5ae86d90e50036425"
                 ))],
                 gas_limit: U64::from_be_slice(&hex!("01c9c380")),
-            }),
+            }).try_into().unwrap()),
         );
 
         assert_eq!(params, expected_params);

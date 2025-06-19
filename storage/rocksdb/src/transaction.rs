@@ -120,13 +120,13 @@ mod tests {
         let signed_tx = OpTxEnvelope::Eip1559(tx.into_signed(signature));
 
         let transaction = ExtendedTransaction {
-            inner: signed_tx,
+            inner: signed_tx.try_into().unwrap(),
             block_number: 1,
             block_hash: B256::new(hex!(
                 "2222223123123121231231231231232222222231231231212312312312312322"
             )),
             transaction_index: 1,
-            effective_gas_price: 1,
+            effective_gas_price: U256::from(1),
         };
 
         let serialized = transaction.to_value();
@@ -151,13 +151,13 @@ mod tests {
         let sealed_tx = OpTxEnvelope::Deposit(tx.seal_slow());
 
         let transaction = ExtendedTransaction {
-            inner: sealed_tx,
+            inner: sealed_tx.try_into().unwrap(),
             block_number: 1,
             block_hash: B256::new(hex!(
                 "2222223123123121231231231231232222222231231231212312312312312322"
             )),
             transaction_index: 1,
-            effective_gas_price: 1,
+            effective_gas_price: U256::from(1),
         };
 
         let serialized = transaction.to_value();

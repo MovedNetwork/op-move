@@ -25,16 +25,13 @@ fn parse_params(request: serde_json::Value) -> Result<NormalizedEthTransaction, 
             let bytes: Bytes = json_utils::deserialize(x)?;
             let mut slice: &[u8] = bytes.as_ref();
 
-            // First decode to UmiTxEnvelope to reject unsupported types early
-            let umi_tx: UmiTxEnvelope = UmiTxEnvelope::decode(&mut slice)
-                .map_err(|e| {
-                    JsonRpcError::parse_error(
-                        request,
-                        format!("Unsupported or invalid transaction type: {e}"),
-                    )
-                })?;
+            let umi_tx: UmiTxEnvelope = UmiTxEnvelope::decode(&mut slice).map_err(|e| {
+                JsonRpcError::parse_error(
+                    request,
+                    format!("Unsupported or invalid transaction type: {e}"),
+                )
+            })?;
 
-            // Normalize transaction at API border
             let normalized_tx: NormalizedEthTransaction = umi_tx.try_into()?;
 
             Ok(normalized_tx)

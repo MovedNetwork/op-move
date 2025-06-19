@@ -5,6 +5,7 @@ use {
         transaction,
     },
     rocksdb::{AsColumnFamilyRef, DB as RocksDb},
+    std::sync::Arc,
     umi_blockchain::{
         block::ExtendedBlock,
         payload::{PayloadId, PayloadQueries, PayloadResponse},
@@ -22,12 +23,12 @@ impl ToKey for PayloadId {
 }
 
 #[derive(Debug, Clone)]
-pub struct RocksDbPayloadQueries<'db> {
-    db: &'db RocksDb,
+pub struct RocksDbPayloadQueries {
+    db: Arc<RocksDb>,
 }
 
-impl<'db> RocksDbPayloadQueries<'db> {
-    pub fn new(db: &'db RocksDb) -> Self {
+impl RocksDbPayloadQueries {
+    pub fn new(db: Arc<RocksDb>) -> Self {
         Self { db }
     }
 
@@ -36,13 +37,13 @@ impl<'db> RocksDbPayloadQueries<'db> {
     }
 
     fn cf(&self) -> impl AsColumnFamilyRef + use<'_> {
-        cf(self.db)
+        cf(self.db.as_ref())
     }
 }
 
-impl<'db> PayloadQueries for RocksDbPayloadQueries<'db> {
+impl PayloadQueries for RocksDbPayloadQueries {
     type Err = rocksdb::Error;
-    type Storage = &'db RocksDb;
+    type Storage = Arc<RocksDb>;
 
     fn by_hash(
         &self,

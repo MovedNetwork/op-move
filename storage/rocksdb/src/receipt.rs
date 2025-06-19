@@ -1,7 +1,7 @@
 use {
     crate::generic::{FromValue, ToValue},
     rocksdb::{AsColumnFamilyRef, DB as RocksDb, WriteBatchWithTransaction},
-    std::marker::PhantomData,
+    std::{marker::PhantomData, sync::Arc},
     umi_blockchain::receipt::{
         ExtendedReceipt, ReceiptQueries, ReceiptRepository, TransactionReceipt,
     },
@@ -27,7 +27,7 @@ impl RocksDbReceiptRepository<'_> {
 
 impl<'db> ReceiptRepository for RocksDbReceiptRepository<'db> {
     type Err = rocksdb::Error;
-    type Storage = &'db RocksDb;
+    type Storage = Arc<RocksDb>;
 
     fn contains(&self, db: &Self::Storage, transaction_hash: B256) -> Result<bool, Self::Err> {
         let cf = cf(db);
@@ -69,7 +69,7 @@ impl RocksDbReceiptQueries<'_> {
 
 impl<'db> ReceiptQueries for RocksDbReceiptQueries<'db> {
     type Err = rocksdb::Error;
-    type Storage = &'db RocksDb;
+    type Storage = Arc<RocksDb>;
 
     fn by_transaction_hash(
         &self,

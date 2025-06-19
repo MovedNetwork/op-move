@@ -64,7 +64,7 @@ impl<'app> Dependencies<'app> for Uninitialized {
         &|_| {}
     }
 
-    fn payload_queries() -> Self::PayloadQueries {}
+    fn payload_queries(&self) -> Self::PayloadQueries {}
 
     fn receipt_queries() -> Self::ReceiptQueries {}
 

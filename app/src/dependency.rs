@@ -48,7 +48,7 @@ impl<'app, D: Dependencies<'app>> ApplicationReader<'app, D> {
             base_token: D::base_token_accounts(genesis_config),
             block_hash_lookup: deps.block_hash_lookup(),
             block_queries: D::block_queries(),
-            payload_queries: D::payload_queries(),
+            payload_queries: deps.payload_queries(),
             receipt_queries: D::receipt_queries(),
             receipt_memory: deps.receipt_memory_reader(),
             storage: deps.shared_storage_reader(),
@@ -109,7 +109,7 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
             on_payload: D::on_payload(),
             on_tx: D::on_tx(),
             on_tx_batch: D::on_tx_batch(),
-            payload_queries: D::payload_queries(),
+            payload_queries: deps.payload_queries(),
             receipt_queries: D::receipt_queries(),
             receipt_repository: D::receipt_repository(),
             receipt_memory: deps.receipt_memory(),
@@ -158,7 +158,7 @@ pub trait DependenciesThreadSafe<'db>:
         CreateL1GasFee: Send + 'static,
         CreateL2GasFee: Send + 'static,
     > + Send
-    + 'static
+    + 'db
 {
 }
 
@@ -191,7 +191,7 @@ impl<
             CreateL1GasFee: Send + 'static,
             CreateL2GasFee: Send + 'static,
         > + Send
-        + 'static,
+        + 'app,
 > DependenciesThreadSafe<'app> for T
 {
 }
@@ -251,7 +251,7 @@ pub trait Dependencies<'db> {
 
     fn on_tx_batch() -> &'db Self::OnTxBatch;
 
-    fn payload_queries() -> Self::PayloadQueries;
+    fn payload_queries(&self) -> Self::PayloadQueries;
 
     fn receipt_queries() -> Self::ReceiptQueries;
 
@@ -447,7 +447,7 @@ mod test_doubles {
             unimplemented!("Dependencies are created manually in tests")
         }
 
-        fn payload_queries() -> Self::PayloadQueries {
+        fn payload_queries(&self) -> Self::PayloadQueries {
             unimplemented!("Dependencies are created manually in tests")
         }
 

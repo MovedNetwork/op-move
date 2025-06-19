@@ -5,7 +5,6 @@ use {
     },
     eth_trie::DB,
     heed::RoTxn,
-    std::sync::Arc,
     umi_evm_ext::state::DbWithRoot,
     umi_shared::primitives::{Address, B256},
 };
@@ -20,12 +19,12 @@ pub const DB: &str = "evm_storage_trie";
 pub const ROOT_DB: &str = "evm_storage_trie_root";
 
 pub struct HeedEthStorageTrieDb {
-    env: Arc<heed::Env>,
+    env: heed::Env,
     account: Address,
 }
 
 impl HeedEthStorageTrieDb {
-    pub fn new(env: Arc<heed::Env>, account: Address) -> Self {
+    pub fn new(env: heed::Env, account: Address) -> Self {
         Self { env, account }
     }
 

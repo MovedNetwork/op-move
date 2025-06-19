@@ -38,7 +38,7 @@ impl HeedBlockRepository<'_> {
 
 impl<'db> BlockRepository for HeedBlockRepository<'db> {
     type Err = heed::Error;
-    type Storage = &'db heed::Env;
+    type Storage = heed::Env;
 
     fn add(&mut self, env: &mut Self::Storage, block: ExtendedBlock) -> Result<(), Self::Err> {
         let mut transaction = env.write_txn()?;
@@ -98,7 +98,7 @@ impl HeedBlockQueries<'_> {
 
 impl<'db> BlockQueries for HeedBlockQueries<'db> {
     type Err = heed::Error;
-    type Storage = &'db heed::Env;
+    type Storage = heed::Env;
 
     fn by_hash(
         &self,

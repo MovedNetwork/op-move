@@ -20,17 +20,17 @@ pub const HEIGHT_DB: &str = "state_height";
 pub const HEIGHT_KEY: u64 = 0;
 
 #[derive(Debug, Clone)]
-pub struct HeedStateRootIndex<'db> {
-    env: &'db heed::Env,
+pub struct HeedStateRootIndex {
+    env: heed::Env,
 }
 
-impl<'db> HeedStateRootIndex<'db> {
-    pub const fn new(env: &'db heed::Env) -> Self {
+impl HeedStateRootIndex {
+    pub const fn new(env: heed::Env) -> Self {
         Self { env }
     }
 }
 
-impl HeightToStateRootIndex for HeedStateRootIndex<'_> {
+impl HeightToStateRootIndex for HeedStateRootIndex {
     type Err = heed::Error;
 
     fn height(&self) -> Result<u64, Self::Err> {

@@ -35,7 +35,7 @@ impl HeedTransactionRepository<'_> {
 
 impl<'db> TransactionRepository for HeedTransactionRepository<'db> {
     type Err = heed::Error;
-    type Storage = &'db heed::Env;
+    type Storage = heed::Env;
 
     fn extend(
         &mut self,
@@ -71,7 +71,7 @@ impl HeedTransactionQueries<'_> {
 
 impl<'db> TransactionQueries for HeedTransactionQueries<'db> {
     type Err = heed::Error;
-    type Storage = &'db heed::Env;
+    type Storage = heed::Env;
 
     fn by_hash(
         &self,

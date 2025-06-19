@@ -29,6 +29,13 @@ pub const L2_LOWEST_ADDRESS: Address = address!("4200000000000000000000000000000
 pub const L2_HIGHEST_ADDRESS: Address = address!("42000000000000000000000000000000000000ff");
 pub const DEPOSIT_RECEIPT_VERSION: u64 = 1;
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
+pub enum UmiTxType {
+    Legacy,
+    Eip2930,
+    Eip1559,
+}
+
 /// Custom canonical transaction envelope that only holds transaction types we support.
 /// This excludes EIP-4844 (blob transactions) and EIP-7702 (account abstraction).
 /// Otherwise derived straight from alloy's `TxEnvelope`.
@@ -96,33 +103,32 @@ pub trait WrapReceipt {
     fn wrap_receipt(&self, receipt: Receipt, bloom: Bloom) -> OpReceiptEnvelope;
 }
 
-impl WrapReceipt for OpTxEnvelope {
+impl WrapReceipt for NormalizedExtendedTxEnvelope {
     fn wrap_receipt(&self, receipt: Receipt, bloom: Bloom) -> OpReceiptEnvelope {
         match self {
-            Self::Legacy(_) => OpReceiptEnvelope::Legacy(ReceiptWithBloom {
-                receipt,
-                logs_bloom: bloom,
-            }),
-            Self::Eip1559(_) => OpReceiptEnvelope::Eip1559(ReceiptWithBloom {
-                receipt,
-                logs_bloom: bloom,
-            }),
-            Self::Eip2930(_) => OpReceiptEnvelope::Eip2930(ReceiptWithBloom {
-                receipt,
-                logs_bloom: bloom,
-            }),
-            Self::Deposit(dep) => {
-                OpReceiptEnvelope::Deposit(OpDepositReceiptWithBloom {
-                    receipt: OpDepositReceipt {
-                        inner: receipt,
-                        // Per OP stack spec <https://specs.optimism.io/protocol/deposits.html#execution>
-                        deposit_nonce: Some(dep.nonce()),
-                        deposit_receipt_version: Some(DEPOSIT_RECEIPT_VERSION),
-                    },
+            Self::Canonical(norm_tx) => match norm_tx.tx_type {
+                UmiTxType::Legacy => OpReceiptEnvelope::Legacy(ReceiptWithBloom {
+                    receipt,
                     logs_bloom: bloom,
-                })
-            }
-            _ => unreachable!("Wrapping of other tx types not supported"),
+                }),
+                UmiTxType::Eip2930 => OpReceiptEnvelope::Eip2930(ReceiptWithBloom {
+                    receipt,
+                    logs_bloom: bloom,
+                }),
+                UmiTxType::Eip1559 => OpReceiptEnvelope::Eip1559(ReceiptWithBloom {
+                    receipt,
+                    logs_bloom: bloom,
+                }),
+            },
+            Self::DepositedTx(dep_tx) => OpReceiptEnvelope::Deposit(OpDepositReceiptWithBloom {
+                receipt: OpDepositReceipt {
+                    inner: receipt,
+                    // Per OP stack spec <https://specs.optimism.io/protocol/deposits.html#execution>
+                    deposit_nonce: Some(dep_tx.nonce()),
+                    deposit_receipt_version: Some(DEPOSIT_RECEIPT_VERSION),
+                },
+                logs_bloom: bloom,
+            }),
         }
     }
 }
@@ -201,37 +207,6 @@ impl NormalizedExtendedTxEnvelope {
         match self {
             Self::Canonical(tx) => tx.l1_gas_fee_input.clone(),
             Self::DepositedTx(_) => L1GasFeeInput::default(),
-        }
-    }
-
-    pub fn inner(&self) -> OpTxEnvelope {
-        match self {
-            Self::Canonical(tx) => {
-                // For canonical transactions, we create a basic EIP-1559 envelope
-                // This is used for storage only and may not contain the exact original envelope
-                use alloy::{
-                    consensus::{SignableTransaction, TxEip1559},
-                    signers::Signature,
-                };
-
-                let inner_tx = TxEip1559 {
-                    chain_id: tx.chain_id.unwrap_or(1),
-                    nonce: tx.nonce,
-                    gas_limit: tx.gas_limit(),
-                    max_fee_per_gas: tx.max_fee_per_gas.to::<u128>(),
-                    max_priority_fee_per_gas: tx.max_priority_fee_per_gas.to::<u128>(),
-                    to: tx.to,
-                    value: tx.value,
-                    access_list: tx.access_list.clone(),
-                    input: tx.data.clone(),
-                };
-
-                // Create a dummy signature since we only need this for storage
-                let signature = Signature::test_signature();
-                let signed = inner_tx.into_signed(signature);
-                OpTxEnvelope::Eip1559(signed)
-            }
-            Self::DepositedTx(tx) => OpTxEnvelope::Deposit(tx.clone()),
         }
     }
 
@@ -333,6 +308,7 @@ impl TransactionExecutionOutcome {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub struct NormalizedEthTransaction {
+    pub tx_type: UmiTxType,
     pub signer: Address,
     pub tx_hash: B256,
     pub to: TxKind,
@@ -372,6 +348,7 @@ impl TryFrom<Signed<TxEip1559>> for NormalizedEthTransaction {
         let (tx, signature, tx_hash) = value.into_parts();
 
         Ok(Self {
+            tx_type: UmiTxType::Eip1559,
             signer: address,
             tx_hash,
             to: tx.to,
@@ -402,6 +379,7 @@ impl TryFrom<Signed<TxEip2930>> for NormalizedEthTransaction {
         let (tx, signature, tx_hash) = value.into_parts();
 
         Ok(Self {
+            tx_type: UmiTxType::Eip2930,
             signer: address,
             tx_hash,
             to: tx.to,
@@ -432,6 +410,7 @@ impl TryFrom<Signed<TxLegacy>> for NormalizedEthTransaction {
         let (tx, signature, tx_hash) = value.into_parts();
 
         Ok(Self {
+            tx_type: UmiTxType::Legacy,
             signer: address,
             to: tx.to,
             tx_hash,
@@ -451,60 +430,62 @@ impl TryFrom<Signed<TxLegacy>> for NormalizedEthTransaction {
 
 impl From<NormalizedEthTransaction> for OpTxEnvelope {
     fn from(normalized: NormalizedEthTransaction) -> Self {
-        if normalized.max_fee_per_gas > U256::ZERO
-            || normalized.max_priority_fee_per_gas > U256::ZERO
-        {
-            let tx_eip1559 = TxEip1559 {
-                chain_id: normalized
-                    .chain_id
-                    .expect("Chain ID can be unset only for legacy txs"),
-                nonce: normalized.nonce,
-                gas_limit: normalized.gas_limit.saturating_to(),
-                max_fee_per_gas: normalized.max_fee_per_gas.saturating_to(),
-                max_priority_fee_per_gas: normalized.max_priority_fee_per_gas.saturating_to(),
-                to: normalized.to,
-                value: normalized.value,
-                access_list: normalized.access_list,
-                input: normalized.data,
-            };
+        match normalized.tx_type {
+            UmiTxType::Legacy => {
+                let tx_legacy = TxLegacy {
+                    chain_id: normalized.chain_id,
+                    nonce: normalized.nonce,
+                    gas_price: normalized.max_fee_per_gas.saturating_to(),
+                    gas_limit: normalized.gas_limit.saturating_to(),
+                    to: normalized.to,
+                    value: normalized.value,
+                    input: normalized.data,
+                };
 
-            let signed_tx =
-                Signed::new_unchecked(tx_eip1559, normalized.signature, normalized.tx_hash);
+                let signed_tx =
+                    Signed::new_unchecked(tx_legacy, normalized.signature, normalized.tx_hash);
 
-            OpTxEnvelope::Eip1559(signed_tx)
-        } else if !normalized.access_list.is_empty() {
-            let tx_eip2930 = TxEip2930 {
-                chain_id: normalized
-                    .chain_id
-                    .expect("Chain ID can be unset only for legacy txs"),
-                nonce: normalized.nonce,
-                gas_price: normalized.max_fee_per_gas.saturating_to(),
-                gas_limit: normalized.gas_limit.saturating_to(),
-                to: normalized.to,
-                value: normalized.value,
-                access_list: normalized.access_list,
-                input: normalized.data,
-            };
+                OpTxEnvelope::Legacy(signed_tx)
+            }
+            UmiTxType::Eip2930 => {
+                let tx_eip2930 = TxEip2930 {
+                    chain_id: normalized
+                        .chain_id
+                        .expect("Chain ID can be unset only for legacy txs"),
+                    nonce: normalized.nonce,
+                    gas_price: normalized.max_fee_per_gas.saturating_to(),
+                    gas_limit: normalized.gas_limit.saturating_to(),
+                    to: normalized.to,
+                    value: normalized.value,
+                    access_list: normalized.access_list,
+                    input: normalized.data,
+                };
 
-            let signed_tx =
-                Signed::new_unchecked(tx_eip2930, normalized.signature, normalized.tx_hash);
+                let signed_tx =
+                    Signed::new_unchecked(tx_eip2930, normalized.signature, normalized.tx_hash);
 
-            OpTxEnvelope::Eip2930(signed_tx)
-        } else {
-            let tx_legacy = TxLegacy {
-                chain_id: normalized.chain_id,
-                nonce: normalized.nonce,
-                gas_price: normalized.max_fee_per_gas.saturating_to(),
-                gas_limit: normalized.gas_limit.saturating_to(),
-                to: normalized.to,
-                value: normalized.value,
-                input: normalized.data,
-            };
+                OpTxEnvelope::Eip2930(signed_tx)
+            }
+            UmiTxType::Eip1559 => {
+                let tx_eip1559 = TxEip1559 {
+                    chain_id: normalized
+                        .chain_id
+                        .expect("Chain ID can be unset only for legacy txs"),
+                    nonce: normalized.nonce,
+                    gas_limit: normalized.gas_limit.saturating_to(),
+                    max_fee_per_gas: normalized.max_fee_per_gas.saturating_to(),
+                    max_priority_fee_per_gas: normalized.max_priority_fee_per_gas.saturating_to(),
+                    to: normalized.to,
+                    value: normalized.value,
+                    access_list: normalized.access_list,
+                    input: normalized.data,
+                };
 
-            let signed_tx =
-                Signed::new_unchecked(tx_legacy, normalized.signature, normalized.tx_hash);
+                let signed_tx =
+                    Signed::new_unchecked(tx_eip1559, normalized.signature, normalized.tx_hash);
 
-            OpTxEnvelope::Legacy(signed_tx)
+                OpTxEnvelope::Eip1559(signed_tx)
+            }
         }
     }
 }
@@ -618,6 +599,7 @@ impl From<TransactionRequest> for NormalizedEthTransaction {
             data: value.input.into_input().unwrap_or_default(),
             access_list: value.access_list.unwrap_or_default(),
             // As it's exclusively for simulation, we can get away with this
+            tx_type: UmiTxType::Eip1559,
             tx_hash: B256::random(),
             l1_gas_fee_input: L1GasFeeInput::default(),
             signature: PrimitiveSignature::new(U256::ZERO, U256::ZERO, false),

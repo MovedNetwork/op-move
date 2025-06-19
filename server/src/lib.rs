@@ -209,8 +209,8 @@ impl<'db, D: Dependencies<'db>> GenesisStateExt for Application<'db, D> {
     }
 }
 
-pub fn initialize_app<'f>(
-    genesis_config: &'f GenesisConfig,
+pub fn initialize_app(
+    genesis_config: &GenesisConfig,
 ) -> (
     Application<'static, dependency::Dependency>,
     ApplicationReader<'static, dependency::ReaderDependency>,

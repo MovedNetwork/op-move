@@ -33,7 +33,7 @@ impl HeedTransactionRepository<'_> {
     }
 }
 
-impl<'db> TransactionRepository for HeedTransactionRepository<'db> {
+impl TransactionRepository for HeedTransactionRepository<'_> {
     type Err = heed::Error;
     type Storage = heed::Env;
 
@@ -69,7 +69,7 @@ impl HeedTransactionQueries<'_> {
     }
 }
 
-impl<'db> TransactionQueries for HeedTransactionQueries<'db> {
+impl TransactionQueries for HeedTransactionQueries<'_> {
     type Err = heed::Error;
     type Storage = heed::Env;
 

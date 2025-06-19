@@ -24,7 +24,7 @@ pub struct CommandActor<'actor, 'app, D: Dependencies<'app>> {
     app: &'actor mut Application<'app, D>,
 }
 
-impl<'a, 'app, D: DependenciesThreadSafe<'app>> CommandActor<'a, 'app, D> {
+impl<'app, D: DependenciesThreadSafe<'app>> CommandActor<'_, 'app, D> {
     pub async fn work(mut self) {
         while let Some(msg) = self.rx.recv().await {
             Self::handle_command(&mut *self.app, msg);

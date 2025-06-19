@@ -25,7 +25,7 @@ impl RocksDbTransactionRepository<'_> {
     }
 }
 
-impl<'db> TransactionRepository for RocksDbTransactionRepository<'db> {
+impl TransactionRepository for RocksDbTransactionRepository<'_> {
     type Err = rocksdb::Error;
     type Storage = Arc<RocksDb>;
 
@@ -61,7 +61,7 @@ impl RocksDbTransactionQueries<'_> {
     }
 }
 
-impl<'db> TransactionQueries for RocksDbTransactionQueries<'db> {
+impl TransactionQueries for RocksDbTransactionQueries<'_> {
     type Err = rocksdb::Error;
     type Storage = Arc<RocksDb>;
 

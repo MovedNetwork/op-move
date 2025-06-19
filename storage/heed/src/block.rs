@@ -36,7 +36,7 @@ impl HeedBlockRepository<'_> {
     }
 }
 
-impl<'db> BlockRepository for HeedBlockRepository<'db> {
+impl BlockRepository for HeedBlockRepository<'_> {
     type Err = heed::Error;
     type Storage = heed::Env;
 
@@ -96,7 +96,7 @@ impl HeedBlockQueries<'_> {
     }
 }
 
-impl<'db> BlockQueries for HeedBlockQueries<'db> {
+impl BlockQueries for HeedBlockQueries<'_> {
     type Err = heed::Error;
     type Storage = heed::Env;
 

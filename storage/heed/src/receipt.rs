@@ -33,7 +33,7 @@ impl HeedReceiptRepository<'_> {
     }
 }
 
-impl<'db> ReceiptRepository for HeedReceiptRepository<'db> {
+impl ReceiptRepository for HeedReceiptRepository<'_> {
     type Err = heed::Error;
     type Storage = heed::Env;
 
@@ -81,7 +81,7 @@ impl HeedReceiptQueries<'_> {
     }
 }
 
-impl<'db> ReceiptQueries for HeedReceiptQueries<'db> {
+impl ReceiptQueries for HeedReceiptQueries<'_> {
     type Err = heed::Error;
     type Storage = heed::Env;
 

@@ -26,7 +26,7 @@ pub struct HeedReaderDependencies {
     db: umi_storage_heed::Env,
 }
 
-impl<'db> HeedDependencies {
+impl HeedDependencies {
     /// Creates a set of dependencies appropriate for usage in reader.
     pub fn reader(&self) -> HeedReaderDependencies {
         HeedReaderDependencies {

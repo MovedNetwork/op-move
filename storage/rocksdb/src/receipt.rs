@@ -25,7 +25,7 @@ impl RocksDbReceiptRepository<'_> {
     }
 }
 
-impl<'db> ReceiptRepository for RocksDbReceiptRepository<'db> {
+impl ReceiptRepository for RocksDbReceiptRepository<'_> {
     type Err = rocksdb::Error;
     type Storage = Arc<RocksDb>;
 
@@ -67,7 +67,7 @@ impl RocksDbReceiptQueries<'_> {
     }
 }
 
-impl<'db> ReceiptQueries for RocksDbReceiptQueries<'db> {
+impl ReceiptQueries for RocksDbReceiptQueries<'_> {
     type Err = rocksdb::Error;
     type Storage = Arc<RocksDb>;
 

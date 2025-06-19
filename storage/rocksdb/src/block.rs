@@ -30,7 +30,7 @@ impl RocksDbBlockRepository<'_> {
     }
 }
 
-impl<'db> BlockRepository for RocksDbBlockRepository<'db> {
+impl BlockRepository for RocksDbBlockRepository<'_> {
     type Err = rocksdb::Error;
     type Storage = Arc<RocksDb>;
 
@@ -79,7 +79,7 @@ impl RocksDbBlockQueries<'_> {
     }
 }
 
-impl<'db> BlockQueries for RocksDbBlockQueries<'db> {
+impl BlockQueries for RocksDbBlockQueries<'_> {
     type Err = rocksdb::Error;
     type Storage = Arc<RocksDb>;
 

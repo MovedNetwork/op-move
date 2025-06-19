@@ -92,16 +92,6 @@ impl Encodable for UmiTxEnvelope {
     }
 }
 
-impl UmiTxEnvelope {
-    pub fn recover_signer(&self) -> Result<Address, Error> {
-        match self {
-            UmiTxEnvelope::Legacy(tx) => Ok(tx.recover_signer()?),
-            UmiTxEnvelope::Eip2930(tx) => Ok(tx.recover_signer()?),
-            UmiTxEnvelope::Eip1559(tx) => Ok(tx.recover_signer()?),
-        }
-    }
-}
-
 pub trait WrapReceipt {
     fn wrap_receipt(&self, receipt: Receipt, bloom: Bloom) -> OpReceiptEnvelope;
 }
@@ -465,7 +455,7 @@ impl From<NormalizedEthTransaction> for OpTxEnvelope {
             let tx_eip1559 = TxEip1559 {
                 chain_id: normalized
                     .chain_id
-                    .expect("Chain ID can be unset only for legacy txds"),
+                    .expect("Chain ID can be unset only for legacy txs"),
                 nonce: normalized.nonce,
                 gas_limit: normalized.gas_limit.saturating_to(),
                 max_fee_per_gas: normalized.max_fee_per_gas.saturating_to(),
@@ -484,7 +474,7 @@ impl From<NormalizedEthTransaction> for OpTxEnvelope {
             let tx_eip2930 = TxEip2930 {
                 chain_id: normalized
                     .chain_id
-                    .expect("Chain ID can be unset only for legacy txds"),
+                    .expect("Chain ID can be unset only for legacy txs"),
                 nonce: normalized.nonce,
                 gas_price: normalized.max_fee_per_gas.saturating_to(),
                 gas_limit: normalized.gas_limit.saturating_to(),

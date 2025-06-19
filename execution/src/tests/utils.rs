@@ -1,5 +1,6 @@
 use {
     super::*,
+    crate::transaction::UmiTxEnvelope,
     alloy::consensus::Sealed,
     move_binary_format::errors::VMError,
     move_compiler::{
@@ -775,7 +776,9 @@ pub fn create_transaction_with_value(
     let signature = signer.inner.sign_transaction_sync(&mut tx).unwrap();
     let signed_tx = TxEnvelope::Eip1559(tx.into_signed(signature));
     let tx_hash = *signed_tx.tx_hash();
-    let normalized_tx = NormalizedExtendedTxEnvelope::Canonical(signed_tx.try_into().unwrap());
+    let umi_tx: UmiTxEnvelope = signed_tx.try_into().unwrap();
+    let normalized_eth_tx: NormalizedEthTransaction = umi_tx.try_into().unwrap();
+    let normalized_tx = NormalizedExtendedTxEnvelope::Canonical(normalized_eth_tx);
 
     (tx_hash, normalized_tx)
 }

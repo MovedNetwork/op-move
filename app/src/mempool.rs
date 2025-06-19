@@ -42,12 +42,11 @@ mod tests {
     use {
         alloy::{
             consensus::{SignableTransaction, TxEip1559},
-            eips::Encodable2718,
             network::TxSignerSync,
             primitives::{TxKind, ruint::aliases::U256},
             signers::local::PrivateKeySigner,
         },
-        op_alloy::consensus::TxDeposit,
+        umi_shared::primitives::Address,
     };
 
     use super::*;

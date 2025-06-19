@@ -91,7 +91,7 @@ async fn test_sending_the_same_payload_twice_produces_one_block() -> anyhow::Res
                 timestamp: U64::from_limbs([1747148047]),
                 extra_data: Bytes::new(),
                 base_fee_per_gas: U256::ZERO,
-                block_hash: B256::new(hex!("62581f9d2327af2d1387ff4e0fdb08e1f4b28547b8a92fd2b0cb96bf4121d931")),
+                block_hash: B256::new(hex!("fe7d6823fd8391a780488d2226b7bae7c36e51d1045a0959c27bb51238aa6d80")),
                 transactions: vec![Bytes::from_static(&hex!("7ef8f8a08c2449b17ee7c7ad9a93f6dbd0ac4d3a666f5c3183aa19f8c2dcc8a310cc878894deaddeaddeaddeaddeaddeaddeaddeaddead00019442000000000000000000000000000000000000158080830f424080b8a4440a5e2000022950000c5f4f00000000000000010000000068235d0e00000000000000200000000000000000000000000000000000000000000000000000000000d9858400000000000000000000000000000000000000000000000000000000000000015d16200108a6cd9dd5bcf4b1e8670dafbb7854a380091e3e3da33ed07cf8214f0000000000000000000000008c67a7b8624044f8f672e9ec374dfa596f01afb9"))],
                 withdrawals: vec![],
                 blob_gas_used: U64::ZERO,

@@ -1,4 +1,4 @@
-use {super::*, crate::transaction::NormalizedExtendedTxEnvelope};
+use {super::*, crate::transaction::{NormalizedExtendedTxEnvelope, UmiTxEnvelope}};
 
 #[test]
 fn test_move_event_converts_to_eth_log_successfully() {
@@ -103,7 +103,9 @@ fn test_transaction_chain_id() {
     let signature = ctx.signer.inner.sign_transaction_sync(&mut tx).unwrap();
     let signed_tx = TxEnvelope::Eip1559(tx.into_signed(signature));
     let tx_hash = *signed_tx.tx_hash();
-    let signed_tx = NormalizedExtendedTxEnvelope::Canonical(signed_tx.try_into().unwrap());
+    let umi_tx: UmiTxEnvelope = signed_tx.try_into().unwrap();
+    let normalized_tx: NormalizedEthTransaction = umi_tx.try_into().unwrap();
+    let signed_tx = NormalizedExtendedTxEnvelope::Canonical(normalized_tx);
 
     let transaction = TestTransaction::new(signed_tx, tx_hash);
     let err = ctx.execute_tx(&transaction).unwrap_err();
@@ -137,7 +139,9 @@ fn test_out_of_gas() {
     let signature = ctx.signer.inner.sign_transaction_sync(&mut tx).unwrap();
     let signed_tx = TxEnvelope::Eip1559(tx.into_signed(signature));
     let tx_hash = *signed_tx.tx_hash();
-    let signed_tx = NormalizedExtendedTxEnvelope::Canonical(signed_tx.try_into().unwrap());
+    let umi_tx: UmiTxEnvelope = signed_tx.try_into().unwrap();
+    let normalized_tx: NormalizedEthTransaction = umi_tx.try_into().unwrap();
+    let signed_tx = NormalizedExtendedTxEnvelope::Canonical(normalized_tx);
 
     let transaction = TestTransaction::new(signed_tx, tx_hash);
     let err = ctx.execute_tx(&transaction).unwrap_err();

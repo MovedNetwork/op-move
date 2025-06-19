@@ -3,8 +3,8 @@ use {
     umi_app::{ApplicationReader, Dependencies},
 };
 
-pub async fn execute(
-    app: &ApplicationReader<impl Dependencies>,
+pub async fn execute<'reader>(
+    app: &ApplicationReader<'reader, impl Dependencies<'reader>>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let response = app.chain_id();
     Ok(serde_json::to_value(format!("{response:#x}"))

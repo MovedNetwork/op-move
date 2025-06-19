@@ -30,7 +30,7 @@ enum BlockNumberOrHash {
     Hash(B256),
 }
 
-impl<D: Dependencies> ApplicationReader<D> {
+impl<'app, D: Dependencies<'app>> ApplicationReader<'app, D> {
     pub fn chain_id(&self) -> u64 {
         self.genesis_config.chain_id
     }

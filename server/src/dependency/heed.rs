@@ -28,14 +28,14 @@ impl HeedDependencies {
     }
 }
 
-impl umi_app::Dependencies for HeedDependencies {
+impl<'db> umi_app::Dependencies<'db> for HeedDependencies {
+    type BlockHashLookup = SharedBlockHashCache;
+    type BlockHashWriter = SharedBlockHashCache;
     type BlockQueries = block::HeedBlockQueries<'static>;
     type BlockRepository = block::HeedBlockRepository<'static>;
-    type BlockHashLookup = umi_app::SharedBlockHashCache;
-    type BlockHashWriter = umi_app::SharedBlockHashCache;
-    type OnPayload = umi_app::OnPayload<Application<Self>>;
-    type OnTx = umi_app::OnTx<Application<Self>>;
-    type OnTxBatch = umi_app::OnTxBatch<Application<Self>>;
+    type OnPayload = umi_app::OnPayload<Application<'db, Self>>;
+    type OnTx = umi_app::OnTx<Application<'db, Self>>;
+    type OnTxBatch = umi_app::OnTxBatch<Application<'db, Self>>;
     type PayloadQueries = payload::HeedPayloadQueries<'static>;
     type ReceiptQueries = receipt::HeedReceiptQueries<'static>;
     type ReceiptRepository = receipt::HeedReceiptRepository<'static>;
@@ -50,6 +50,14 @@ impl umi_app::Dependencies for HeedDependencies {
     type TransactionQueries = transaction::HeedTransactionQueries<'static>;
     type TransactionRepository = transaction::HeedTransactionRepository<'static>;
 
+    fn block_hash_lookup(&self) -> Self::BlockHashLookup {
+        BLOCK_HASH_CACHE.clone()
+    }
+
+    fn block_hash_writer(&self) -> Self::BlockHashWriter {
+        BLOCK_HASH_CACHE.clone()
+    }
+
     fn block_queries() -> Self::BlockQueries {
         block::HeedBlockQueries::new()
     }
@@ -58,29 +66,21 @@ impl umi_app::Dependencies for HeedDependencies {
         block::HeedBlockRepository::new()
     }
 
-    fn on_payload() -> &'static Self::OnPayload {
+    fn on_payload() -> &'db Self::OnPayload {
         &|state, id, hash| state.payload_queries.add_block_hash(id, hash).unwrap()
     }
 
-    fn on_tx() -> &'static Self::OnTx {
+    fn on_tx() -> &'db Self::OnTx {
         CommandActor::on_tx_noop()
     }
 
-    fn on_tx_batch() -> &'static Self::OnTxBatch {
+    fn on_tx_batch() -> &'db Self::OnTxBatch {
         &|state| {
             state
                 .state_queries
                 .push_state_root(state.state.state_root())
                 .unwrap()
         }
-    }
-
-    fn block_hash_lookup(&self) -> Self::BlockHashLookup {
-        BLOCK_HASH_CACHE.clone()
-    }
-
-    fn block_hash_writer(&self) -> Self::BlockHashWriter {
-        BLOCK_HASH_CACHE.clone()
     }
 
     fn payload_queries() -> Self::PayloadQueries {
@@ -138,16 +138,16 @@ impl umi_app::Dependencies for HeedDependencies {
     impl_shared!();
 }
 
-impl umi_app::Dependencies for HeedReaderDependencies {
+impl<'db> umi_app::Dependencies<'db> for HeedReaderDependencies {
+    type BlockHashLookup =
+        SharedHybridBlockHashCache<'static, Self::SharedStorageReader, Self::BlockQueries>;
+    type BlockHashWriter =
+        SharedHybridBlockHashCache<'static, Self::SharedStorageReader, Self::BlockQueries>;
     type BlockQueries = block::HeedBlockQueries<'static>;
     type BlockRepository = block::HeedBlockRepository<'static>;
-    type BlockHashLookup =
-        umi_app::SharedHybridBlockHashCache<'static, Self::SharedStorageReader, Self::BlockQueries>;
-    type BlockHashWriter =
-        umi_app::SharedHybridBlockHashCache<'static, Self::SharedStorageReader, Self::BlockQueries>;
-    type OnPayload = umi_app::OnPayload<Application<Self>>;
-    type OnTx = umi_app::OnTx<Application<Self>>;
-    type OnTxBatch = umi_app::OnTxBatch<Application<Self>>;
+    type OnPayload = umi_app::OnPayload<Application<'db, Self>>;
+    type OnTx = umi_app::OnTx<Application<'db, Self>>;
+    type OnTxBatch = umi_app::OnTxBatch<Application<'db, Self>>;
     type PayloadQueries = payload::HeedPayloadQueries<'static>;
     type ReceiptQueries = receipt::HeedReceiptQueries<'static>;
     type ReceiptRepository = receipt::HeedReceiptRepository<'static>;
@@ -162,6 +162,14 @@ impl umi_app::Dependencies for HeedReaderDependencies {
     type TransactionQueries = transaction::HeedTransactionQueries<'static>;
     type TransactionRepository = transaction::HeedTransactionRepository<'static>;
 
+    fn block_hash_lookup(&self) -> Self::BlockHashLookup {
+        HYBRID_BLOCK_HASH_CACHE.clone()
+    }
+
+    fn block_hash_writer(&self) -> Self::BlockHashWriter {
+        HYBRID_BLOCK_HASH_CACHE.clone()
+    }
+
     fn block_queries() -> Self::BlockQueries {
         block::HeedBlockQueries::new()
     }
@@ -170,29 +178,21 @@ impl umi_app::Dependencies for HeedReaderDependencies {
         block::HeedBlockRepository::new()
     }
 
-    fn on_payload() -> &'static Self::OnPayload {
+    fn on_payload() -> &'db Self::OnPayload {
         &|state, id, hash| state.payload_queries.add_block_hash(id, hash).unwrap()
     }
 
-    fn on_tx() -> &'static Self::OnTx {
+    fn on_tx() -> &'db Self::OnTx {
         CommandActor::on_tx_noop()
     }
 
-    fn on_tx_batch() -> &'static Self::OnTxBatch {
+    fn on_tx_batch() -> &'db Self::OnTxBatch {
         &|state| {
             state
                 .state_queries
                 .push_state_root(state.state.state_root())
                 .unwrap()
         }
-    }
-
-    fn block_hash_lookup(&self) -> Self::BlockHashLookup {
-        HYBRID_BLOCK_HASH_CACHE.clone()
-    }
-
-    fn block_hash_writer(&self) -> Self::BlockHashWriter {
-        HYBRID_BLOCK_HASH_CACHE.clone()
     }
 
     fn payload_queries() -> Self::PayloadQueries {

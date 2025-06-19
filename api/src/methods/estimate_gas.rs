@@ -6,9 +6,9 @@ use {
 
 const BASE_FEE: u64 = 21_000;
 
-pub async fn execute(
+pub async fn execute<'reader>(
     request: serde_json::Value,
-    app: &ApplicationReader<impl Dependencies>,
+    app: &ApplicationReader<'reader, impl Dependencies<'reader>>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let (transaction, block_number) = parse_params(request)?;
     let response = std::cmp::max(app.estimate_gas(transaction, block_number)?, BASE_FEE);
@@ -104,7 +104,7 @@ mod tests {
     async fn test_execute(block: &str) {
         let (state_channel, rx) = mpsc::channel(10);
         let (reader, mut app) = create_app();
-        let state_actor = CommandActor::new(rx, &mut app);
+        let state_actor = CommandActor::new(rx, app);
 
         umi_app::run_with_actor(state_actor, async move {
             deposit_eth("0x8fd379246834eac74b8419ffda202cf8051f7a03", &state_channel).await;

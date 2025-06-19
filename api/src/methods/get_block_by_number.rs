@@ -3,9 +3,9 @@ use {
     umi_app::{ApplicationReader, Dependencies},
 };
 
-pub async fn execute(
+pub async fn execute<'reader>(
     request: serde_json::Value,
-    app: &ApplicationReader<impl Dependencies>,
+    app: &ApplicationReader<'reader, impl Dependencies<'reader>>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let (number, include_transactions) = parse_params_2(request)?;
 
@@ -100,7 +100,7 @@ mod tests {
     async fn test_latest_block_height_is_updated_with_newly_built_block() {
         let (state_channel, rx) = mpsc::channel(10);
         let (reader, mut app) = create_app();
-        let state: CommandActor<TestDependencies> = CommandActor::new(rx, &mut app);
+        let state: CommandActor<TestDependencies> = CommandActor::new(rx, app);
 
         umi_app::run_with_actor(state, async move {
             let request = example_request(Latest);
@@ -133,7 +133,7 @@ mod tests {
     async fn test_latest_block_height_is_same_as_tag(tag: BlockNumberOrTag) {
         let (state_channel, rx) = mpsc::channel(10);
         let (reader, mut app) = create_app();
-        let state: CommandActor<TestDependencies> = CommandActor::new(rx, &mut app);
+        let state: CommandActor<TestDependencies> = CommandActor::new(rx, app);
 
         umi_app::run_with_actor(state, async move {
             let msg = Command::StartBlockBuild {

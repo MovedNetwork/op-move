@@ -12,16 +12,16 @@ use {
 /// A set of non-operational dependencies that can be used to satisfy a parameter list.
 pub struct Uninitialized;
 
-impl Dependencies for Uninitialized {
+impl<'app> Dependencies<'app> for Uninitialized {
     type BaseTokenAccounts = ();
     type BlockHash = B256;
     type BlockQueries = ();
     type BlockHashLookup = ();
     type BlockHashWriter = ();
     type BlockRepository = ();
-    type OnPayload = crate::OnPayload<Application<Self>>;
-    type OnTx = crate::OnTx<Application<Self>>;
-    type OnTxBatch = crate::OnTxBatch<Application<Self>>;
+    type OnPayload = crate::OnPayload<Application<'app, Self>>;
+    type OnTx = crate::OnTx<Application<'app, Self>>;
+    type OnTxBatch = crate::OnTxBatch<Application<'app, Self>>;
     type PayloadQueries = ();
     type ReceiptQueries = ();
     type ReceiptRepository = ();
@@ -52,15 +52,15 @@ impl Dependencies for Uninitialized {
 
     fn block_repository() -> Self::BlockRepository {}
 
-    fn on_payload() -> &'static Self::OnPayload {
+    fn on_payload() -> &'app Self::OnPayload {
         &|_, _, _| {}
     }
 
-    fn on_tx() -> &'static Self::OnTx {
+    fn on_tx() -> &'app Self::OnTx {
         &|_, _| {}
     }
 
-    fn on_tx_batch() -> &'static Self::OnTxBatch {
+    fn on_tx_batch() -> &'app Self::OnTxBatch {
         &|_| {}
     }
 

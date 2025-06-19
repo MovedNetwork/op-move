@@ -61,7 +61,7 @@ pub mod tests {
     #[tokio::test]
     async fn test_execute() {
         let (_reader, mut app) = create_app();
-        let (queue, state) = umi_app::create(&mut app, 10);
+        let (queue, state) = umi_app::create(app, 10);
 
         umi_app::run_with_actor(state, async move {
             let request = example_request();

@@ -13,6 +13,8 @@ pub fn dependencies() -> Dependency {
     InMemoryDependencies::new()
 }
 
+unsafe impl Sync for InMemoryDependencies {}
+
 pub struct InMemoryDependencies {
     memory_reader: umi_blockchain::in_memory::SharedMemoryReader,
     memory: Option<umi_blockchain::in_memory::SharedMemory>,
@@ -62,14 +64,14 @@ impl Default for InMemoryDependencies {
     }
 }
 
-impl umi_app::Dependencies for InMemoryDependencies {
+impl<'db> umi_app::Dependencies<'db> for InMemoryDependencies {
     type BlockQueries = umi_blockchain::block::InMemoryBlockQueries;
     type BlockRepository = umi_blockchain::block::InMemoryBlockRepository;
     type BlockHashLookup = umi_app::SharedBlockHashCache;
     type BlockHashWriter = umi_app::SharedBlockHashCache;
-    type OnPayload = umi_app::OnPayload<Application<Self>>;
-    type OnTx = umi_app::OnTx<Application<Self>>;
-    type OnTxBatch = umi_app::OnTxBatch<Application<Self>>;
+    type OnPayload = umi_app::OnPayload<Application<'db, Self>>;
+    type OnTx = umi_app::OnTx<Application<'db, Self>>;
+    type OnTxBatch = umi_app::OnTxBatch<Application<'db, Self>>;
     type PayloadQueries = umi_blockchain::payload::InMemoryPayloadQueries;
     type ReceiptQueries = umi_blockchain::receipt::InMemoryReceiptQueries;
     type ReceiptRepository = umi_blockchain::receipt::InMemoryReceiptRepository;
@@ -91,15 +93,15 @@ impl umi_app::Dependencies for InMemoryDependencies {
         umi_blockchain::block::InMemoryBlockRepository::new()
     }
 
-    fn on_payload() -> &'static Self::OnPayload {
+    fn on_payload() -> &'db Self::OnPayload {
         CommandActor::on_payload_in_memory()
     }
 
-    fn on_tx() -> &'static Self::OnTx {
+    fn on_tx() -> &'db Self::OnTx {
         CommandActor::on_tx_in_memory()
     }
 
-    fn on_tx_batch() -> &'static Self::OnTxBatch {
+    fn on_tx_batch() -> &'db Self::OnTxBatch {
         CommandActor::on_tx_batch_in_memory()
     }
 

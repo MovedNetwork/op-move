@@ -8,12 +8,12 @@ use {
     umi_blockchain::payload::NewPayloadId,
 };
 
-pub async fn handle(
+pub async fn handle<'reader>(
     request: serde_json::Value,
     queue: CommandQueue,
     is_allowed: impl Fn(&MethodName) -> bool,
     payload_id: &impl NewPayloadId,
-    app: ApplicationReader<impl Dependencies>,
+    app: ApplicationReader<'reader, impl Dependencies<'reader>>,
 ) -> JsonRpcResponse {
     let id = json_utils::get_field(&request, "id");
     let jsonrpc = json_utils::get_field(&request, "jsonrpc");
@@ -34,12 +34,12 @@ pub async fn handle(
     }
 }
 
-async fn inner_handle_request(
+async fn inner_handle_request<'reader>(
     request: serde_json::Value,
     queue: CommandQueue,
     is_allowed: impl Fn(&MethodName) -> bool,
     payload_id: &impl NewPayloadId,
-    app: &ApplicationReader<impl Dependencies>,
+    app: &ApplicationReader<'reader, impl Dependencies<'reader>>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     use {crate::methods::*, MethodName::*};
 

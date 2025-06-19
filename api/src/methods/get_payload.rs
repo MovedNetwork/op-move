@@ -7,9 +7,9 @@ use {
     umi_app::{ApplicationReader, Dependencies},
 };
 
-pub async fn execute_v3(
+pub async fn execute_v3<'reader>(
     request: serde_json::Value,
-    app: &ApplicationReader<impl Dependencies>,
+    app: &ApplicationReader<'reader, impl Dependencies<'reader>>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let payload_id: PayloadId = parse_params_1(request)?;
 
@@ -169,7 +169,7 @@ mod tests {
             payload_queries: InMemoryPayloadQueries::new(),
             evm_storage,
         };
-        let (queue, state) = umi_app::create(&mut app, 10);
+        let (queue, state) = umi_app::create(app, 10);
 
         umi_app::run_with_actor(state, async move {
             // Update the state with an execution payload

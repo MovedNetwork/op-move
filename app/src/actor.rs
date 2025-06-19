@@ -19,25 +19,25 @@ pub type OnTx<S> = dyn Fn(&mut S, ChangeSet) + Send + Sync;
 /// A function invoked on an execution of a new payload.
 pub type OnPayload<S> = dyn Fn(&mut S, PayloadId, B256) + Send + Sync;
 
-pub struct CommandActor<'a, D: Dependencies> {
+pub struct CommandActor<'a, D: Dependencies<'a>> {
     rx: Receiver<Command>,
-    app: &'a mut Application<D>,
+    app: Application<'a, D>,
 }
 
-impl<D: DependenciesThreadSafe> CommandActor<'_, D> {
+impl<'app, D: DependenciesThreadSafe<'app>> CommandActor<'app, D> {
     pub async fn work(mut self) {
         while let Some(msg) = self.rx.recv().await {
-            Self::handle_command(&mut *self.app, msg);
+            Self::handle_command(&mut self.app, msg);
         }
     }
 }
 
-impl<'a, D: Dependencies> CommandActor<'a, D> {
-    pub fn new(rx: Receiver<Command>, app: &'a mut Application<D>) -> Self {
+impl<'a, D: Dependencies<'a>> CommandActor<'a, D> {
+    pub fn new(rx: Receiver<Command>, app: Application<'a, D>) -> Self {
         Self { rx, app }
     }
 
-    pub fn handle_command(mut app: impl DerefMut<Target = Application<D>>, msg: Command) {
+    pub fn handle_command(mut app: impl DerefMut<Target = Application<'a, D>>, msg: Command) {
         match msg {
             Command::StartBlockBuild {
                 payload_attributes,
@@ -48,31 +48,31 @@ impl<'a, D: Dependencies> CommandActor<'a, D> {
         }
     }
 
-    pub fn on_tx_batch_noop() -> &'static OnTxBatch<Application<D>> {
+    pub fn on_tx_batch_noop() -> &'a OnTxBatch<Application<'a, D>> {
         &|_| {}
     }
 
-    pub fn on_tx_noop() -> &'static OnTx<Application<D>> {
+    pub fn on_tx_noop() -> &'a OnTx<Application<'a, D>> {
         &|_, _| {}
     }
 
-    pub fn on_payload_noop() -> &'static OnPayload<Application<D>> {
+    pub fn on_payload_noop() -> &'a OnPayload<Application<'a, D>> {
         &|_, _, _| {}
     }
 }
 
-impl<D: Dependencies<StateQueries = InMemoryStateQueries>> CommandActor<'_, D> {
-    pub fn on_tx_in_memory() -> &'static OnTx<Application<D>> {
+impl<'app, D: Dependencies<'app, StateQueries = InMemoryStateQueries>> CommandActor<'app, D> {
+    pub fn on_tx_in_memory() -> &'app OnTx<Application<'app, D>> {
         &|_state, _changes| ()
     }
 
-    pub fn on_tx_batch_in_memory() -> &'static OnTxBatch<Application<D>> {
+    pub fn on_tx_batch_in_memory() -> &'app OnTxBatch<Application<'app, D>> {
         &|_state| ()
     }
 }
 
-impl<D: Dependencies<PayloadQueries = InMemoryPayloadQueries>> CommandActor<'_, D> {
-    pub fn on_payload_in_memory() -> &'static OnPayload<Application<D>> {
+impl<'app, D: Dependencies<'app, PayloadQueries = InMemoryPayloadQueries>> CommandActor<'app, D> {
+    pub fn on_payload_in_memory() -> &'app OnPayload<Application<'app, D>> {
         &|_state, _payload_id, _block_hash| ()
     }
 }
@@ -85,8 +85,8 @@ impl<D: Dependencies<PayloadQueries = InMemoryPayloadQueries>> CommandActor<'_, 
 /// the `actor` work loop stops.
 ///
 /// [`CommandQueue`]: crate::CommandQueue
-pub async fn run_with_actor<D: DependenciesThreadSafe, F, Out>(
-    actor: CommandActor<'_, D>,
+pub async fn run_with_actor<'app, D: DependenciesThreadSafe<'app>, F, Out>(
+    actor: CommandActor<'app, D>,
     future: F,
 ) -> Out
 where

@@ -115,7 +115,7 @@ pub async fn run(args: Config) {
 fn serve(
     addr: SocketAddr,
     queue: &CommandQueue,
-    reader: &ApplicationReader<dependency::ReaderDependency>,
+    reader: &ApplicationReader<'static, dependency::ReaderDependency>,
     port: &'static str,
     is_allowed: &'static (impl Fn(&MethodName) -> bool + Send + Sync),
     jwt: Option<DecodingKey>,
@@ -173,7 +173,7 @@ pub trait GenesisStateExt: Sized {
     }
 }
 
-impl<D: Dependencies> GenesisStateExt for Application<D> {
+impl<'db, D: Dependencies<'db>> GenesisStateExt for Application<'db, D> {
     fn is_state_empty(&self) -> bool {
         self.block_queries
             .latest(&self.storage_reader)
@@ -209,14 +209,15 @@ impl<D: Dependencies> GenesisStateExt for Application<D> {
     }
 }
 
-pub fn initialize_app(
-    genesis_config: &GenesisConfig,
+pub fn initialize_app<'f>(
+    genesis_config: &'f GenesisConfig,
 ) -> (
-    Application<dependency::Dependency>,
-    ApplicationReader<dependency::ReaderDependency>,
+    Application<'static, dependency::Dependency>,
+    ApplicationReader<'static, dependency::ReaderDependency>,
 ) {
-    let (app, app_reader) = dependency::create(genesis_config);
-    (app.with_genesis(genesis_config), app_reader)
+    let (mut app, app_reader) = dependency::create(genesis_config);
+    app.initialize_genesis_state_if_empty(genesis_config);
+    (app, app_reader)
 }
 
 fn create_genesis_block(
@@ -273,13 +274,13 @@ pub fn validate_jwt(
         })
 }
 
-async fn mirror(
+async fn mirror<'reader>(
     queue: CommandQueue,
     request: Request,
     port: &str,
     is_allowed: &impl Fn(&MethodName) -> bool,
     payload_id: &impl NewPayloadId,
-    app: ApplicationReader<impl Dependencies>,
+    app: ApplicationReader<'reader, impl Dependencies<'reader>>,
 ) -> Result<warp::reply::Response, Rejection> {
     let (path, query, method, headers, body) = request;
 

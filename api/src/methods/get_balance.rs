@@ -3,9 +3,9 @@ use {
     umi_app::{ApplicationReader, Dependencies},
 };
 
-pub async fn execute(
+pub async fn execute<'reader>(
     request: serde_json::Value,
-    app: &ApplicationReader<impl Dependencies>,
+    app: &ApplicationReader<'reader, impl Dependencies<'reader>>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let (address, block_number) = parse_params_2(request)?;
 

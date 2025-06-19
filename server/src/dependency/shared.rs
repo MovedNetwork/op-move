@@ -7,7 +7,10 @@ use {
 
 pub fn create(
     genesis_config: &GenesisConfig,
-) -> (Application<Dependency>, ApplicationReader<ReaderDependency>) {
+) -> (
+    Application<'static, Dependency>,
+    ApplicationReader<'static, ReaderDependency>,
+) {
     let deps = dependencies();
     let reader_deps = deps.reader();
 

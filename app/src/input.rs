@@ -5,9 +5,7 @@ use {
         block::{ExtendedBlock, Header},
         payload::{NewPayloadIdInput, PayloadId},
     },
-    umi_execution::transaction::{
-        NormalizedExtendedTxEnvelope, NormalizedEthTransaction,
-    },
+    umi_execution::transaction::{NormalizedEthTransaction, NormalizedExtendedTxEnvelope},
     umi_shared::primitives::{Address, B256, B2048, Bytes, ToU64, U64, U256},
 };
 
@@ -42,7 +40,7 @@ impl TryFrom<Payload> for PayloadForExecution {
         let mut transactions = Vec::new();
 
         for raw_tx in value.transactions {
-            let mut slice: &[u8] = &raw_tx.as_ref();
+            let mut slice: &[u8] = raw_tx.as_ref();
             let tx = OpTxEnvelope::decode(&mut slice)?;
             transactions.push(tx.try_into()?);
         }

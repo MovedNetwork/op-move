@@ -45,7 +45,7 @@ async fn test_storage_evm_contract() -> anyhow::Result<()> {
         assert!(receipt.inner.inner.is_success());
         let contract_address = receipt.inner.contract_address.unwrap();
 
-        // 2. Call `set` function in block with heights <= 3
+        // 2. Call `set` function in blocks at heights 2 and 3
         for block_height in [2, 3] {
             let tx = call_contract(chain_id, contract_address, setCall::SELECTOR);
             let receipt = ctx.execute_transaction(tx).await.unwrap();

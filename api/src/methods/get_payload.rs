@@ -169,7 +169,7 @@ mod tests {
             payload_queries: InMemoryPayloadQueries::new(),
             evm_storage,
         };
-        let (queue, state) = umi_app::create(app, 10);
+        let (queue, state) = umi_app::create(&mut app, 10);
 
         umi_app::run_with_actor(state, async move {
             // Update the state with an execution payload

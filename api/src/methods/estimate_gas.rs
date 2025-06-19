@@ -104,7 +104,7 @@ mod tests {
     async fn test_execute(block: &str) {
         let (state_channel, rx) = mpsc::channel(10);
         let (reader, mut app) = create_app();
-        let state_actor = CommandActor::new(rx, app);
+        let state_actor = CommandActor::new(rx, &mut app);
 
         umi_app::run_with_actor(state_actor, async move {
             deposit_eth("0x8fd379246834eac74b8419ffda202cf8051f7a03", &state_channel).await;

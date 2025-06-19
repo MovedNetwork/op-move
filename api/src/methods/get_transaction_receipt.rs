@@ -49,7 +49,7 @@ mod tests {
     #[tokio::test]
     async fn test_execute() {
         let (reader, mut app) = create_app();
-        let (queue, state) = umi_app::create(app, 10);
+        let (queue, state) = umi_app::create(&mut app, 10);
 
         umi_app::run_with_actor(state, async move {
             // 1. Send transaction

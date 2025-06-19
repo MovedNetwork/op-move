@@ -13,10 +13,10 @@ use {
     tokio::sync::{broadcast, mpsc},
 };
 
-pub fn create<'app, T: DependenciesThreadSafe<'app>>(
-    app: Application<'app, T>,
+pub fn create<'app, 'b, T: DependenciesThreadSafe<'b>>(
+    app: &'app mut Application<'b, T>,
     buffer: u32,
-) -> (CommandQueue, CommandActor<'app, T>) {
+) -> (CommandQueue, CommandActor<'app, 'b, T>) {
     let (ktx, _) = broadcast::channel(1);
     let (tx, rx) = mpsc::channel(buffer as usize);
 
@@ -160,8 +160,8 @@ where
     let queue = CommandQueue::new(tx, ktx);
     let reader_with_factory = factory.create();
     let handle = future(queue, reader_with_factory.reader);
-    let app = reader_with_factory.factory.create();
-    let actor = CommandActor::new(rx, app);
+    let mut app = reader_with_factory.factory.create();
+    let actor = CommandActor::new(rx, &mut app);
 
     crate::run_with_actor(actor, handle).await
 }

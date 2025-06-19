@@ -74,7 +74,7 @@ mod tests {
     async fn test_execute_call_entry_fn(block: &str) {
         let (reader, mut app) = create_app();
         let (state_channel, rx) = mpsc::channel(10);
-        let state_actor = CommandActor::new(rx, app);
+        let state_actor = CommandActor::new(rx, &mut app);
 
         umi_app::run_with_actor(state_actor, async move {
             // Add funds to the account to deploy the `counter` contract
@@ -125,7 +125,7 @@ mod tests {
     async fn test_execute_call_script(block: &str) {
         let (reader, mut app) = create_app();
         let (state_channel, rx) = mpsc::channel(10);
-        let state_actor = CommandActor::new(rx, app);
+        let state_actor = CommandActor::new(rx, &mut app);
 
         umi_app::run_with_actor(state_actor, async move {
             // Add funds to the account to deploy the `counter` contract

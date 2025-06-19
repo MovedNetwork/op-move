@@ -4,7 +4,6 @@ use {
     std::fmt::Debug,
     umi_shared::primitives::B256,
 };
-
 pub trait BlockQueries: Debug {
     /// The associated error type for the backing storage access operation.
     type Err: Debug;
@@ -26,6 +25,33 @@ pub trait BlockQueries: Debug {
     ) -> Result<Option<BlockResponse>, Self::Err>;
 
     fn latest(&self, storage: &Self::Storage) -> Result<Option<u64>, Self::Err>;
+}
+
+impl<T: BlockQueries> BlockQueries for &T {
+    type Err = T::Err;
+    type Storage = T::Storage;
+
+    fn by_hash(
+        &self,
+        storage: &Self::Storage,
+        hash: B256,
+        include_transactions: bool,
+    ) -> Result<Option<BlockResponse>, Self::Err> {
+        (*self).by_hash(storage, hash, include_transactions)
+    }
+
+    fn by_height(
+        &self,
+        storage: &Self::Storage,
+        height: u64,
+        include_transactions: bool,
+    ) -> Result<Option<BlockResponse>, Self::Err> {
+        (*self).by_height(storage, height, include_transactions)
+    }
+
+    fn latest(&self, storage: &Self::Storage) -> Result<Option<u64>, Self::Err> {
+        (*self).latest(storage)
+    }
 }
 
 type RpcBlock = alloy::rpc::types::Block<RpcTransaction>;

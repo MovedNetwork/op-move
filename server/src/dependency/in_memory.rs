@@ -105,7 +105,7 @@ impl<'db> umi_app::Dependencies<'db> for InMemoryDependencies {
         CommandActor::on_tx_batch_in_memory()
     }
 
-    fn payload_queries() -> Self::PayloadQueries {
+    fn payload_queries(&self) -> Self::PayloadQueries {
         umi_blockchain::payload::InMemoryPayloadQueries::new()
     }
 

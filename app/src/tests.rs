@@ -31,7 +31,8 @@ use {
     },
     umi_evm_ext::state::{BlockHashWriter, InMemoryStorageTrieRepository, StorageTrieRepository},
     umi_execution::{
-        UmiBaseTokenAccounts, create_vm_session, session_id::SessionId,
+        UmiBaseTokenAccounts, create_vm_session,
+        session_id::SessionId,
         transaction::{NormalizedEthTransaction, UmiTxEnvelope},
     },
     umi_genesis::{
@@ -441,7 +442,10 @@ fn test_fetched_balances_are_updated_after_transfer_of_funds() {
     let tx = create_transaction(0);
 
     app.add_transaction(tx);
-    app.start_block_build(PayloadForExecution::default(), U64::from(0x03421ee50df45cacu64));
+    app.start_block_build(
+        PayloadForExecution::default(),
+        U64::from(0x03421ee50df45cacu64),
+    );
 
     let actual_recipient_balance = reader.balance_by_height(to, Latest).unwrap();
     let expected_recipient_balance = amount;
@@ -464,7 +468,10 @@ fn test_fetched_nonces_are_updated_after_executing_transaction() {
     let tx = create_transaction(0);
 
     app.add_transaction(tx);
-    app.start_block_build(PayloadForExecution::default(), U64::from(0x03421ee50df45cacu64));
+    app.start_block_build(
+        PayloadForExecution::default(),
+        U64::from(0x03421ee50df45cacu64),
+    );
 
     let actual_recipient_balance = reader.nonce_by_height(to, Latest).unwrap();
     let expected_recipient_balance = 0;
@@ -513,7 +520,9 @@ fn test_older_payload_can_be_fetched_again_successfully() {
         Payload {
             gas_limit: U64::MAX,
             ..Default::default()
-        }.try_into().unwrap(),
+        }
+        .try_into()
+        .unwrap(),
         payload_id,
     );
 
@@ -530,7 +539,9 @@ fn test_older_payload_can_be_fetched_again_successfully() {
             timestamp: U64::from(1u64),
             gas_limit: U64::MAX,
             ..Default::default()
-        }.try_into().unwrap(),
+        }
+        .try_into()
+        .unwrap(),
         payload_2_id,
     );
 
@@ -737,7 +748,9 @@ fn test_fee_history_percentile_calculations(
         Payload {
             gas_limit: U64::from(1_000_000),
             ..Default::default()
-        }.try_into().unwrap(),
+        }
+        .try_into()
+        .unwrap(),
         U64::from(1),
     );
 
@@ -775,7 +788,9 @@ fn test_fee_history_gas_ratio_progression(tx_counts: Vec<usize>, expect_increasi
                 timestamp: U64::from(block_num as u64 + 1),
                 gas_limit: U64::from(1_000_000),
                 ..Default::default()
-            }.try_into().unwrap(),
+            }
+            .try_into()
+            .unwrap(),
             U64::from(block_num as u64 + 1),
         );
     }
@@ -815,7 +830,9 @@ fn test_fee_history_boundary_percentiles() {
         Payload {
             gas_limit: U64::from(1_000_000),
             ..Default::default()
-        }.try_into().unwrap(),
+        }
+        .try_into()
+        .unwrap(),
         U64::from(1),
     );
 

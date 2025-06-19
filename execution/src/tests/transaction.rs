@@ -1,4 +1,7 @@
-use {super::*, crate::transaction::{NormalizedExtendedTxEnvelope, UmiTxEnvelope}};
+use {
+    super::*,
+    crate::transaction::{NormalizedExtendedTxEnvelope, UmiTxEnvelope},
+};
 
 #[test]
 fn test_move_event_converts_to_eth_log_successfully() {

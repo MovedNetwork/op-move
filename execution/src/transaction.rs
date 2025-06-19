@@ -209,8 +209,10 @@ impl NormalizedExtendedTxEnvelope {
             Self::Canonical(tx) => {
                 // For canonical transactions, we create a basic EIP-1559 envelope
                 // This is used for storage only and may not contain the exact original envelope
-                use alloy::consensus::{SignableTransaction, TxEip1559};
-                use alloy::signers::Signature;
+                use alloy::{
+                    consensus::{SignableTransaction, TxEip1559},
+                    signers::Signature,
+                };
 
                 let inner_tx = TxEip1559 {
                     chain_id: tx.chain_id.unwrap_or(1),

@@ -2,9 +2,7 @@ use {
     crate::{json_utils, jsonrpc::JsonRpcError},
     alloy::rlp::Decodable,
     umi_app::{Command, CommandQueue},
-    umi_execution::transaction::{
-        NormalizedEthTransaction, UmiTxEnvelope,
-    },
+    umi_execution::transaction::{NormalizedEthTransaction, UmiTxEnvelope},
     umi_shared::primitives::{B256, Bytes},
 };
 
@@ -40,7 +38,10 @@ fn parse_params(request: serde_json::Value) -> Result<NormalizedEthTransaction, 
     }
 }
 
-async fn inner_execute(tx: NormalizedEthTransaction, queue: CommandQueue) -> Result<B256, JsonRpcError> {
+async fn inner_execute(
+    tx: NormalizedEthTransaction,
+    queue: CommandQueue,
+) -> Result<B256, JsonRpcError> {
     let tx_hash = tx.tx_hash;
 
     let msg = Command::AddTransaction { tx };

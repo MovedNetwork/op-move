@@ -39,14 +39,14 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
         }
 
         // Include transactions from both `payload_attributes` and internal mem-pool
-        let transactions_with_metadata = attributes
+        let transactions = attributes
             .transactions
             .iter()
             .cloned()
             .chain(
                 self.mem_pool
                     .drain()
-                    .map(|tx| NormalizedExtendedTxEnvelope::from(tx)),
+                    .map(NormalizedExtendedTxEnvelope::from),
             )
             .filter(|tx|
                 // Do not include transactions we have already processed before
@@ -68,12 +68,8 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
             timestamp: attributes.timestamp.as_limbs()[0],
             prev_randao: attributes.prev_randao,
         };
-        let transactions: Vec<_> = transactions_with_metadata
-            .iter()
-            .map(|tx| tx.clone())
-            .collect();
         let (execution_outcome, receipts) = self.execute_transactions(
-            transactions_with_metadata.into_iter(),
+            transactions.clone().into_iter(),
             base_fee,
             &header_for_execution,
         );

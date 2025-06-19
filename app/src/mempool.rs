@@ -51,7 +51,11 @@ mod tests {
 
     use super::*;
 
-    fn create_test_tx(signer: &PrivateKeySigner, nonce: u64, to: Address) -> NormalizedEthTransaction {
+    fn create_test_tx(
+        signer: &PrivateKeySigner,
+        nonce: u64,
+        to: Address,
+    ) -> NormalizedEthTransaction {
         let mut tx = TxEip1559 {
             chain_id: 1,
             nonce,
@@ -66,7 +70,7 @@ mod tests {
 
         let signature = signer.sign_transaction_sync(&mut tx).unwrap();
         let signed_tx = tx.into_signed(signature);
-        
+
         signed_tx.try_into().unwrap()
     }
 

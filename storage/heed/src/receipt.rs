@@ -33,9 +33,9 @@ impl HeedReceiptRepository<'_> {
     }
 }
 
-impl<'db> ReceiptRepository for HeedReceiptRepository<'db> {
+impl ReceiptRepository for HeedReceiptRepository<'_> {
     type Err = heed::Error;
-    type Storage = &'db heed::Env;
+    type Storage = heed::Env;
 
     fn contains(&self, env: &Self::Storage, transaction_hash: B256) -> Result<bool, Self::Err> {
         let transaction = env.read_txn()?;
@@ -81,9 +81,9 @@ impl HeedReceiptQueries<'_> {
     }
 }
 
-impl<'db> ReceiptQueries for HeedReceiptQueries<'db> {
+impl ReceiptQueries for HeedReceiptQueries<'_> {
     type Err = heed::Error;
-    type Storage = &'db heed::Env;
+    type Storage = heed::Env;
 
     fn by_transaction_hash(
         &self,

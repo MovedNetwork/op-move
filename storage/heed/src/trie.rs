@@ -20,17 +20,17 @@ pub const DB: &str = "trie";
 pub const ROOT_DB: &str = "trie_root";
 pub const ROOT_KEY: u64 = 0u64;
 
-pub struct HeedEthTrieDb<'db> {
-    env: &'db heed::Env,
+pub struct HeedEthTrieDb {
+    env: heed::Env,
 }
 
-impl<'db> HeedEthTrieDb<'db> {
-    pub fn new(env: &'db heed::Env) -> Self {
+impl HeedEthTrieDb {
+    pub fn new(env: heed::Env) -> Self {
         Self { env }
     }
 }
 
-impl DbWithRoot for HeedEthTrieDb<'_> {
+impl DbWithRoot for HeedEthTrieDb {
     fn root(&self) -> Result<Option<B256>, heed::Error> {
         let transaction = self.env.read_txn()?;
 
@@ -54,7 +54,7 @@ impl DbWithRoot for HeedEthTrieDb<'_> {
     }
 }
 
-impl DB for HeedEthTrieDb<'_> {
+impl DB for HeedEthTrieDb {
     type Error = heed::Error;
 
     fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {

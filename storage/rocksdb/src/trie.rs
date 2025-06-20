@@ -10,12 +10,12 @@ pub const TRIE_COLUMN_FAMILY: &str = "trie";
 pub const ROOT_COLUMN_FAMILY: &str = "trie_root";
 pub const ROOT_KEY: &str = "trie_root";
 
-pub struct RocksEthTrieDb<'db> {
-    db: &'db RocksDb,
+pub struct RocksEthTrieDb {
+    db: Arc<RocksDb>,
 }
 
-impl<'db> RocksEthTrieDb<'db> {
-    pub fn new(db: &'db RocksDb) -> Self {
+impl RocksEthTrieDb {
+    pub fn new(db: Arc<RocksDb>) -> Self {
         Self { db }
     }
 
@@ -32,7 +32,7 @@ impl<'db> RocksEthTrieDb<'db> {
     }
 }
 
-impl DbWithRoot for RocksEthTrieDb<'_> {
+impl DbWithRoot for RocksEthTrieDb {
     fn root(&self) -> Result<Option<B256>, rocksdb::Error> {
         Ok(self
             .db
@@ -45,7 +45,7 @@ impl DbWithRoot for RocksEthTrieDb<'_> {
     }
 }
 
-impl DB for RocksEthTrieDb<'_> {
+impl DB for RocksEthTrieDb {
     type Error = rocksdb::Error;
 
     fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {

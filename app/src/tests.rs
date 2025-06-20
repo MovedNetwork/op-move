@@ -66,8 +66,8 @@ fn create_app_with_given_queries<SQ: StateQueries + Clone + Send + Sync + 'stati
     height: u64,
     state_queries: SQ,
 ) -> (
-    ApplicationReader<TestDependencies<SQ>>,
-    Application<TestDependencies<SQ>>,
+    ApplicationReader<'static, TestDependencies<SQ>>,
+    Application<'static, TestDependencies<SQ>>,
 ) {
     let genesis_config = GenesisConfig::default();
     let mut block_hash_cache = SharedBlockHashCache::default();
@@ -187,8 +187,8 @@ fn create_app_with_fake_queries(
     initial_balance: U256,
     height: u64,
 ) -> (
-    ApplicationReader<TestDependencies>,
-    Application<TestDependencies>,
+    ApplicationReader<'static, TestDependencies>,
+    Application<'static, TestDependencies>,
 ) {
     let genesis_config = GenesisConfig::default();
     let mut block_hash_cache = SharedBlockHashCache::default();

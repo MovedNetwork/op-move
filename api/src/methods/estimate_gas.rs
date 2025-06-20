@@ -6,9 +6,9 @@ use {
 
 const BASE_FEE: u64 = 21_000;
 
-pub async fn execute(
+pub async fn execute<'reader>(
     request: serde_json::Value,
-    app: &ApplicationReader<impl Dependencies>,
+    app: &ApplicationReader<'reader, impl Dependencies<'reader>>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let (transaction, block_number) = parse_params(request)?;
     let response = std::cmp::max(app.estimate_gas(transaction, block_number)?, BASE_FEE);

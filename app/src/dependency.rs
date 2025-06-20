@@ -7,7 +7,7 @@ use {
     umi_genesis::config::GenesisConfig, umi_shared::primitives::B256,
 };
 
-pub struct ApplicationReader<D: Dependencies> {
+pub struct ApplicationReader<'app, D: Dependencies<'app>> {
     pub genesis_config: GenesisConfig,
     pub base_token: D::BaseTokenAccounts,
     pub block_queries: D::BlockQueries,
@@ -21,9 +21,9 @@ pub struct ApplicationReader<D: Dependencies> {
     pub transaction_queries: D::TransactionQueries,
 }
 
-unsafe impl<D: Dependencies> Sync for ApplicationReader<D> {}
+unsafe impl<'app, D: Dependencies<'app>> Sync for ApplicationReader<'app, D> {}
 
-impl<D: Dependencies> Clone for ApplicationReader<D> {
+impl<'app, D: Dependencies<'app>> Clone for ApplicationReader<'app, D> {
     fn clone(&self) -> Self {
         Self {
             genesis_config: self.genesis_config.clone(),
@@ -41,14 +41,14 @@ impl<D: Dependencies> Clone for ApplicationReader<D> {
     }
 }
 
-impl<D: Dependencies> ApplicationReader<D> {
+impl<'app, D: Dependencies<'app>> ApplicationReader<'app, D> {
     pub fn new(deps: D, genesis_config: &GenesisConfig) -> Self {
         Self {
             genesis_config: genesis_config.clone(),
             base_token: D::base_token_accounts(genesis_config),
             block_hash_lookup: deps.block_hash_lookup(),
             block_queries: D::block_queries(),
-            payload_queries: D::payload_queries(),
+            payload_queries: deps.payload_queries(),
             receipt_queries: D::receipt_queries(),
             receipt_memory: deps.receipt_memory_reader(),
             storage: deps.shared_storage_reader(),
@@ -59,7 +59,7 @@ impl<D: Dependencies> ApplicationReader<D> {
     }
 }
 
-pub struct Application<D: Dependencies> {
+pub struct Application<'app, D: Dependencies<'app>> {
     pub genesis_config: GenesisConfig,
     pub mem_pool: Mempool,
     pub block_hash_writer: D::BlockHashWriter,
@@ -71,9 +71,9 @@ pub struct Application<D: Dependencies> {
     pub block_hash: D::BlockHash,
     pub block_queries: D::BlockQueries,
     pub block_repository: D::BlockRepository,
-    pub on_payload: &'static D::OnPayload,
-    pub on_tx: &'static D::OnTx,
-    pub on_tx_batch: &'static D::OnTxBatch,
+    pub on_payload: &'app D::OnPayload,
+    pub on_tx: &'app D::OnTx,
+    pub on_tx_batch: &'app D::OnTxBatch,
     pub payload_queries: D::PayloadQueries,
     pub receipt_queries: D::ReceiptQueries,
     pub receipt_repository: D::ReceiptRepository,
@@ -92,7 +92,7 @@ pub struct Application<D: Dependencies> {
     pub resolver_cache: ResolverCache,
 }
 
-impl<D: Dependencies> Application<D> {
+impl<'app, D: Dependencies<'app>> Application<'app, D> {
     pub fn new(mut deps: D, genesis_config: &GenesisConfig) -> Self {
         Self {
             genesis_config: genesis_config.clone(),
@@ -109,7 +109,7 @@ impl<D: Dependencies> Application<D> {
             on_payload: D::on_payload(),
             on_tx: D::on_tx(),
             on_tx_batch: D::on_tx_batch(),
-            payload_queries: D::payload_queries(),
+            payload_queries: deps.payload_queries(),
             receipt_queries: D::receipt_queries(),
             receipt_repository: D::receipt_repository(),
             receipt_memory: deps.receipt_memory(),
@@ -130,8 +130,9 @@ impl<D: Dependencies> Application<D> {
     }
 }
 
-pub trait DependenciesThreadSafe:
+pub trait DependenciesThreadSafe<'db>:
     Dependencies<
+        'db,
         BaseTokenAccounts: Send + 'static,
         BlockHash: Send + 'static,
         BlockHashLookup: Send + 'static,
@@ -157,12 +158,14 @@ pub trait DependenciesThreadSafe:
         CreateL1GasFee: Send + 'static,
         CreateL2GasFee: Send + 'static,
     > + Send
-    + 'static
+    + 'db
 {
 }
 
 impl<
+    'app,
     T: Dependencies<
+            'app,
             BaseTokenAccounts: Send + 'static,
             BlockHash: Send + 'static,
             BlockHashLookup: Send + 'static,
@@ -188,12 +191,12 @@ impl<
             CreateL1GasFee: Send + 'static,
             CreateL2GasFee: Send + 'static,
         > + Send
-        + 'static,
-> DependenciesThreadSafe for T
+        + 'app,
+> DependenciesThreadSafe<'app> for T
 {
 }
 
-pub trait Dependencies {
+pub trait Dependencies<'db> {
     type BaseTokenAccounts: umi_execution::BaseTokenAccounts + Clone;
     type BlockHash: umi_blockchain::block::BlockHash;
     type BlockHashLookup: umi_evm_ext::state::BlockHashLookup + Clone;
@@ -203,13 +206,13 @@ pub trait Dependencies {
     type BlockRepository: umi_blockchain::block::BlockRepository<Storage = Self::SharedStorage>;
 
     /// A function invoked on an execution of a new payload.
-    type OnPayload: Fn(&mut Application<Self>, PayloadId, B256) + 'static + ?Sized;
+    type OnPayload: Fn(&mut Application<'db, Self>, PayloadId, B256) + 'db + ?Sized;
 
     /// A function invoked on an execution of a new transaction.
-    type OnTx: Fn(&mut Application<Self>, ChangeSet) + 'static + ?Sized;
+    type OnTx: Fn(&mut Application<'db, Self>, ChangeSet) + 'db + ?Sized;
 
     /// A function invoked on a completion of new transaction execution batch.
-    type OnTxBatch: Fn(&mut Application<Self>) + 'static + ?Sized;
+    type OnTxBatch: Fn(&mut Application<'db, Self>) + 'db + ?Sized;
 
     type PayloadQueries: umi_blockchain::payload::PayloadQueries<Storage = Self::SharedStorageReader>
         + Clone;
@@ -242,13 +245,13 @@ pub trait Dependencies {
 
     fn block_repository() -> Self::BlockRepository;
 
-    fn on_payload() -> &'static Self::OnPayload;
+    fn on_payload() -> &'db Self::OnPayload;
 
-    fn on_tx() -> &'static Self::OnTx;
+    fn on_tx() -> &'db Self::OnTx;
 
-    fn on_tx_batch() -> &'static Self::OnTxBatch;
+    fn on_tx_batch() -> &'db Self::OnTxBatch;
 
-    fn payload_queries() -> Self::PayloadQueries;
+    fn payload_queries(&self) -> Self::PayloadQueries;
 
     fn receipt_queries() -> Self::ReceiptQueries;
 
@@ -336,6 +339,7 @@ mod test_doubles {
     );
 
     impl<
+        'app,
         SQ: StateQueries + Clone + Send + 'static,
         S: State + Send + 'static,
         BT: umi_execution::BaseTokenAccounts + Clone + Send + 'static,
@@ -357,7 +361,7 @@ mod test_doubles {
         BF: umi_blockchain::block::BaseGasFee + Send + 'static,
         F1: umi_execution::CreateL1GasFee + Send + 'static,
         F2: umi_execution::CreateL2GasFee + Send + 'static,
-    > Dependencies
+    > Dependencies<'app>
         for TestDependencies<
             SQ,
             S,
@@ -388,9 +392,9 @@ mod test_doubles {
         type BlockHashWriter = BHW;
         type BlockQueries = BQ;
         type BlockRepository = BR;
-        type OnPayload = crate::OnPayload<Application<Self>>;
-        type OnTx = crate::OnTx<Application<Self>>;
-        type OnTxBatch = crate::OnTxBatch<Application<Self>>;
+        type OnPayload = crate::OnPayload<Application<'app, Self>>;
+        type OnTx = crate::OnTx<Application<'app, Self>>;
+        type OnTxBatch = crate::OnTxBatch<Application<'app, Self>>;
         type PayloadQueries = PQ;
         type ReceiptQueries = RQ;
         type ReceiptRepository = RR;
@@ -431,19 +435,19 @@ mod test_doubles {
             unimplemented!("Dependencies are created manually in tests")
         }
 
-        fn on_payload() -> &'static Self::OnPayload {
+        fn on_payload() -> &'app Self::OnPayload {
             unimplemented!("Dependencies are created manually in tests")
         }
 
-        fn on_tx() -> &'static Self::OnTx {
+        fn on_tx() -> &'app Self::OnTx {
             unimplemented!("Dependencies are created manually in tests")
         }
 
-        fn on_tx_batch() -> &'static Self::OnTxBatch {
+        fn on_tx_batch() -> &'app Self::OnTxBatch {
             unimplemented!("Dependencies are created manually in tests")
         }
 
-        fn payload_queries() -> Self::PayloadQueries {
+        fn payload_queries(&self) -> Self::PayloadQueries {
             unimplemented!("Dependencies are created manually in tests")
         }
 

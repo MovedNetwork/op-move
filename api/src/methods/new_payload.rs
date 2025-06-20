@@ -8,9 +8,9 @@ use {
     umi_shared::primitives::B256,
 };
 
-pub async fn execute_v3(
+pub async fn execute_v3<'reader>(
     request: serde_json::Value,
-    app: &ApplicationReader<impl Dependencies>,
+    app: &ApplicationReader<'reader, impl Dependencies<'reader>>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let (execution_payload, expected_blob_versioned_hashes, parent_beacon_block_root) =
         parse_params_3(request)?;
@@ -24,11 +24,11 @@ pub async fn execute_v3(
     Ok(serde_json::to_value(response).expect("Must be able to JSON-serialize response"))
 }
 
-async fn inner_execute_v3(
+async fn inner_execute_v3<'reader>(
     execution_payload: ExecutionPayloadV3,
     expected_blob_versioned_hashes: Vec<B256>,
     parent_beacon_block_root: B256,
-    app: &ApplicationReader<impl Dependencies>,
+    app: &ApplicationReader<'reader, impl Dependencies<'reader>>,
 ) -> Result<PayloadStatusV1, JsonRpcError> {
     // Spec: https://github.com/ethereum/execution-apis/blob/main/src/engine/cancun.md#specification
 

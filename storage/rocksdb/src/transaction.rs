@@ -1,7 +1,7 @@
 use {
     crate::generic::{FromValue, ToValue},
     rocksdb::{AsColumnFamilyRef, DB as RocksDb, WriteBatchWithTransaction},
-    std::marker::PhantomData,
+    std::{marker::PhantomData, sync::Arc},
     umi_blockchain::transaction::{
         ExtendedTransaction, TransactionQueries, TransactionRepository, TransactionResponse,
     },
@@ -25,9 +25,9 @@ impl RocksDbTransactionRepository<'_> {
     }
 }
 
-impl<'db> TransactionRepository for RocksDbTransactionRepository<'db> {
+impl TransactionRepository for RocksDbTransactionRepository<'_> {
     type Err = rocksdb::Error;
-    type Storage = &'db RocksDb;
+    type Storage = Arc<RocksDb>;
 
     fn extend(
         &mut self,
@@ -61,9 +61,9 @@ impl RocksDbTransactionQueries<'_> {
     }
 }
 
-impl<'db> TransactionQueries for RocksDbTransactionQueries<'db> {
+impl TransactionQueries for RocksDbTransactionQueries<'_> {
     type Err = rocksdb::Error;
-    type Storage = &'db RocksDb;
+    type Storage = Arc<RocksDb>;
 
     fn by_hash(
         &self,

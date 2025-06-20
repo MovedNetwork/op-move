@@ -36,11 +36,11 @@ impl From<heed::Error> for Error {
 
 #[derive(Debug, Clone)]
 pub struct HeedStorageTrieRepository {
-    env: Arc<heed::Env>,
+    env: heed::Env,
 }
 
 impl HeedStorageTrieRepository {
-    pub const fn new(env: Arc<heed::Env>) -> Self {
+    pub const fn new(env: heed::Env) -> Self {
         Self { env }
     }
 }

@@ -33,7 +33,7 @@ use {
     umi_state::State,
 };
 
-impl<D: Dependencies> Application<D> {
+impl<'app, D: Dependencies<'app>> Application<'app, D> {
     pub fn start_block_build(&mut self, attributes: Payload, id: PayloadId) {
         if self
             .payload_queries

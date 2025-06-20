@@ -3,9 +3,9 @@ use {
     umi_app::{ApplicationReader, Dependencies},
 };
 
-pub async fn execute(
+pub async fn execute<'app>(
     request: serde_json::Value,
-    app: &ApplicationReader<impl Dependencies>,
+    app: &ApplicationReader<'app, impl Dependencies<'app>>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     parse_params_0(request)?;
     // this is a generic server error code
@@ -40,8 +40,8 @@ mod tests {
     };
 
     pub fn create_app_without_genesis() -> (
-        ApplicationReader<TestDependencies>,
-        Application<TestDependencies>,
+        ApplicationReader<'static, TestDependencies>,
+        Application<'static, TestDependencies>,
     ) {
         let genesis_config = GenesisConfig::default();
         let block_hash_cache = SharedBlockHashCache::default();

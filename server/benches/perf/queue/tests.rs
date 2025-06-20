@@ -11,10 +11,10 @@ use {
     umi_server::initialize_app,
 };
 
-fn build_1000_blocks(
+fn build_1000_blocks<'app>(
     runtime: &Runtime,
     bencher: &mut BenchmarkGroup<WallTime>,
-    app: &mut Application<impl DependenciesThreadSafe>,
+    app: &mut Application<'app, impl DependenciesThreadSafe<'app>>,
     buffer_size: u32,
 ) {
     bencher.throughput(Throughput::Elements(*input::BLOCKS_1000_LEN));

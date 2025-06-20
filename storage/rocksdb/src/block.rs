@@ -4,7 +4,7 @@ use {
         transaction,
     },
     rocksdb::{AsColumnFamilyRef, DB as RocksDb, IteratorMode, WriteBatchWithTransaction},
-    std::marker::PhantomData,
+    std::{marker::PhantomData, sync::Arc},
     umi_blockchain::{
         block::{BlockQueries, BlockRepository, BlockResponse, ExtendedBlock},
         transaction::ExtendedTransaction,
@@ -30,9 +30,9 @@ impl RocksDbBlockRepository<'_> {
     }
 }
 
-impl<'db> BlockRepository for RocksDbBlockRepository<'db> {
+impl BlockRepository for RocksDbBlockRepository<'_> {
     type Err = rocksdb::Error;
-    type Storage = &'db RocksDb;
+    type Storage = Arc<RocksDb>;
 
     fn add(&mut self, db: &mut Self::Storage, block: ExtendedBlock) -> Result<(), Self::Err> {
         let mut batch = WriteBatchWithTransaction::<false>::default();
@@ -79,9 +79,9 @@ impl RocksDbBlockQueries<'_> {
     }
 }
 
-impl<'db> BlockQueries for RocksDbBlockQueries<'db> {
+impl BlockQueries for RocksDbBlockQueries<'_> {
     type Err = rocksdb::Error;
-    type Storage = &'db RocksDb;
+    type Storage = Arc<RocksDb>;
 
     fn by_hash(
         &self,

@@ -57,8 +57,8 @@ pub mod tests {
     pub const PRIVATE_KEY: [u8; 32] = [0xaa; 32];
 
     pub fn create_app() -> (
-        ApplicationReader<TestDependencies>,
-        Application<TestDependencies>,
+        ApplicationReader<'static, TestDependencies>,
+        Application<'static, TestDependencies>,
     ) {
         let genesis_config = GenesisConfig::default();
         let mut block_hash_cache = SharedBlockHashCache::default();
@@ -210,8 +210,8 @@ pub mod tests {
         address: AccountAddress,
         height: u64,
     ) -> Box<(
-        ApplicationReader<impl DependenciesThreadSafe<State = InMemoryState>>,
-        Application<impl DependenciesThreadSafe<State = InMemoryState>>,
+        ApplicationReader<'static, impl DependenciesThreadSafe<'static, State = InMemoryState>>,
+        Application<'static, impl DependenciesThreadSafe<'static, State = InMemoryState>>,
     )> {
         #[derive(Debug, Clone)]
         struct StubLatest(u64);

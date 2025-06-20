@@ -16,15 +16,15 @@ use {
 
 const DEPOSIT_TX: &[u8] = &hex!("7ef8f8a032595a51f0561028c684fbeeb46c7221a34be9a2eedda60a93069dd77320407e94deaddeaddeaddeaddeaddeaddeaddeaddead00019442000000000000000000000000000000000000158080830f424080b8a4440a5e2000000000000000000000000000000000000000006807cdc800000000000000220000000000000000000000000000000000000000000000000000000000a68a3a000000000000000000000000000000000000000000000000000000000000000198663a8bf712c08273a02876877759b43dc4df514214cc2f6008870b9a8503380000000000000000000000008c67a7b8624044f8f672e9ec374dfa596f01afb9");
 
-pub struct TestContext {
+pub struct TestContext<'test> {
     pub genesis_config: GenesisConfig,
     pub queue: CommandQueue,
-    pub reader: ApplicationReader<dependency::ReaderDependency>,
+    pub reader: ApplicationReader<'test, dependency::ReaderDependency>,
     head: B256,
     timestamp: u64,
 }
 
-impl TestContext {
+impl TestContext<'static> {
     pub async fn run<'f, F, FU>(mut future: FU) -> anyhow::Result<()>
     where
         F: Future<Output = anyhow::Result<()>> + Send + 'f,
@@ -179,10 +179,10 @@ impl TestContext {
     }
 }
 
-pub async fn handle_request<T: DeserializeOwned>(
+pub async fn handle_request<'reader, T: DeserializeOwned>(
     request: serde_json::Value,
     queue: &CommandQueue,
-    app: ApplicationReader<impl Dependencies>,
+    app: ApplicationReader<'reader, impl Dependencies<'reader>>,
 ) -> anyhow::Result<T> {
     let response = umi_api::request::handle(
         request.clone(),

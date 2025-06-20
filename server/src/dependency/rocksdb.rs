@@ -1,53 +1,69 @@
 use {
     crate::dependency::shared::*,
-    std::sync::{Arc, LazyLock},
-    umi_app::{Application, CommandActor, SharedBlockHashCache},
+    std::sync::Arc,
+    umi_app::{Application, CommandActor, SharedBlockHashCache, SharedHybridBlockHashCache},
     umi_blockchain::state::EthTrieStateQueries,
     umi_genesis::config::GenesisConfig,
     umi_state::{EthTrieState, State},
+    umi_storage_rocksdb::RocksEthTrieDb,
 };
 
 pub type Dependency = RocksDbDependencies;
 pub type ReaderDependency = RocksDbReaderDependencies;
 
 pub fn dependencies() -> Dependency {
-    RocksDbDependencies
+    RocksDbDependencies {
+        db: Arc::new(create_db()),
+    }
 }
 
-pub struct RocksDbDependencies;
-pub struct RocksDbReaderDependencies;
+pub struct RocksDbDependencies {
+    db: Arc<umi_storage_rocksdb::RocksDb>,
+}
+
+pub struct RocksDbReaderDependencies {
+    db: Arc<umi_storage_rocksdb::RocksDb>,
+}
 
 impl RocksDbDependencies {
     /// Creates a set of dependencies appropriate for usage in reader.
     pub fn reader(&self) -> ReaderDependency {
-        RocksDbReaderDependencies
+        RocksDbReaderDependencies {
+            db: self.db.clone(),
+        }
     }
 }
 
-impl umi_app::Dependencies for RocksDbDependencies {
-    type BlockQueries = umi_storage_rocksdb::block::RocksDbBlockQueries<'static>;
-    type BlockRepository = umi_storage_rocksdb::block::RocksDbBlockRepository<'static>;
-    type BlockHashLookup = umi_app::SharedBlockHashCache;
-    type BlockHashWriter = umi_app::SharedBlockHashCache;
-    type OnPayload = umi_app::OnPayload<Application<Self>>;
-    type OnTx = umi_app::OnTx<Application<Self>>;
-    type OnTxBatch = umi_app::OnTxBatch<Application<Self>>;
-    type PayloadQueries = umi_storage_rocksdb::payload::RocksDbPayloadQueries<'static>;
-    type ReceiptQueries = umi_storage_rocksdb::receipt::RocksDbReceiptQueries<'static>;
-    type ReceiptRepository = umi_storage_rocksdb::receipt::RocksDbReceiptRepository<'static>;
-    type ReceiptStorage = &'static umi_storage_rocksdb::RocksDb;
-    type SharedStorage = &'static umi_storage_rocksdb::RocksDb;
-    type ReceiptStorageReader = &'static umi_storage_rocksdb::RocksDb;
-    type SharedStorageReader = &'static umi_storage_rocksdb::RocksDb;
-    type State = EthTrieState<umi_storage_rocksdb::RocksEthTrieDb<'static>>;
-    type StateQueries = EthTrieStateQueries<
-        umi_storage_rocksdb::RocksDbStateRootIndex<'static>,
-        umi_storage_rocksdb::RocksEthTrieDb<'static>,
-    >;
+impl<'db> umi_app::Dependencies<'db> for RocksDbDependencies {
+    type BlockHashLookup = SharedBlockHashCache;
+    type BlockHashWriter = SharedBlockHashCache;
+    type BlockQueries = umi_storage_rocksdb::block::RocksDbBlockQueries<'db>;
+    type BlockRepository = umi_storage_rocksdb::block::RocksDbBlockRepository<'db>;
+    type OnPayload = umi_app::OnPayload<Application<'db, Self>>;
+    type OnTx = umi_app::OnTx<Application<'db, Self>>;
+    type OnTxBatch = umi_app::OnTxBatch<Application<'db, Self>>;
+    type PayloadQueries = umi_storage_rocksdb::payload::RocksDbPayloadQueries;
+    type ReceiptQueries = umi_storage_rocksdb::receipt::RocksDbReceiptQueries<'db>;
+    type ReceiptRepository = umi_storage_rocksdb::receipt::RocksDbReceiptRepository<'db>;
+    type ReceiptStorage = Arc<umi_storage_rocksdb::RocksDb>;
+    type SharedStorage = Arc<umi_storage_rocksdb::RocksDb>;
+    type ReceiptStorageReader = Arc<umi_storage_rocksdb::RocksDb>;
+    type SharedStorageReader = Arc<umi_storage_rocksdb::RocksDb>;
+    type State = EthTrieState<RocksEthTrieDb>;
+    type StateQueries =
+        EthTrieStateQueries<umi_storage_rocksdb::RocksDbStateRootIndex, RocksEthTrieDb>;
     type StorageTrieRepository = umi_storage_rocksdb::evm::RocksDbStorageTrieRepository;
-    type TransactionQueries = umi_storage_rocksdb::transaction::RocksDbTransactionQueries<'static>;
+    type TransactionQueries = umi_storage_rocksdb::transaction::RocksDbTransactionQueries<'db>;
     type TransactionRepository =
-        umi_storage_rocksdb::transaction::RocksDbTransactionRepository<'static>;
+        umi_storage_rocksdb::transaction::RocksDbTransactionRepository<'db>;
+
+    fn block_hash_lookup(&self) -> Self::BlockHashLookup {
+        SharedBlockHashCache::new()
+    }
+
+    fn block_hash_writer(&self) -> Self::BlockHashWriter {
+        SharedBlockHashCache::new()
+    }
 
     fn block_queries() -> Self::BlockQueries {
         umi_storage_rocksdb::block::RocksDbBlockQueries::new()
@@ -57,15 +73,15 @@ impl umi_app::Dependencies for RocksDbDependencies {
         umi_storage_rocksdb::block::RocksDbBlockRepository::new()
     }
 
-    fn on_payload() -> &'static Self::OnPayload {
+    fn on_payload() -> &'db Self::OnPayload {
         &|state, id, hash| state.payload_queries.add_block_hash(id, hash).unwrap()
     }
 
-    fn on_tx() -> &'static Self::OnTx {
+    fn on_tx() -> &'db Self::OnTx {
         CommandActor::on_tx_noop()
     }
 
-    fn on_tx_batch() -> &'static Self::OnTxBatch {
+    fn on_tx_batch() -> &'db Self::OnTxBatch {
         &|state| {
             state
                 .state_queries
@@ -74,16 +90,8 @@ impl umi_app::Dependencies for RocksDbDependencies {
         }
     }
 
-    fn block_hash_lookup(&self) -> Self::BlockHashLookup {
-        BLOCK_HASH_CACHE.clone()
-    }
-
-    fn block_hash_writer(&self) -> Self::BlockHashWriter {
-        BLOCK_HASH_CACHE.clone()
-    }
-
-    fn payload_queries() -> Self::PayloadQueries {
-        umi_storage_rocksdb::payload::RocksDbPayloadQueries::new(db())
+    fn payload_queries(&self) -> Self::PayloadQueries {
+        umi_storage_rocksdb::payload::RocksDbPayloadQueries::new(self.db.clone())
     }
 
     fn receipt_queries() -> Self::ReceiptQueries {
@@ -95,35 +103,35 @@ impl umi_app::Dependencies for RocksDbDependencies {
     }
 
     fn receipt_memory(&mut self) -> Self::ReceiptStorage {
-        db()
+        self.db.clone()
     }
 
     fn shared_storage(&mut self) -> Self::SharedStorage {
-        db()
+        self.db.clone()
     }
 
     fn receipt_memory_reader(&self) -> Self::ReceiptStorageReader {
-        db()
+        self.db.clone()
     }
 
     fn shared_storage_reader(&self) -> Self::SharedStorageReader {
-        db()
+        self.db.clone()
     }
 
     fn state(&self) -> Self::State {
-        fallible::retry(|| EthTrieState::try_new(TRIE_DB.clone()))
+        fallible::retry(|| EthTrieState::try_new(Arc::new(RocksEthTrieDb::new(self.db.clone()))))
     }
 
     fn state_queries(&self, genesis_config: &GenesisConfig) -> Self::StateQueries {
         EthTrieStateQueries::new(
-            umi_storage_rocksdb::RocksDbStateRootIndex::new(db()),
-            TRIE_DB.clone(),
+            umi_storage_rocksdb::RocksDbStateRootIndex::new(self.db.clone()),
+            Arc::new(RocksEthTrieDb::new(self.db.clone())),
             genesis_config.initial_state_root,
         )
     }
 
     fn storage_trie_repository(&self) -> Self::StorageTrieRepository {
-        umi_storage_rocksdb::evm::RocksDbStorageTrieRepository::new(Database.clone())
+        umi_storage_rocksdb::evm::RocksDbStorageTrieRepository::new(self.db.clone())
     }
 
     fn transaction_queries() -> Self::TransactionQueries {
@@ -137,32 +145,44 @@ impl umi_app::Dependencies for RocksDbDependencies {
     impl_shared!();
 }
 
-impl umi_app::Dependencies for RocksDbReaderDependencies {
-    type BlockQueries = umi_storage_rocksdb::block::RocksDbBlockQueries<'static>;
-    type BlockRepository = umi_storage_rocksdb::block::RocksDbBlockRepository<'static>;
+impl<'db> umi_app::Dependencies<'db> for RocksDbReaderDependencies {
     type BlockHashLookup =
-        umi_app::SharedHybridBlockHashCache<'static, Self::SharedStorageReader, Self::BlockQueries>;
+        SharedHybridBlockHashCache<Self::SharedStorageReader, Self::BlockQueries>;
     type BlockHashWriter =
-        umi_app::SharedHybridBlockHashCache<'static, Self::SharedStorageReader, Self::BlockQueries>;
-    type OnPayload = umi_app::OnPayload<Application<Self>>;
-    type OnTx = umi_app::OnTx<Application<Self>>;
-    type OnTxBatch = umi_app::OnTxBatch<Application<Self>>;
-    type PayloadQueries = umi_storage_rocksdb::payload::RocksDbPayloadQueries<'static>;
-    type ReceiptQueries = umi_storage_rocksdb::receipt::RocksDbReceiptQueries<'static>;
-    type ReceiptRepository = umi_storage_rocksdb::receipt::RocksDbReceiptRepository<'static>;
-    type ReceiptStorage = &'static umi_storage_rocksdb::RocksDb;
-    type SharedStorage = &'static umi_storage_rocksdb::RocksDb;
-    type ReceiptStorageReader = &'static umi_storage_rocksdb::RocksDb;
-    type SharedStorageReader = &'static umi_storage_rocksdb::RocksDb;
-    type State = EthTrieState<umi_storage_rocksdb::RocksEthTrieDb<'static>>;
-    type StateQueries = EthTrieStateQueries<
-        umi_storage_rocksdb::RocksDbStateRootIndex<'static>,
-        umi_storage_rocksdb::RocksEthTrieDb<'static>,
-    >;
+        SharedHybridBlockHashCache<Self::SharedStorageReader, Self::BlockQueries>;
+    type BlockQueries = umi_storage_rocksdb::block::RocksDbBlockQueries<'db>;
+    type BlockRepository = umi_storage_rocksdb::block::RocksDbBlockRepository<'db>;
+    type OnPayload = umi_app::OnPayload<Application<'db, Self>>;
+    type OnTx = umi_app::OnTx<Application<'db, Self>>;
+    type OnTxBatch = umi_app::OnTxBatch<Application<'db, Self>>;
+    type PayloadQueries = umi_storage_rocksdb::payload::RocksDbPayloadQueries;
+    type ReceiptQueries = umi_storage_rocksdb::receipt::RocksDbReceiptQueries<'db>;
+    type ReceiptRepository = umi_storage_rocksdb::receipt::RocksDbReceiptRepository<'db>;
+    type ReceiptStorage = Arc<umi_storage_rocksdb::RocksDb>;
+    type SharedStorage = Arc<umi_storage_rocksdb::RocksDb>;
+    type ReceiptStorageReader = Arc<umi_storage_rocksdb::RocksDb>;
+    type SharedStorageReader = Arc<umi_storage_rocksdb::RocksDb>;
+    type State = EthTrieState<RocksEthTrieDb>;
+    type StateQueries =
+        EthTrieStateQueries<umi_storage_rocksdb::RocksDbStateRootIndex, RocksEthTrieDb>;
     type StorageTrieRepository = umi_storage_rocksdb::evm::RocksDbStorageTrieRepository;
-    type TransactionQueries = umi_storage_rocksdb::transaction::RocksDbTransactionQueries<'static>;
+    type TransactionQueries = umi_storage_rocksdb::transaction::RocksDbTransactionQueries<'db>;
     type TransactionRepository =
-        umi_storage_rocksdb::transaction::RocksDbTransactionRepository<'static>;
+        umi_storage_rocksdb::transaction::RocksDbTransactionRepository<'db>;
+
+    fn block_hash_lookup(&self) -> Self::BlockHashLookup {
+        SharedHybridBlockHashCache::new(
+            self.db.clone(),
+            umi_storage_rocksdb::block::RocksDbBlockQueries::new(),
+        )
+    }
+
+    fn block_hash_writer(&self) -> Self::BlockHashWriter {
+        SharedHybridBlockHashCache::new(
+            self.db.clone(),
+            umi_storage_rocksdb::block::RocksDbBlockQueries::new(),
+        )
+    }
 
     fn block_queries() -> Self::BlockQueries {
         umi_storage_rocksdb::block::RocksDbBlockQueries::new()
@@ -172,15 +192,15 @@ impl umi_app::Dependencies for RocksDbReaderDependencies {
         umi_storage_rocksdb::block::RocksDbBlockRepository::new()
     }
 
-    fn on_payload() -> &'static Self::OnPayload {
+    fn on_payload() -> &'db Self::OnPayload {
         &|state, id, hash| state.payload_queries.add_block_hash(id, hash).unwrap()
     }
 
-    fn on_tx() -> &'static Self::OnTx {
+    fn on_tx() -> &'db Self::OnTx {
         CommandActor::on_tx_noop()
     }
 
-    fn on_tx_batch() -> &'static Self::OnTxBatch {
+    fn on_tx_batch() -> &'db Self::OnTxBatch {
         &|state| {
             state
                 .state_queries
@@ -189,16 +209,8 @@ impl umi_app::Dependencies for RocksDbReaderDependencies {
         }
     }
 
-    fn block_hash_lookup(&self) -> Self::BlockHashLookup {
-        HYBRID_BLOCK_HASH_CACHE.clone()
-    }
-
-    fn block_hash_writer(&self) -> Self::BlockHashWriter {
-        HYBRID_BLOCK_HASH_CACHE.clone()
-    }
-
-    fn payload_queries() -> Self::PayloadQueries {
-        umi_storage_rocksdb::payload::RocksDbPayloadQueries::new(db())
+    fn payload_queries(&self) -> Self::PayloadQueries {
+        umi_storage_rocksdb::payload::RocksDbPayloadQueries::new(self.db.clone())
     }
 
     fn receipt_queries() -> Self::ReceiptQueries {
@@ -210,35 +222,35 @@ impl umi_app::Dependencies for RocksDbReaderDependencies {
     }
 
     fn receipt_memory(&mut self) -> Self::ReceiptStorage {
-        db()
+        self.db.clone()
     }
 
     fn shared_storage(&mut self) -> Self::SharedStorage {
-        db()
+        self.db.clone()
     }
 
     fn receipt_memory_reader(&self) -> Self::ReceiptStorageReader {
-        db()
+        self.db.clone()
     }
 
     fn shared_storage_reader(&self) -> Self::SharedStorageReader {
-        db()
+        self.db.clone()
     }
 
     fn state(&self) -> Self::State {
-        fallible::retry(|| EthTrieState::try_new(TRIE_DB.clone()))
+        fallible::retry(|| EthTrieState::try_new(Arc::new(RocksEthTrieDb::new(self.db.clone()))))
     }
 
     fn state_queries(&self, genesis_config: &GenesisConfig) -> Self::StateQueries {
         EthTrieStateQueries::new(
-            umi_storage_rocksdb::RocksDbStateRootIndex::new(db()),
-            TRIE_DB.clone(),
+            umi_storage_rocksdb::RocksDbStateRootIndex::new(self.db.clone()),
+            Arc::new(RocksEthTrieDb::new(self.db.clone())),
             genesis_config.initial_state_root,
         )
     }
 
     fn storage_trie_repository(&self) -> Self::StorageTrieRepository {
-        umi_storage_rocksdb::evm::RocksDbStorageTrieRepository::new(Database.clone())
+        umi_storage_rocksdb::evm::RocksDbStorageTrieRepository::new(self.db.clone())
     }
 
     fn transaction_queries() -> Self::TransactionQueries {
@@ -250,36 +262,6 @@ impl umi_app::Dependencies for RocksDbReaderDependencies {
     }
 
     impl_shared!();
-}
-
-lazy_static::lazy_static! {
-    static ref Database: Arc<umi_storage_rocksdb::RocksDb> = {
-        Arc::new(create_db())
-    };
-    static ref TRIE_DB: Arc<umi_storage_rocksdb::RocksEthTrieDb<'static>> = {
-        Arc::new(umi_storage_rocksdb::RocksEthTrieDb::new(db()))
-    };
-}
-
-pub static BLOCK_HASH_CACHE: LazyLock<SharedBlockHashCache> =
-    LazyLock::new(SharedBlockHashCache::new);
-
-pub static HYBRID_BLOCK_HASH_CACHE: LazyLock<
-    umi_app::SharedHybridBlockHashCache<
-        'static,
-        &'static umi_storage_rocksdb::RocksDb,
-        umi_storage_rocksdb::block::RocksDbBlockQueries<'static>,
-    >,
-> = LazyLock::new(|| {
-    let queries = Box::leak(Box::new(
-        umi_storage_rocksdb::block::RocksDbBlockQueries::new(),
-    ));
-    let db_ref = Box::leak(Box::new(db()));
-    umi_app::SharedHybridBlockHashCache::new(db_ref, queries)
-});
-
-fn db() -> &'static umi_storage_rocksdb::RocksDb {
-    &Database
 }
 
 fn create_db() -> umi_storage_rocksdb::RocksDb {

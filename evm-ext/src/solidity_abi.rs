@@ -531,9 +531,8 @@ mod tests {
             "Took too long to decode value: {}",
             alloy::hex::encode(value)
         );
-        let now = Instant::now();
-        let value = inner_abi_decode_params(value, &annotated_layout);
-        let duration = now.elapsed();
+        let (value, duration) =
+            median_duration(|| inner_abi_decode_params(value, &annotated_layout));
 
         assert_sufficient_gas(gas_cost, duration, message);
 
@@ -557,6 +556,18 @@ mod tests {
         let mut buf = vec![0; size];
         rng.fill_bytes(&mut buf);
         buf
+    }
+
+    fn median_duration<T, F: Fn() -> T>(f: F) -> (T, Duration) {
+        const N_TRIALS: usize = 100;
+        let mut durations = Vec::with_capacity(N_TRIALS);
+        for _ in 0..N_TRIALS {
+            let now = Instant::now();
+            f();
+            durations.push(now.elapsed());
+        }
+        durations.sort_unstable();
+        (f(), durations[N_TRIALS / 2])
     }
 
     // We have this function instead of using the `Arbitrary` for `MoveValue`

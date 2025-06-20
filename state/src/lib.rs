@@ -18,7 +18,6 @@ use {
     move_binary_format::errors::{Location, VMResult},
     move_core_types::{
         account_address::AccountAddress,
-        effects::ChangeSet,
         identifier::IdentStr,
         language_storage::{ModuleId, StructTag},
     },
@@ -60,7 +59,7 @@ pub trait InsertChangeSetIntoMerkleTrie {
 
     fn insert_change_set_into_merkle_trie(
         &mut self,
-        change_set: &ChangeSet,
+        change_set: &Changes,
     ) -> Result<B256, Self::Err>;
 }
 
@@ -69,7 +68,7 @@ impl<D: DB> InsertChangeSetIntoMerkleTrie for EthTrie<D> {
 
     fn insert_change_set_into_merkle_trie(
         &mut self,
-        change_set: &ChangeSet,
+        change_set: &Changes,
     ) -> Result<B256, Self::Err> {
         let values = change_set.to_tree_values();
 
@@ -121,9 +120,10 @@ pub trait ToTreeValues {
     fn to_tree_values(&self) -> HashMap<TreeKey, TreeValue>;
 }
 
-impl ToTreeValues for ChangeSet {
+impl ToTreeValues for Changes {
     fn to_tree_values(&self) -> HashMap<TreeKey, TreeValue> {
-        self.accounts()
+        self.accounts
+            .accounts()
             .iter()
             .flat_map(|(address, changes)| {
                 changes
@@ -162,6 +162,22 @@ impl ToTreeValues for ChangeSet {
                         (key, value)
                     }))
             })
+            .chain(self.tables.changes.iter().flat_map(|(handle, changes)| {
+                let handle = handle.into();
+                changes.entries.iter().map(move |(id, op)| {
+                    let key = StateKey::table_item(&handle, id);
+                    let value = op
+                        .clone()
+                        .ok()
+                        .map(|(bytes, _)| StateValue::new_legacy(bytes));
+                    (
+                        TreeKey::StateKey(key),
+                        value
+                            .map(TreeValue::StateValue)
+                            .unwrap_or(TreeValue::Deleted),
+                    )
+                })
+            }))
             .collect::<HashMap<_, _>>()
     }
 }
@@ -293,7 +309,7 @@ mod tests {
             .unwrap();
         state
             .trie_mut()
-            .insert_change_set_into_merkle_trie(&change_set.accounts)
+            .insert_change_set_into_merkle_trie(&change_set)
             .unwrap();
         let expected_state_root = state.state_root();
 
@@ -312,7 +328,7 @@ mod tests {
             .unwrap();
         state
             .trie_mut()
-            .insert_change_set_into_merkle_trie(&change_set.accounts)
+            .insert_change_set_into_merkle_trie(&change_set)
             .unwrap();
         let actual_state_root = state.state_root();
 

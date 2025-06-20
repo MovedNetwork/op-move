@@ -54,6 +54,7 @@ mod execute;
 mod gas;
 mod layout;
 mod nonces;
+mod table_changes;
 mod tag_validation;
 #[cfg(test)]
 mod tests;

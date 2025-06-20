@@ -1,9 +1,4 @@
-use {
-    super::*,
-    move_vm_runtime::{AsFunctionValueExtension, AsUnsyncCodeStorage},
-    umi_genesis::{CreateMoveVm, UmiVm},
-    umi_state::ResolverBasedModuleBytesStorage,
-};
+use super::*;
 
 #[test]
 fn test_execute_natives_contract() {
@@ -19,50 +14,16 @@ fn test_execute_tables_contract() {
     let mut ctx = TestContext::new();
     let module_id = ctx.deploy_contract("tables");
 
-    let umi_vm = UmiVm::new(&ctx.genesis_config);
-    let module_bytes_storage = ResolverBasedModuleBytesStorage::new(ctx.state.resolver());
-    let code_storage = module_bytes_storage.as_unsync_code_storage(&umi_vm);
-    let vm = umi_vm.create_move_vm().unwrap();
-    let traversal_storage = TraversalStorage::new();
-
-    let mut session = create_vm_session(
-        &vm,
-        ctx.state.resolver(),
-        SessionId::default(),
-        &ctx.evm_storage,
-        &(),
-        &(),
-    );
-    let mut traversal_context = TraversalContext::new(&traversal_storage);
-
     let move_address = EVM_ADDRESS.to_move_address();
     let signer_arg = MoveValue::Signer(move_address);
-    let entry_fn = EntryFunction::new(
-        module_id,
-        Identifier::new("make_test_tables").unwrap(),
-        Vec::new(),
+    let (tx_hash, tx) = utils::create_test_tx(
+        &mut ctx.signer,
+        &module_id,
+        "make_test_tables",
         vec![bcs::to_bytes(&signer_arg).unwrap()],
     );
-    let (module_id, function_name, ty_args, args) = entry_fn.into_inner();
-
-    let function = session
-        .load_function(&code_storage, &module_id, &function_name, &ty_args)
-        .unwrap();
-    session
-        .execute_entry_function(
-            function,
-            args,
-            &mut UnmeteredGasMeter,
-            &mut traversal_context,
-            &code_storage,
-        )
-        .unwrap();
-
-    let (_change_set, mut extensions) = session.finish_with_extensions(&code_storage).unwrap();
-    let table_change_set = extensions
-        .remove::<NativeTableContext>()
-        .into_change_set(&code_storage.as_function_value_extension())
-        .unwrap();
+    let outcome = ctx.execute_tx(&TestTransaction::new(tx, tx_hash)).unwrap();
+    let table_change_set = outcome.changes.move_vm.tables;
 
     // tables.move creates 11 new tables and makes 11 changes
     const TABLE_CHANGE_SET_NEW_TABLES_LEN: usize = 11;

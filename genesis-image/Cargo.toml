@@ -17,6 +17,7 @@ umi-evm-ext.workspace = true
 umi-state.workspace = true
 
 [build-dependencies]
+aptos-table-natives.workspace = true
 bcs.workspace = true
 move-core-types.workspace = true
 move-table-extension.workspace = true

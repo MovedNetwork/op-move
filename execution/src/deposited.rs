@@ -148,7 +148,10 @@ pub(super) fn execute_deposited_transaction<
     changes
         .squash(evm_changes.accounts)
         .expect("EVM changes must merge with other session changes");
-    let changes = Changes::new(changes.into(), evm_changes.storage);
+    let changes = Changes::new(
+        umi_state::Changes::without_tables(changes),
+        evm_changes.storage,
+    );
 
     Ok(TransactionExecutionOutcome::new(
         vm_outcome,

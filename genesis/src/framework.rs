@@ -22,7 +22,7 @@ use {
     std::{collections::BTreeMap, fs, path::PathBuf},
     sui_framework::SystemPackage,
     sui_types::base_types::ObjectID,
-    umi_state::{ResolverBasedModuleBytesStorage, State},
+    umi_state::{Changes, ResolverBasedModuleBytesStorage, State},
 };
 
 pub const CRATE_ROOT: &str = env!("CARGO_MANIFEST_DIR");
@@ -219,7 +219,9 @@ fn deploy_aptos_framework(state: &mut impl State, umi_vm: &UmiVm) -> Result<Chan
         };
         // We need to add changes on a package-by-package basis so that other packages in the framework
         // can link against previous ones, but also pass it outside for genesis image generation
-        state.apply(package_writes.clone().into()).unwrap();
+        state
+            .apply(Changes::without_tables(package_writes.clone()))
+            .unwrap();
         framework_writes
             .squash(package_writes)
             .expect("Packages in framework should not conflict with each other");
@@ -278,7 +280,9 @@ fn deploy_sui_framework(state: &mut impl State, umi_vm: &UmiVm) -> Result<Change
     )?;
     let bundle = staged_stdlib_storage.release_verified_module_bundle();
     let stdlib_writes = convert_bundle_into_module_ops(bundle)?;
-    state.apply(stdlib_writes.clone().into()).unwrap();
+    state
+        .apply(Changes::without_tables(stdlib_writes.clone()))
+        .unwrap();
     total_writes
         .squash(stdlib_writes)
         .expect("Sui stdlib can be squashed with empty change set");
@@ -301,7 +305,9 @@ fn deploy_sui_framework(state: &mut impl State, umi_vm: &UmiVm) -> Result<Change
     )?;
     let bundle = staged_framework_storage.release_verified_module_bundle();
     let framework_writes = convert_bundle_into_module_ops(bundle)?;
-    state.apply(framework_writes.clone().into()).unwrap();
+    state
+        .apply(Changes::without_tables(framework_writes.clone()))
+        .unwrap();
     total_writes
         .squash(framework_writes)
         .expect("Sui framework can be squashed with stdlib");

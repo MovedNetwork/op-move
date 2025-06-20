@@ -1,16 +1,23 @@
 use {
+    aptos_table_natives::{TableChange, TableChangeSet},
     bytes::Bytes,
     move_core_types::{
         account_address::AccountAddress,
         effects::{AccountChanges, ChangeSet, Op},
         identifier::Identifier,
         language_storage::{ModuleId, StructTag, TypeTag},
+        value::MoveTypeLayout,
     },
-    move_table_extension::{TableChange, TableChangeSet, TableHandle, TableInfo},
-    std::collections::{BTreeMap, BTreeSet},
+    move_table_extension::{TableHandle, TableInfo},
+    std::{
+        collections::{BTreeMap, BTreeSet},
+        sync::Arc,
+    },
     umi_evm_ext::state::{StorageTrieChanges, StorageTriesChanges},
     umi_shared::primitives::{Address, B256},
 };
+
+pub type TableEntry = (Bytes, Option<Arc<MoveTypeLayout>>);
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, serde::Serialize, serde::Deserialize)]
 pub enum SerdeOp<T> {
@@ -74,8 +81,8 @@ impl From<AccountChanges<Bytes, Bytes>> for SerdeAccountChanges<Bytes, Bytes> {
     }
 }
 
-impl From<Op<Bytes>> for SerdeOp<Bytes> {
-    fn from(value: Op<Bytes>) -> Self {
+impl<T> From<Op<T>> for SerdeOp<T> {
+    fn from(value: Op<T>) -> Self {
         match value {
             Op::New(v) => Self::New(v),
             Op::Modify(v) => Self::Modify(v),
@@ -84,8 +91,8 @@ impl From<Op<Bytes>> for SerdeOp<Bytes> {
     }
 }
 
-impl From<SerdeOp<Bytes>> for Op<Bytes> {
-    fn from(value: SerdeOp<Bytes>) -> Self {
+impl<T> From<SerdeOp<T>> for Op<T> {
+    fn from(value: SerdeOp<T>) -> Self {
         match value {
             SerdeOp::New(v) => Self::New(v),
             SerdeOp::Modify(v) => Self::Modify(v),
@@ -94,9 +101,9 @@ impl From<SerdeOp<Bytes>> for Op<Bytes> {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct SerdeTableChange {
-    pub entries: BTreeMap<Vec<u8>, SerdeOp<Bytes>>,
+    pub entries: BTreeMap<Vec<u8>, SerdeOp<TableEntry>>,
 }
 
 impl From<TableChange> for SerdeTableChange {
@@ -147,7 +154,7 @@ impl From<SerdeTableInfo> for TableInfo {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct SerdeTableChangeSet {
     pub new_tables: BTreeMap<AccountAddress, SerdeTableInfo>,
     pub removed_tables: BTreeSet<AccountAddress>,
@@ -172,7 +179,7 @@ impl From<TableChangeSet> for SerdeTableChangeSet {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct SerdeAllChanges {
     pub changes: SerdeChanges<Bytes, Bytes>,
     pub tables: SerdeTableChangeSet,

@@ -21,7 +21,7 @@ use {
         state::InMemoryStorageTrieRepository,
     },
     umi_genesis::{CreateMoveVm, UmiVm, config::CHAIN_ID},
-    umi_state::ResolverBasedModuleBytesStorage,
+    umi_state::{Changes, ResolverBasedModuleBytesStorage},
 };
 
 /// Represents the base token state for a test transaction
@@ -587,7 +587,7 @@ impl TestContext {
         changes.squash(evm_changes.accounts).unwrap();
         drop(extensions);
 
-        self.state.apply(changes.into()).unwrap();
+        self.state.apply(Changes::without_tables(changes)).unwrap();
         self.evm_storage.apply(evm_changes.storage).unwrap();
         outcome
     }

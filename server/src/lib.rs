@@ -7,6 +7,7 @@ use {
         future::Future,
         io::Read,
         net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+        path::Path,
         time::SystemTime,
     },
     umi_api::method_name::MethodName,
@@ -17,7 +18,8 @@ use {
     },
     umi_genesis::config::GenesisConfig,
     umi_server_args::{
-        Config, DefaultLayer, OptionalAuthSocket, OptionalConfig, OptionalHttpSocket,
+        Config, DatabaseBackend, DefaultLayer, OptionalAuthSocket, OptionalConfig,
+        OptionalDatabase, OptionalHttpSocket,
     },
     umi_shared::primitives::U256,
     warp::{
@@ -44,23 +46,29 @@ struct Claims {
     iat: u64,
 }
 
-pub const DEFAULTS: DefaultLayer = DefaultLayer::new(OptionalConfig {
-    auth: Some(OptionalAuthSocket {
-        addr: Some(SocketAddr::V4(SocketAddrV4::new(
-            Ipv4Addr::new(0, 0, 0, 0),
-            8551,
-        ))),
-        jwt_secret: None,
-    }),
-    http: Some(OptionalHttpSocket {
-        addr: Some(SocketAddr::V4(SocketAddrV4::new(
-            Ipv4Addr::new(0, 0, 0, 0),
-            8545,
-        ))),
-    }),
-    // TODO: think about channel size bound
-    max_buffered_commands: Some(1_000),
-});
+pub fn defaults() -> DefaultLayer {
+    DefaultLayer::new(OptionalConfig {
+        auth: Some(OptionalAuthSocket {
+            addr: Some(SocketAddr::V4(SocketAddrV4::new(
+                Ipv4Addr::new(0, 0, 0, 0),
+                8551,
+            ))),
+            jwt_secret: None,
+        }),
+        http: Some(OptionalHttpSocket {
+            addr: Some(SocketAddr::V4(SocketAddrV4::new(
+                Ipv4Addr::new(0, 0, 0, 0),
+                8545,
+            ))),
+        }),
+        db: Some(OptionalDatabase {
+            backend: Some(DatabaseBackend::InMemory),
+            dir: Some(Path::new("db").into()),
+            purge: Some(false),
+        }),
+        max_buffered_commands: Some(1_000), // TODO: think about channel size bound
+    })
+}
 
 const EIP1559_ELASTICITY_MULTIPLIER: u64 = 6;
 const EIP1559_BASE_FEE_MAX_CHANGE_DENOMINATOR: U256 = U256::from_limbs([250, 0, 0, 0]);
@@ -80,7 +88,7 @@ pub async fn run(args: Config) {
         ..Default::default()
     };
 
-    let deps = dependency::dependencies();
+    let deps = dependency::dependencies(args.db);
     let reader = {
         let genesis_config = genesis_config.clone();
         let deps = deps.reader();
@@ -210,12 +218,13 @@ impl<'db, D: Dependencies<'db>> GenesisStateExt for Application<'db, D> {
 }
 
 pub fn initialize_app(
+    args: umi_server_args::Database,
     genesis_config: &GenesisConfig,
 ) -> (
     Application<'static, dependency::Dependency>,
     ApplicationReader<'static, dependency::ReaderDependency>,
 ) {
-    let (mut app, app_reader) = dependency::create(genesis_config);
+    let (mut app, app_reader) = dependency::create(args, genesis_config);
     app.initialize_genesis_state_if_empty(genesis_config);
     (app, app_reader)
 }

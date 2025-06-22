@@ -14,8 +14,10 @@ use {
 pub type Dependency = HeedDependencies;
 pub type ReaderDependency = HeedReaderDependencies;
 
-pub fn dependencies() -> Dependency {
-    HeedDependencies { db: create_db() }
+pub fn dependencies(args: umi_server_args::Database) -> Dependency {
+    HeedDependencies {
+        db: create_db(args),
+    }
 }
 
 pub struct HeedDependencies {
@@ -259,22 +261,20 @@ impl<'db> umi_app::Dependencies<'db> for HeedReaderDependencies {
     impl_shared!();
 }
 
-fn create_db() -> umi_storage_heed::Env {
+fn create_db(args: umi_server_args::Database) -> umi_storage_heed::Env {
     assert_eq!(umi_storage_heed::DATABASES.len(), 11);
 
-    let path = "db";
-
-    if std::env::var("PURGE").as_ref().map(String::as_str) == Ok("1") {
-        let _ = std::fs::remove_dir_all(path);
+    if args.purge {
+        let _ = std::fs::remove_dir_all(&args.dir);
     }
-    let _ = std::fs::create_dir(path);
+    let _ = std::fs::create_dir(&args.dir);
 
     let env = unsafe {
         EnvOpenOptions::new()
             .max_readers(16384)
             .max_dbs(umi_storage_heed::DATABASES.len() as u32)
             .map_size(1024 * 1024 * 1024 * 1024) // 1 TiB
-            .open(path)
+            .open(&args.dir)
             .expect("Database dir should be accessible")
     };
 

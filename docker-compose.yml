@@ -82,8 +82,8 @@ services:
       dockerfile: ./docker/Dockerfile.op-move
     environment:
       OP_MOVE_AUTH_JWT_SECRET: "f3099a1d969c4f5aba1a94434c368a84f8d950121feb4a398a67f78453853d1d"
+      OP_MOVE_DB_PURGE: ${OP_MOVE_DB_PURGE:-false}
       OP_GETH_ADDR: "op-geth"
-      PURGE: ${PURGE:-0}
     networks:
       - localnet
     volumes:

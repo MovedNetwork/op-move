@@ -9,7 +9,7 @@ pub type Dependency = InMemoryDependencies;
 // TODO: make the same separation as for other backends
 pub type ReaderDependency = InMemoryDependencies;
 
-pub fn dependencies() -> Dependency {
+pub fn dependencies(_args: umi_server_args::Database) -> Dependency {
     InMemoryDependencies::new()
 }
 

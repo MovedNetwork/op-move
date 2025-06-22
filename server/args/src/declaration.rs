@@ -1,7 +1,7 @@
 use {
-    clap::{Args, Parser},
+    clap::{Args, Parser, ValueEnum},
     serde::Deserialize,
-    std::net::SocketAddr,
+    std::{fmt::Debug, net::SocketAddr, path::Path},
     thiserror::Error,
 };
 
@@ -9,6 +9,7 @@ use {
 pub struct Config {
     pub auth: AuthSocket,
     pub http: HttpSocket,
+    pub db: Database,
     pub max_buffered_commands: u32,
 }
 
@@ -23,12 +24,32 @@ pub struct HttpSocket {
     pub addr: SocketAddr,
 }
 
+#[derive(PartialEq, Debug, Clone)]
+pub struct Database {
+    /// TODO: Currently a dummy, either make it work or remove it
+    pub backend: DatabaseBackend,
+    pub dir: Box<Path>,
+    pub purge: bool,
+}
+
+impl Default for Database {
+    fn default() -> Self {
+        Self {
+            backend: DatabaseBackend::InMemory,
+            dir: Path::new("db").into(),
+            purge: false,
+        }
+    }
+}
+
 #[derive(Deserialize, Parser, PartialEq, Debug, Clone, Default)]
 pub struct OptionalConfig {
     #[command(flatten)]
     pub auth: Option<OptionalAuthSocket>,
     #[command(flatten)]
     pub http: Option<OptionalHttpSocket>,
+    #[command(flatten)]
+    pub db: Option<OptionalDatabase>,
     #[arg(long)]
     pub max_buffered_commands: Option<u32>,
 }
@@ -47,6 +68,24 @@ pub struct OptionalHttpSocket {
     pub addr: Option<SocketAddr>,
 }
 
+#[derive(Deserialize, Parser, PartialEq, Debug, Clone, Default)]
+pub struct OptionalDatabase {
+    /// TODO: Currently a dummy, either make it work or remove it
+    #[arg(long = "db.backend", id = "db.backend")]
+    pub backend: Option<DatabaseBackend>,
+    #[arg(long = "db.dir", id = "db.dir")]
+    pub dir: Option<Box<Path>>,
+    #[arg(long = "db.purge", id = "db.purge")]
+    pub purge: Option<bool>,
+}
+
+#[derive(Deserialize, ValueEnum, PartialEq, Debug, Clone)]
+pub enum DatabaseBackend {
+    InMemory,
+    RocksDb,
+    Lmdb,
+}
+
 #[derive(Debug, Clone, Error)]
 #[error("Missing field `{0}`")]
 pub struct MissingField(&'static str);
@@ -58,6 +97,7 @@ impl TryFrom<OptionalConfig> for Config {
         Ok(Self {
             auth: value.auth.ok_or(MissingField("auth"))?.try_into()?,
             http: value.http.ok_or(MissingField("http"))?.try_into()?,
+            db: value.db.ok_or(MissingField("db"))?.try_into()?,
             max_buffered_commands: value
                 .max_buffered_commands
                 .ok_or(MissingField("max_buffered_commands"))?,
@@ -86,32 +126,78 @@ impl TryFrom<OptionalHttpSocket> for HttpSocket {
     }
 }
 
+impl TryFrom<OptionalDatabase> for Database {
+    type Error = MissingField;
+
+    fn try_from(value: OptionalDatabase) -> Result<Self, Self::Error> {
+        Ok(Self {
+            backend: value.backend.ok_or(MissingField("db.backend"))?,
+            dir: value.dir.ok_or(MissingField("db.dir"))?,
+            purge: value.purge.ok_or(MissingField("db.purge"))?,
+        })
+    }
+}
+
 impl OptionalConfig {
     pub fn apply(mut self, other: Self) -> Self {
-        self.auth = match (self.auth, other.auth) {
+        let Self {
+            auth,
+            http,
+            db,
+            max_buffered_commands,
+        } = other;
+
+        self.auth = match (self.auth, auth) {
             (Some(ours), Some(theirs)) => Some(ours.apply(theirs)),
             (ours, theirs) => theirs.or(ours),
         };
-        self.http = match (self.http, other.http) {
+        self.http = match (self.http, http) {
             (Some(ours), Some(theirs)) => Some(ours.apply(theirs)),
             (ours, theirs) => theirs.or(ours),
         };
-        self.max_buffered_commands = other.max_buffered_commands.or(self.max_buffered_commands);
+        self.db = match (self.db, db) {
+            (Some(ours), Some(theirs)) => Some(ours.apply(theirs)),
+            (ours, theirs) => theirs.or(ours),
+        };
+        self.max_buffered_commands = max_buffered_commands.or(self.max_buffered_commands);
+
         self
     }
 }
 
 impl OptionalAuthSocket {
     pub fn apply(mut self, other: Self) -> Self {
-        self.addr = other.addr.or(self.addr);
-        self.jwt_secret = other.jwt_secret.or(self.jwt_secret);
+        let Self { addr, jwt_secret } = other;
+
+        self.addr = addr.or(self.addr);
+        self.jwt_secret = jwt_secret.or(self.jwt_secret);
+
         self
     }
 }
 
 impl OptionalHttpSocket {
     pub fn apply(mut self, other: Self) -> Self {
-        self.addr = other.addr.or(self.addr);
+        let Self { addr } = other;
+
+        self.addr = addr.or(self.addr);
+
+        self
+    }
+}
+
+impl OptionalDatabase {
+    pub fn apply(mut self, other: Self) -> Self {
+        let Self {
+            backend,
+            dir,
+            purge,
+        } = other;
+
+        self.purge = purge.or(self.purge);
+        self.dir = dir.or(self.dir);
+        self.backend = backend.or(self.backend);
+
         self
     }
 }

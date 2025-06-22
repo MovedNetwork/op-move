@@ -21,21 +21,19 @@ fn parse_params(request: serde_json::Value) -> Result<NormalizedEthTransaction, 
         [] => Err(JsonRpcError::not_enough_params_error(request)),
         [x] => {
             let bytes: Bytes = json_utils::deserialize(x)?;
-            let mut slice: &[u8] = bytes.as_ref();
-
-            let umi_tx: UmiTxEnvelope = UmiTxEnvelope::decode(&mut slice).map_err(|e| {
-                JsonRpcError::parse_error(
-                    request,
-                    format!("Unsupported or invalid transaction type: {e}"),
-                )
-            })?;
-
-            let normalized_tx: NormalizedEthTransaction = umi_tx.try_into()?;
-
-            Ok(normalized_tx)
+            Ok(parse_transaction_bytes(&bytes)?)
         }
         _ => Err(JsonRpcError::too_many_params_error(request)),
     }
+}
+
+fn parse_transaction_bytes(
+    bytes: &Bytes,
+) -> Result<NormalizedEthTransaction, umi_shared::error::Error> {
+    let mut slice: &[u8] = bytes.as_ref();
+    let umi_tx = UmiTxEnvelope::decode(&mut slice)?;
+    let normalized_tx: NormalizedEthTransaction = umi_tx.try_into()?;
+    Ok(normalized_tx)
 }
 
 async fn inner_execute(
@@ -67,6 +65,42 @@ pub mod tests {
                 }
         "#,
         ).unwrap()
+    }
+
+    pub fn example_bad_request() -> serde_json::Value {
+        // deposit tx
+        serde_json::from_str(
+            r#"
+                {
+                    "method": "eth_sendRawTransaction",
+                    "params": [
+                    "7ef8f8a032595a51f0561028c684fbeeb46c7221a34be9a2eedda60a93069dd77320407e94deaddeaddeaddeaddeaddeaddeaddeaddead00019442000000000000000000000000000000000000158080830f424080b8a4440a5e2000000000000000000000000000000000000000006807cdc800000000000000220000000000000000000000000000000000000000000000000000000000a68a3a000000000000000000000000000000000000000000000000000000000000000198663a8bf712c08273a02876877759b43dc4df514214cc2f6008870b9a8503380000000000000000000000008c67a7b8624044f8f672e9ec374dfa596f01afb9"
+                    ],
+                    "id": 11,
+                    "jsonrpc": "2.0"
+                }
+        "#,
+        ).unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_bad_input() {
+        let (_reader, mut app) = create_app();
+
+        let (queue, state) = umi_app::create(&mut app, 10);
+
+        umi_app::run_with_actor(state, async move {
+            let request = example_bad_request();
+
+            // This is actually alloy's response, as it doesn't recognize OP deposit type
+            let expected_response =
+                JsonRpcError::transaction_error("Could not decode RLP bytes: unexpected tx type");
+
+            let response = execute(request, queue).await.unwrap_err();
+
+            assert_eq!(response, expected_response);
+        })
+        .await;
     }
 
     #[tokio::test]

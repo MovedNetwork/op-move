@@ -165,7 +165,7 @@ impl TryFrom<OpTxEnvelope> for NormalizedExtendedTxEnvelope {
             OpTxEnvelope::Eip2930(tx) => NormalizedExtendedTxEnvelope::Canonical(tx.try_into()?),
             OpTxEnvelope::Legacy(tx) => NormalizedExtendedTxEnvelope::Canonical(tx.try_into()?),
             OpTxEnvelope::Deposit(tx) => NormalizedExtendedTxEnvelope::DepositedTx(tx),
-            _ => Err(InvalidTransactionCause::UnsupportedType)?,
+            OpTxEnvelope::Eip7702(_) => Err(InvalidTransactionCause::UnsupportedType)?,
         })
     }
 }

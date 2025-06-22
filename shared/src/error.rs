@@ -118,7 +118,7 @@ pub enum InvalidTransactionCause {
     FailedArgumentDeserialization,
     #[error("Invalid nested references")]
     UnsupportedNestedReference,
-    #[error("Blob transactions are not supported")]
+    #[error("Unsupported transaction type")]
     UnsupportedType,
     #[error("Unknown transaction type: {0}")]
     UnknownType(TxType),
@@ -273,7 +273,7 @@ mod tests {
     )]
     #[test_case(
         InvalidTransactionCause::UnsupportedType,
-        "Blob transactions are not supported"
+        "Unsupported transaction type"
     )]
     #[test_case(
         InvalidTransactionCause::UnknownType(TxType::Legacy),

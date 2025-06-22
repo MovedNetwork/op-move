@@ -28,7 +28,7 @@ pub mod tests {
             signers::local::PrivateKeySigner,
         },
         move_core_types::account_address::AccountAddress,
-        op_alloy::consensus::{OpTxEnvelope, TxDeposit},
+        op_alloy::consensus::TxDeposit,
         std::{convert::Infallible, sync::Arc},
         tokio::sync::mpsc::Sender,
         umi_app::{
@@ -47,7 +47,10 @@ pub mod tests {
             transaction::{InMemoryTransactionQueries, InMemoryTransactionRepository},
         },
         umi_evm_ext::state::{BlockHashWriter, InMemoryStorageTrieRepository},
-        umi_execution::UmiBaseTokenAccounts,
+        umi_execution::{
+            UmiBaseTokenAccounts,
+            transaction::{NormalizedExtendedTxEnvelope, UmiTxEnvelope},
+        },
         umi_genesis::config::{CHAIN_ID, GenesisConfig},
         umi_shared::primitives::{Address, B256, U64, U256},
         umi_state::{InMemoryState, InMemoryTrieDb},
@@ -146,7 +149,7 @@ pub mod tests {
     pub async fn deposit_eth(to: &str, channel: &Sender<Command>) {
         let to = Address::from_hex(to).unwrap();
         let amount = parse_ether("1").unwrap();
-        let tx = OpTxEnvelope::Deposit(Sealed::new(TxDeposit {
+        let tx = NormalizedExtendedTxEnvelope::DepositedTx(Sealed::new(TxDeposit {
             to: TxKind::Call(to),
             value: amount,
             source_hash: FixedBytes::default(),
@@ -188,7 +191,7 @@ pub mod tests {
         let signer = PrivateKeySigner::from_bytes(&PRIVATE_KEY.into()).unwrap();
         let signature = signer.sign_transaction_sync(&mut tx).unwrap();
         let signed_tx = tx.into_signed(signature);
-        let tx = OpTxEnvelope::Eip1559(signed_tx);
+        let tx = UmiTxEnvelope::Eip1559(signed_tx);
 
         let mut encoded = Vec::new();
         tx.encode(&mut encoded);

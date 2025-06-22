@@ -93,10 +93,8 @@ mod tests {
             signers::local::PrivateKeySigner,
         },
         hex_literal::hex,
-        op_alloy::{
-            consensus::{OpTxEnvelope, TxDeposit},
-            network::TxSignerSync,
-        },
+        op_alloy::{consensus::TxDeposit, network::TxSignerSync},
+        umi_execution::transaction::{NormalizedEthTransaction, NormalizedExtendedTxEnvelope},
         umi_shared::primitives::U256,
     };
 
@@ -117,10 +115,11 @@ mod tests {
             input: vec![9, 9, 9].into(),
         };
         let signature = signer.sign_transaction_sync(&mut tx).unwrap();
-        let signed_tx = OpTxEnvelope::Eip1559(tx.into_signed(signature));
+        let signed_tx = tx.into_signed(signature);
+        let normalized_tx = NormalizedEthTransaction::try_from(signed_tx).unwrap();
 
         let transaction = ExtendedTransaction {
-            inner: signed_tx.try_into().unwrap(),
+            inner: normalized_tx.into(),
             block_number: 1,
             block_hash: B256::new(hex!(
                 "2222223123123121231231231231232222222231231231212312312312312322"
@@ -148,10 +147,10 @@ mod tests {
             from: Default::default(),
             is_system_transaction: false,
         };
-        let sealed_tx = OpTxEnvelope::Deposit(tx.seal_slow());
+        let sealed_tx = NormalizedExtendedTxEnvelope::DepositedTx(tx.seal_slow());
 
         let transaction = ExtendedTransaction {
-            inner: sealed_tx.try_into().unwrap(),
+            inner: sealed_tx,
             block_number: 1,
             block_hash: B256::new(hex!(
                 "2222223123123121231231231231232222222231231231212312312312312322"

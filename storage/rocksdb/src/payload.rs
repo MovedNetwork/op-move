@@ -59,7 +59,7 @@ impl PayloadQueries for RocksDbPayloadQueries {
                     .map(|hash| {
                         Ok(db
                             .get_pinned_cf(&transaction_cf, hash)?
-                            .map(|v| ExtendedTransaction::from_value(v.as_ref()).inner.into()))
+                            .map(|v| ExtendedTransaction::from_value(v.as_ref()).inner))
                     })
                     .filter_map(|v| v.transpose())
                     .collect::<Result<Vec<_>, _>>()?;

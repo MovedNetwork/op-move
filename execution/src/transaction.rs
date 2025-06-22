@@ -139,6 +139,23 @@ pub enum NormalizedExtendedTxEnvelope {
     DepositedTx(Sealed<TxDeposit>),
 }
 
+// TODO: avoid conversion to op-alloy and do it internally
+impl Decodable for NormalizedExtendedTxEnvelope {
+    fn decode(buf: &mut &[u8]) -> alloy::rlp::Result<Self> {
+        let envelope = OpTxEnvelope::decode(buf)?;
+        envelope
+            .try_into()
+            .map_err(|_| alloy::rlp::Error::Custom("Unsupported transaction type"))
+    }
+}
+
+impl Encodable for NormalizedExtendedTxEnvelope {
+    fn encode(&self, out: &mut dyn alloy::rlp::BufMut) {
+        let envelope: OpTxEnvelope = self.clone().into();
+        envelope.encode(out);
+    }
+}
+
 impl TryFrom<OpTxEnvelope> for NormalizedExtendedTxEnvelope {
     type Error = Error;
 
@@ -231,15 +248,7 @@ impl NormalizedExtendedTxEnvelope {
     }
 
     pub fn trie_hash(&self) -> B256 {
-        // Return the transaction hash for trie calculation
         self.tx_hash()
-    }
-}
-
-impl Encodable for NormalizedExtendedTxEnvelope {
-    fn encode(&self, out: &mut dyn alloy::rlp::BufMut) {
-        // For trie calculation, we encode the transaction hash
-        self.tx_hash().encode(out);
     }
 }
 

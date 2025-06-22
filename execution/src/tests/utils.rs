@@ -11,7 +11,6 @@ use {
     move_model::metadata::LanguageVersion,
     move_vm_runtime::AsUnsyncCodeStorage,
     move_vm_types::resolver::ResourceResolver,
-    op_alloy::consensus::OpTxEnvelope,
     regex::Regex,
     std::{
         collections::{BTreeMap, BTreeSet},
@@ -57,8 +56,9 @@ impl TestTransaction {
     /// # Arguments
     /// * `tx` - The normalized transaction envelope
     /// * `tx_hash` - The transaction hash
-    pub fn new(tx: NormalizedExtendedTxEnvelope, tx_hash: B256) -> Self {
+    pub fn new(tx: NormalizedExtendedTxEnvelope) -> Self {
         let gas_limit = tx.gas_limit();
+        let tx_hash = tx.tx_hash();
         Self {
             tx,
             tx_hash,
@@ -137,8 +137,8 @@ impl TestContext {
     /// The ModuleId of the deployed contract
     pub fn deploy_contract(&mut self, module_name: &str) -> ModuleId {
         let module_bytes = self.compile_module(module_name, self.move_address);
-        let (tx_hash, tx) = create_transaction(&mut self.signer, TxKind::Create, module_bytes);
-        let transaction = TestTransaction::new(tx, tx_hash);
+        let tx = create_transaction(&mut self.signer, TxKind::Create, module_bytes);
+        let transaction = TestTransaction::new(tx);
         let outcome = self.execute_tx(&transaction).unwrap();
         self.state.apply(outcome.changes.move_vm).unwrap();
         self.evm_storage.apply(outcome.changes.evm).unwrap();
@@ -168,8 +168,8 @@ impl TestContext {
         args: Vec<TransactionArgument>,
     ) -> Vec<Log<LogData>> {
         let script_bytes = self.compile_script(script_name, local_deps, args);
-        let (tx_hash, tx) = create_transaction(&mut self.signer, TxKind::Create, script_bytes);
-        let transaction = TestTransaction::new(tx, tx_hash);
+        let tx = create_transaction(&mut self.signer, TxKind::Create, script_bytes);
+        let transaction = TestTransaction::new(tx);
         let outcome = self.execute_tx(&transaction).unwrap();
         self.state.apply(outcome.changes.move_vm).unwrap();
         self.evm_storage.apply(outcome.changes.evm).unwrap();
@@ -196,7 +196,7 @@ impl TestContext {
         l2_gas_limit: u64,
         l2_gas_price: U256,
     ) -> umi_shared::error::Result<TransactionExecutionOutcome> {
-        let (tx_hash, tx) = create_transaction_with_value(
+        let tx = create_transaction_with_value(
             &mut self.signer,
             TxKind::Call(to),
             Vec::new(),
@@ -206,7 +206,7 @@ impl TestContext {
         // Default base token is ETH token in address 0x1
         let treasury_address = AccountAddress::ONE;
         let base_token = UmiBaseTokenAccounts::new(treasury_address);
-        let mut transaction = TestTransaction::new(tx, tx_hash);
+        let mut transaction = TestTransaction::new(tx);
         transaction.with_cost_and_token(l1_cost, base_token, l2_gas_limit, l2_gas_price);
         let outcome = self.execute_tx(&transaction)?;
         self.state.apply(outcome.changes.move_vm.clone()).unwrap();
@@ -242,8 +242,8 @@ impl TestContext {
             .into_iter()
             .map(|arg| bcs::to_bytes(arg).unwrap())
             .collect();
-        let (tx_hash, tx) = create_test_tx(&mut self.signer, module_id, function, args);
-        let transaction = TestTransaction::new(tx, tx_hash);
+        let tx = create_test_tx(&mut self.signer, module_id, function, args);
+        let transaction = TestTransaction::new(tx);
         let outcome = self.execute_tx(&transaction).unwrap();
         // Entry function transaction should succeed
         outcome.vm_outcome.unwrap();
@@ -265,11 +265,11 @@ impl TestContext {
             .into_iter()
             .map(|arg| bcs::to_bytes(arg).unwrap())
             .collect();
-        let (tx_hash, tx) = create_test_tx(&mut self.signer.clone(), module_id, function, args);
+        let tx = create_test_tx(&mut self.signer.clone(), module_id, function, args);
 
         let treasury_address = AccountAddress::ONE;
         let base_token = UmiBaseTokenAccounts::new(treasury_address);
-        let mut transaction = TestTransaction::new(tx, tx_hash);
+        let mut transaction = TestTransaction::new(tx);
         transaction.with_cost_and_token(0, base_token, gas_limit, gas_price);
 
         let outcome = self.execute_tx(&transaction).unwrap();
@@ -297,8 +297,8 @@ impl TestContext {
             .into_iter()
             .map(|arg| bcs::to_bytes(arg).unwrap())
             .collect();
-        let (tx_hash, tx) = create_test_tx(&mut self.signer, module_id, function, args);
-        let transaction = TestTransaction::new(tx, tx_hash);
+        let tx = create_test_tx(&mut self.signer, module_id, function, args);
+        let transaction = TestTransaction::new(tx);
         self.execute_tx(&transaction).unwrap_err()
     }
 
@@ -392,7 +392,7 @@ impl TestContext {
     /// * `amount` - Amount of ETH to deposit
     pub fn deposit_eth(&mut self, to: Address, amount: U256) {
         let balance_before = self.get_balance(to);
-        let tx = OpTxEnvelope::Deposit(Sealed::new(TxDeposit {
+        let tx = NormalizedExtendedTxEnvelope::DepositedTx(Sealed::new(TxDeposit {
             to: TxKind::Call(to),
             value: U256::from(amount),
             source_hash: FixedBytes::default(),
@@ -402,13 +402,7 @@ impl TestContext {
             is_system_transaction: false,
             input: Vec::new().into(),
         }));
-        let tx_hash = {
-            let capacity = tx.length();
-            let mut bytes = Vec::with_capacity(capacity);
-            tx.encode(&mut bytes);
-            B256::new(keccak256(bytes).0)
-        };
-        let transaction = TestTransaction::new(tx.try_into().unwrap(), tx_hash);
+        let transaction = TestTransaction::new(tx);
         let outcome = self.execute_tx(&transaction).unwrap();
         outcome.vm_outcome.unwrap();
         self.state.apply(outcome.changes.move_vm).unwrap();
@@ -706,14 +700,13 @@ pub fn module_bytes_to_tx_data(module_bytes: Vec<u8>) -> Vec<u8> {
 /// * `function` - Function name to call
 /// * `args` - Function arguments
 ///
-/// # Returns
-/// Transaction hash and normalized transaction envelope
+/// # Returns the normalized transaction envelope
 pub fn create_test_tx(
     signer: &mut Signer,
     module_id: &ModuleId,
     function: &str,
     args: Vec<Vec<u8>>,
-) -> (B256, NormalizedExtendedTxEnvelope) {
+) -> NormalizedExtendedTxEnvelope {
     let entry_fn = EntryFunction::new(
         module_id.clone(),
         Identifier::new(function).unwrap(),
@@ -741,7 +734,7 @@ pub fn create_transaction(
     signer: &mut Signer,
     to: TxKind,
     input: Vec<u8>,
-) -> (B256, NormalizedExtendedTxEnvelope) {
+) -> NormalizedExtendedTxEnvelope {
     create_transaction_with_value(signer, to, input, U256::ZERO)
 }
 
@@ -760,7 +753,7 @@ pub fn create_transaction_with_value(
     to: TxKind,
     input: Vec<u8>,
     value: U256,
-) -> (B256, NormalizedExtendedTxEnvelope) {
+) -> NormalizedExtendedTxEnvelope {
     let mut tx = TxEip1559 {
         chain_id: CHAIN_ID,
         nonce: signer.nonce,
@@ -775,12 +768,9 @@ pub fn create_transaction_with_value(
     signer.nonce += 1;
     let signature = signer.inner.sign_transaction_sync(&mut tx).unwrap();
     let signed_tx = TxEnvelope::Eip1559(tx.into_signed(signature));
-    let tx_hash = *signed_tx.tx_hash();
     let umi_tx: UmiTxEnvelope = signed_tx.try_into().unwrap();
     let normalized_eth_tx: NormalizedEthTransaction = umi_tx.try_into().unwrap();
-    let normalized_tx = NormalizedExtendedTxEnvelope::Canonical(normalized_eth_tx);
-
-    (tx_hash, normalized_tx)
+    NormalizedExtendedTxEnvelope::Canonical(normalized_eth_tx)
 }
 
 /// Trait for compilation jobs with common functionality

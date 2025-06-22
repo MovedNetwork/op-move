@@ -1,6 +1,5 @@
 use {
     alloy::{primitives::Bloom, rlp::Decodable},
-    op_alloy::consensus::OpTxEnvelope,
     umi_blockchain::{
         block::{ExtendedBlock, Header},
         payload::{NewPayloadIdInput, PayloadId},
@@ -41,8 +40,8 @@ impl TryFrom<Payload> for PayloadForExecution {
 
         for raw_tx in value.transactions {
             let mut slice: &[u8] = raw_tx.as_ref();
-            let tx = OpTxEnvelope::decode(&mut slice)?;
-            transactions.push(tx.try_into()?);
+            let tx = NormalizedExtendedTxEnvelope::decode(&mut slice)?;
+            transactions.push(tx);
         }
 
         Ok(Self {

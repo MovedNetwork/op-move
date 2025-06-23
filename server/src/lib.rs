@@ -94,6 +94,14 @@ const EIP1559_ELASTICITY_MULTIPLIER: u64 = 6;
 const EIP1559_BASE_FEE_MAX_CHANGE_DENOMINATOR: U256 = U256::from_limbs([250, 0, 0, 0]);
 const JWT_VALID_DURATION_IN_SECS: u64 = 60;
 
+pub fn set_global_tracing_subscriber() {
+    // TODO: config options for logging (debug level, output to file, etc)
+    let subscriber = tracing_subscriber::FmtSubscriber::builder()
+        .with_max_level(tracing::Level::DEBUG)
+        .finish();
+    tracing::subscriber::set_global_default(subscriber).expect("Failed to set tracing subscriber");
+}
+
 pub async fn run(args: Config) {
     let genesis_config = GenesisConfig::try_new(
         args.genesis.chain_id,
@@ -361,7 +369,7 @@ async fn mirror<'reader>(
         op_move_response: &op_move_response,
         port,
     };
-    println!("{}", serde_json::to_string(&log).unwrap());
+    tracing::info!("{}", serde_json::to_string(&log).unwrap());
 
     // TODO: this is a hack because we currently can't compute the genesis
     // hash expected by op-node.

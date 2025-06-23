@@ -13,5 +13,6 @@ async fn main() {
         .try_build()
         .unwrap();
 
+    umi_server::set_global_tracing_subscriber();
     umi_server::run(args).await;
 }

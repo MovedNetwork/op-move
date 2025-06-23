@@ -28,6 +28,7 @@ use {
     umi_state::ResolverBasedModuleBytesStorage,
 };
 
+#[tracing::instrument(level = "debug", skip(input))]
 pub(super) fn execute_deposited_transaction<
     S: MoveResolver + TableResolver,
     ST: StorageTrieRepository,

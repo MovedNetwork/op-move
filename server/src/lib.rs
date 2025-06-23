@@ -2,8 +2,8 @@ use {
     crate::mirror::MirrorLog,
     flate2::read::GzDecoder,
     jsonwebtoken::{DecodingKey, Validation},
+    move_core_types::account_address::AccountAddress,
     std::{
-        fs,
         future::Future,
         io::Read,
         net::{Ipv4Addr, SocketAddr, SocketAddrV4},
@@ -19,9 +19,12 @@ use {
     umi_genesis::config::GenesisConfig,
     umi_server_args::{
         Config, DatabaseBackend, DefaultLayer, OptionalAuthSocket, OptionalConfig,
-        OptionalDatabase, OptionalHttpSocket,
+        OptionalDatabase, OptionalGenesis, OptionalHttpSocket,
     },
-    umi_shared::primitives::U256,
+    umi_shared::{
+        hex,
+        primitives::{B256, U256},
+    },
     warp::{
         http::{header::CONTENT_TYPE, HeaderMap, HeaderValue, StatusCode},
         hyper::{body::Bytes, Body, Response},
@@ -66,6 +69,23 @@ pub fn defaults() -> DefaultLayer {
             dir: Some(Path::new("db").into()),
             purge: Some(false),
         }),
+        genesis: Some(OptionalGenesis {
+            chain_id: Some(42069),
+            initial_state_root: Some(B256::new(hex!(
+                "0x4805267476cb522274ec2fe790b4dc6e889ed0d57377f90770d4a658f6b8e4ae"
+            ))),
+            treasury: Some(AccountAddress::ONE), // TODO: fill in the real address,
+            l2_contract_genesis: Some(
+                Path::new("src/tests/optimism/packages/contracts-bedrock/deployments/genesis.json")
+                    .into(),
+            ),
+            token_list: Some(
+                Path::new(Path::new(
+                    "execution/src/tests/res/bridged_tokens_test.json",
+                ))
+                .into(),
+            ),
+        }),
         max_buffered_commands: Some(1_000), // TODO: think about channel size bound
     })
 }
@@ -75,18 +95,14 @@ const EIP1559_BASE_FEE_MAX_CHANGE_DENOMINATOR: U256 = U256::from_limbs([250, 0, 
 const JWT_VALID_DURATION_IN_SECS: u64 = 60;
 
 pub async fn run(args: Config) {
-    // TODO: genesis should come from a file (path specified by CLI)
-    let genesis_config = GenesisConfig {
-        chain_id: 42069,
-        l2_contract_genesis: serde_json::from_reader(
-            &fs::File::open(
-                "src/tests/optimism/packages/contracts-bedrock/deployments/genesis.json",
-            )
-            .expect("L2 contract genesis file should exist and be readable"),
-        )
-        .expect("Path should point to JSON encoded L2 contract `Genesis` struct"),
-        ..Default::default()
-    };
+    let genesis_config = GenesisConfig::try_new(
+        args.genesis.chain_id,
+        args.genesis.initial_state_root,
+        args.genesis.treasury,
+        args.genesis.l2_contract_genesis.as_ref(),
+        args.genesis.token_list.as_ref(),
+    )
+    .unwrap();
 
     let deps = dependency::dependencies(args.db);
     let reader = {

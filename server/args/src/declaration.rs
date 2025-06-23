@@ -3,6 +3,7 @@ use {
     serde::Deserialize,
     std::{fmt::Debug, net::SocketAddr, path::Path},
     thiserror::Error,
+    umi_shared::primitives::{Address, MoveAddress, B256},
 };
 
 #[derive(PartialEq, Debug, Clone)]
@@ -10,6 +11,7 @@ pub struct Config {
     pub auth: AuthSocket,
     pub http: HttpSocket,
     pub db: Database,
+    pub genesis: Genesis,
     pub max_buffered_commands: u32,
 }
 
@@ -32,6 +34,23 @@ pub struct Database {
     pub purge: bool,
 }
 
+#[derive(PartialEq, Debug, Clone)]
+pub struct Genesis {
+    pub chain_id: u64,
+    pub initial_state_root: B256,
+    pub treasury: MoveAddress,
+    pub l2_contract_genesis: Box<Path>,
+    pub token_list: Box<Path>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BridgedToken {
+    pub name: String,
+    pub symbol: String,
+    pub decimals: u8,
+    pub ethereum_address: Address,
+}
+
 impl Default for Database {
     fn default() -> Self {
         Self {
@@ -50,6 +69,8 @@ pub struct OptionalConfig {
     pub http: Option<OptionalHttpSocket>,
     #[command(flatten)]
     pub db: Option<OptionalDatabase>,
+    #[command(flatten)]
+    pub genesis: Option<OptionalGenesis>,
     #[arg(long)]
     pub max_buffered_commands: Option<u32>,
 }
@@ -79,6 +100,23 @@ pub struct OptionalDatabase {
     pub purge: Option<bool>,
 }
 
+#[derive(Deserialize, Parser, PartialEq, Debug, Clone, Default)]
+pub struct OptionalGenesis {
+    #[arg(long = "genesis.chain-id", id = "genesis.chain-id")]
+    pub chain_id: Option<u64>,
+    #[arg(long = "genesis.initial-state-root", id = "genesis.initial-state-root")]
+    pub initial_state_root: Option<B256>,
+    #[arg(long = "genesis.treasury", id = "genesis.treasury")]
+    pub treasury: Option<MoveAddress>,
+    #[arg(
+        long = "genesis.l2-contract-genesis",
+        id = "genesis.l2-contract-genesis"
+    )]
+    pub l2_contract_genesis: Option<Box<Path>>,
+    #[arg(long = "genesis.token-list", id = "genesis.token-list")]
+    pub token_list: Option<Box<Path>>,
+}
+
 #[derive(Deserialize, ValueEnum, PartialEq, Debug, Clone)]
 pub enum DatabaseBackend {
     InMemory,
@@ -98,6 +136,7 @@ impl TryFrom<OptionalConfig> for Config {
             auth: value.auth.ok_or(MissingField("auth"))?.try_into()?,
             http: value.http.ok_or(MissingField("http"))?.try_into()?,
             db: value.db.ok_or(MissingField("db"))?.try_into()?,
+            genesis: value.genesis.ok_or(MissingField("genesis"))?.try_into()?,
             max_buffered_commands: value
                 .max_buffered_commands
                 .ok_or(MissingField("max_buffered_commands"))?,
@@ -138,12 +177,31 @@ impl TryFrom<OptionalDatabase> for Database {
     }
 }
 
+impl TryFrom<OptionalGenesis> for Genesis {
+    type Error = MissingField;
+
+    fn try_from(value: OptionalGenesis) -> Result<Self, Self::Error> {
+        Ok(Self {
+            chain_id: value.chain_id.ok_or(MissingField("genesis.chain-id"))?,
+            initial_state_root: value
+                .initial_state_root
+                .ok_or(MissingField("genesis.initial-state-root"))?,
+            treasury: value.treasury.ok_or(MissingField("genesis.treasury"))?,
+            l2_contract_genesis: value
+                .l2_contract_genesis
+                .ok_or(MissingField("genesis.l2-contract-genesis"))?,
+            token_list: value.token_list.ok_or(MissingField("genesis.token-list"))?,
+        })
+    }
+}
+
 impl OptionalConfig {
     pub fn apply(mut self, other: Self) -> Self {
         let Self {
             auth,
             http,
             db,
+            genesis,
             max_buffered_commands,
         } = other;
 
@@ -160,6 +218,7 @@ impl OptionalConfig {
             (ours, theirs) => theirs.or(ours),
         };
         self.max_buffered_commands = max_buffered_commands.or(self.max_buffered_commands);
+        self.genesis = genesis.or(self.genesis);
 
         self
     }
@@ -197,6 +256,26 @@ impl OptionalDatabase {
         self.purge = purge.or(self.purge);
         self.dir = dir.or(self.dir);
         self.backend = backend.or(self.backend);
+
+        self
+    }
+}
+
+impl OptionalGenesis {
+    pub fn apply(mut self, other: Self) -> Self {
+        let Self {
+            chain_id,
+            initial_state_root,
+            treasury,
+            l2_contract_genesis,
+            token_list,
+        } = other;
+
+        self.chain_id = chain_id.or(self.chain_id);
+        self.initial_state_root = initial_state_root.or(self.initial_state_root);
+        self.treasury = treasury.or(self.treasury);
+        self.l2_contract_genesis = l2_contract_genesis.or(self.l2_contract_genesis);
+        self.token_list = token_list.or(self.token_list);
 
         self
     }

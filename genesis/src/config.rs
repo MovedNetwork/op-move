@@ -4,7 +4,7 @@ use {
     aptos_gas_schedule::{InitialGasSchedule, NativeGasParameters, VMGasParameters},
     aptos_vm_types::storage::StorageGasParameters,
     move_core_types::{account_address::AccountAddress, gas_algebra::GasQuantity},
-    std::path::Path,
+    std::{fs::File, path::Path},
     umi_shared::primitives::B256,
 };
 
@@ -64,6 +64,25 @@ impl Default for GasCosts {
         result.vm.txn.max_execution_gas = GasQuantity::new(INTERNAL_EXECUTION_LIMIT);
         result.vm.txn.min_transaction_gas_units = GasQuantity::new(TRANSACTION_BASE_COST);
         result
+    }
+}
+
+impl GenesisConfig {
+    pub fn try_new(
+        chain_id: u64,
+        initial_state_root: B256,
+        treasury: AccountAddress,
+        l2_contract_genesis: &Path,
+        token_list: &Path,
+    ) -> anyhow::Result<Self> {
+        Ok(Self {
+            chain_id,
+            initial_state_root,
+            gas_costs: Default::default(),
+            treasury,
+            l2_contract_genesis: serde_json::from_reader(File::open(l2_contract_genesis)?)?,
+            token_list: bridged_tokens::parse_token_list(token_list)?,
+        })
     }
 }
 

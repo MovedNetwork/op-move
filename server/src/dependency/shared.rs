@@ -6,12 +6,13 @@ use {
 };
 
 pub fn create(
+    args: umi_server_args::Database,
     genesis_config: &GenesisConfig,
 ) -> (
     Application<'static, Dependency>,
     ApplicationReader<'static, ReaderDependency>,
 ) {
-    let deps = dependencies();
+    let deps = dependencies(args);
     let reader_deps = deps.reader();
 
     (

@@ -12,6 +12,7 @@ use {
     umi_app::{ApplicationReader, CommandQueue, Dependencies},
     umi_blockchain::{payload::StatePayloadId, receipt::TransactionReceipt},
     umi_genesis::config::GenesisConfig,
+    umi_server_args::Database,
 };
 
 const DEPOSIT_TX: &[u8] = &hex!("7ef8f8a032595a51f0561028c684fbeeb46c7221a34be9a2eedda60a93069dd77320407e94deaddeaddeaddeaddeaddeaddeaddeaddead00019442000000000000000000000000000000000000158080830f424080b8a4440a5e2000000000000000000000000000000000000000006807cdc800000000000000220000000000000000000000000000000000000000000000000000000000a68a3a000000000000000000000000000000000000000000000000000000000000000198663a8bf712c08273a02876877759b43dc4df514214cc2f6008870b9a8503380000000000000000000000008c67a7b8624044f8f672e9ec374dfa596f01afb9");
@@ -30,8 +31,9 @@ impl TestContext<'static> {
         F: Future<Output = anyhow::Result<()>> + Send + 'f,
         FU: FnMut(Self) -> F + Send,
     {
+        let db = Database::default();
         let genesis_config = GenesisConfig::default();
-        let (mut app, reader) = initialize_app(&genesis_config);
+        let (mut app, reader) = initialize_app(db, &GenesisConfig::default());
 
         let genesis_block = create_genesis_block(&app.block_hash, &genesis_config);
         let head = genesis_block.hash;

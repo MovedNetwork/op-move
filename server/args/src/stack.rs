@@ -74,7 +74,11 @@ impl<L: Layer> ConfigBuilder<L> {
 mod tests {
     use {
         super::*,
-        crate::declaration::{AuthSocket, HttpSocket, OptionalAuthSocket, OptionalHttpSocket},
+        crate::{
+            declaration::{AuthSocket, HttpSocket, OptionalAuthSocket, OptionalHttpSocket},
+            Database, DatabaseBackend, OptionalDatabase,
+        },
+        std::path::Path,
     };
 
     pub struct StubLayer(OptionalConfig);
@@ -102,6 +106,11 @@ mod tests {
                     addr: Some(overridden_http_addr),
                 }),
                 max_buffered_commands: Some(1),
+                db: Some(OptionalDatabase {
+                    backend: Some(DatabaseBackend::InMemory),
+                    dir: Some(Path::new("db").into()),
+                    purge: Some(false),
+                }),
             }))
             .layer(StubLayer(OptionalConfig {
                 auth: None,
@@ -109,6 +118,7 @@ mod tests {
                     addr: Some(http_addr),
                 }),
                 max_buffered_commands: Some(10),
+                ..Default::default()
             }))
             .try_build()
             .unwrap();
@@ -119,6 +129,11 @@ mod tests {
             },
             http: HttpSocket { addr: http_addr },
             max_buffered_commands: 10,
+            db: Database {
+                backend: DatabaseBackend::InMemory,
+                dir: Path::new("db").into(),
+                purge: false,
+            },
         };
 
         assert_eq!(actual_config, expected_config);

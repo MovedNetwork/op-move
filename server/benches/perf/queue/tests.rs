@@ -9,6 +9,7 @@ use {
     umi_app::{Application, DependenciesThreadSafe},
     umi_genesis::config::GenesisConfig,
     umi_server::initialize_app,
+    umi_server_args::Database,
 };
 
 fn build_1000_blocks<'app>(
@@ -47,7 +48,7 @@ fn bench_build_1000_blocks_with_queue_size(bencher: &mut Criterion) -> impl Term
         .into_iter()
         .rev()
     {
-        let (mut app, _app_reader) = initialize_app(&GenesisConfig::default());
+        let (mut app, _reader) = initialize_app(Database::default(), &GenesisConfig::default());
 
         app.genesis_update(input::GENESIS);
 

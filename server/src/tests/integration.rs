@@ -1,5 +1,5 @@
 use {
-    crate::DEFAULTS,
+    crate::defaults,
     alloy::{
         contract::CallBuilder,
         dyn_abi::EventExt,
@@ -348,7 +348,7 @@ fn run_op_move(jwt_secret: String) -> Runtime {
     let op_move_runtime = Runtime::new().unwrap();
     op_move_runtime.spawn(crate::run(
         ConfigBuilder::new()
-            .layer(DEFAULTS)
+            .layer(defaults())
             .layer(DefaultLayer::new(OptionalConfig {
                 auth: Some(OptionalAuthSocket {
                     jwt_secret: Some(jwt_secret),

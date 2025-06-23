@@ -11,9 +11,9 @@ use {
 pub type Dependency = RocksDbDependencies;
 pub type ReaderDependency = RocksDbReaderDependencies;
 
-pub fn dependencies() -> Dependency {
+pub fn dependencies(args: umi_server_args::Database) -> Dependency {
     RocksDbDependencies {
-        db: Arc::new(create_db()),
+        db: Arc::new(create_db(args)),
     }
 }
 
@@ -264,17 +264,15 @@ impl<'db> umi_app::Dependencies<'db> for RocksDbReaderDependencies {
     impl_shared!();
 }
 
-fn create_db() -> umi_storage_rocksdb::RocksDb {
-    let path = "db";
-
-    if std::env::var("PURGE").as_ref().map(String::as_str) == Ok("1") {
-        let _ = std::fs::remove_dir_all(path);
+fn create_db(args: umi_server_args::Database) -> umi_storage_rocksdb::RocksDb {
+    if args.purge {
+        let _ = std::fs::remove_dir_all(&args.dir);
     }
 
     let mut options = umi_storage_rocksdb::rocksdb::Options::default();
     options.create_if_missing(true);
     options.create_missing_column_families(true);
 
-    umi_storage_rocksdb::RocksDb::open_cf(&options, path, umi_storage_rocksdb::COLUMN_FAMILIES)
+    umi_storage_rocksdb::RocksDb::open_cf(&options, &args.dir, umi_storage_rocksdb::COLUMN_FAMILIES)
         .expect("Database should open in db dir")
 }

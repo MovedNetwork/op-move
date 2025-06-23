@@ -76,9 +76,10 @@ mod tests {
         super::*,
         crate::{
             declaration::{AuthSocket, HttpSocket, OptionalAuthSocket, OptionalHttpSocket},
-            Database, DatabaseBackend, OptionalDatabase,
+            Database, DatabaseBackend, Genesis, OptionalDatabase, OptionalGenesis,
         },
         std::path::Path,
+        umi_shared::primitives::{MoveAddress, B256},
     };
 
     pub struct StubLayer(OptionalConfig);
@@ -111,6 +112,13 @@ mod tests {
                     dir: Some(Path::new("db").into()),
                     purge: Some(false),
                 }),
+                genesis: Some(OptionalGenesis {
+                    chain_id: Some(1),
+                    initial_state_root: Some(B256::ZERO),
+                    treasury: Some(MoveAddress::ZERO),
+                    l2_contract_genesis: Some(Path::new("l2").into()),
+                    token_list: Some(Path::new("tokens").into()),
+                }),
             }))
             .layer(StubLayer(OptionalConfig {
                 auth: None,
@@ -133,6 +141,13 @@ mod tests {
                 backend: DatabaseBackend::InMemory,
                 dir: Path::new("db").into(),
                 purge: false,
+            },
+            genesis: Genesis {
+                chain_id: 1,
+                initial_state_root: B256::ZERO,
+                treasury: MoveAddress::ZERO,
+                l2_contract_genesis: Path::new("l2").into(),
+                token_list: Path::new("tokens").into(),
             },
         };
 

@@ -1,3 +1,5 @@
+pub use alloy::hex;
+
 pub mod error;
 pub mod iter;
 pub mod primitives;

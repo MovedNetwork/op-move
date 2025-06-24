@@ -10,6 +10,7 @@ use {
         path::Path,
         time::SystemTime,
     },
+    tracing_subscriber::fmt::format::FmtSpan,
     umi_api::method_name::MethodName,
     umi_app::{Application, ApplicationReader, Command, CommandQueue, Dependencies},
     umi_blockchain::{
@@ -98,6 +99,8 @@ pub fn set_global_tracing_subscriber() {
     // TODO: config options for logging (debug level, output to file, etc)
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
         .with_max_level(tracing::Level::DEBUG)
+        .with_ansi(false)
+        .with_span_events(FmtSpan::CLOSE)
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("Failed to set tracing subscriber");
 }

@@ -306,6 +306,8 @@ pub struct NormalizedEthTransaction {
     pub max_priority_fee_per_gas: U256,
     pub max_fee_per_gas: U256,
     pub access_list: AccessList,
+    /// Set to 0 during conversions to minimize encoding burden, so it needs
+    /// to be set manually via [`Self::with_gas_input`].
     pub l1_gas_fee_input: L1GasFeeInput,
     pub signature: PrimitiveSignature,
 }
@@ -319,6 +321,10 @@ impl NormalizedEthTransaction {
             _ => u64::MAX,
         }
     }
+    pub fn with_gas_input(mut self, gas_input: L1GasFeeInput) -> Self {
+        self.l1_gas_fee_input = gas_input;
+        self
+    }
 }
 
 impl TryFrom<Signed<TxEip1559>> for NormalizedEthTransaction {
@@ -326,10 +332,6 @@ impl TryFrom<Signed<TxEip1559>> for NormalizedEthTransaction {
 
     fn try_from(value: Signed<TxEip1559>) -> Result<Self, Self::Error> {
         let address = value.recover_signer()?;
-
-        let mut encoded = Vec::new();
-        value.rlp_encode(&mut encoded);
-        let l1_gas_fee_input = encoded.as_slice().into();
 
         let (tx, signature, tx_hash) = value.into_parts();
 
@@ -346,7 +348,7 @@ impl TryFrom<Signed<TxEip1559>> for NormalizedEthTransaction {
             max_fee_per_gas: U256::from(tx.max_fee_per_gas),
             data: tx.input,
             access_list: tx.access_list,
-            l1_gas_fee_input,
+            l1_gas_fee_input: L1GasFeeInput::default(),
             signature,
         })
     }
@@ -357,10 +359,6 @@ impl TryFrom<Signed<TxEip2930>> for NormalizedEthTransaction {
 
     fn try_from(value: Signed<TxEip2930>) -> Result<Self, Self::Error> {
         let address = value.recover_signer()?;
-
-        let mut encoded = Vec::new();
-        value.rlp_encode(&mut encoded);
-        let l1_gas_fee_input = encoded.as_slice().into();
 
         let (tx, signature, tx_hash) = value.into_parts();
 
@@ -377,7 +375,7 @@ impl TryFrom<Signed<TxEip2930>> for NormalizedEthTransaction {
             max_fee_per_gas: U256::from(tx.gas_price),
             data: tx.input,
             access_list: tx.access_list,
-            l1_gas_fee_input,
+            l1_gas_fee_input: L1GasFeeInput::default(),
             signature,
         })
     }
@@ -388,10 +386,6 @@ impl TryFrom<Signed<TxLegacy>> for NormalizedEthTransaction {
 
     fn try_from(value: Signed<TxLegacy>) -> Result<Self, Self::Error> {
         let address = value.recover_signer()?;
-
-        let mut encoded = Vec::new();
-        value.rlp_encode(&mut encoded);
-        let l1_gas_fee_input = encoded.as_slice().into();
 
         let (tx, signature, tx_hash) = value.into_parts();
 
@@ -408,7 +402,7 @@ impl TryFrom<Signed<TxLegacy>> for NormalizedEthTransaction {
             max_fee_per_gas: U256::from(tx.gas_price),
             data: tx.input,
             access_list: AccessList(Vec::new()),
-            l1_gas_fee_input,
+            l1_gas_fee_input: L1GasFeeInput::default(),
             signature,
         })
     }

@@ -7,7 +7,6 @@ use {
     },
     move_core_types::{account_address::AccountAddress, ident_str},
     op_alloy::rpc_types::L1BlockInfo,
-    serde::{Deserialize, Serialize},
     umi_genesis::config::GenesisConfig,
     umi_shared::primitives::U256,
 };
@@ -100,7 +99,7 @@ pub trait L2GasFee {
     fn l2_fee(&self, input: L2GasFeeInput) -> U256;
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct L1GasFeeInput {
     zero_bytes: U256,
     non_zero_bytes: U256,

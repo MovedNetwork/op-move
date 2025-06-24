@@ -31,8 +31,10 @@ fn parse_transaction_bytes(
     bytes: &Bytes,
 ) -> Result<NormalizedEthTransaction, umi_shared::error::Error> {
     let mut slice: &[u8] = bytes.as_ref();
+    let l1_gas_fee_input = slice.into();
     let umi_tx = UmiTxEnvelope::decode(&mut slice)?;
-    let normalized_tx: NormalizedEthTransaction = umi_tx.try_into()?;
+    let normalized_tx =
+        NormalizedEthTransaction::try_from(umi_tx)?.with_gas_input(l1_gas_fee_input);
     Ok(normalized_tx)
 }
 

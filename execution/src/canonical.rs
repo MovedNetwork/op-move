@@ -128,6 +128,7 @@ pub(super) fn verify_transaction<B: BaseTokenAccounts, MS: ModuleStorage>(
     Ok(())
 }
 
+#[tracing::instrument(level = "debug", skip(input, resolver_cache))]
 pub(super) fn execute_canonical_transaction<
     S: MoveResolver + TableResolver,
     ST: StorageTrieRepository,

@@ -8,6 +8,7 @@ use {
     umi_blockchain::payload::NewPayloadId,
 };
 
+#[tracing::instrument(level = "debug", skip(queue, is_allowed, payload_id, app))]
 pub async fn handle<'reader>(
     request: serde_json::Value,
     queue: CommandQueue,

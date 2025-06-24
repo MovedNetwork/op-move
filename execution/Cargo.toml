@@ -33,6 +33,7 @@ op-alloy.workspace = true
 regex.workspace = true
 revm.workspace = true
 serde.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true

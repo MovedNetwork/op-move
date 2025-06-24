@@ -25,6 +25,7 @@ umi-genesis.workspace = true
 umi-shared.workspace = true
 umi-state.workspace = true
 op-alloy.workspace = true
+tracing.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]

@@ -46,6 +46,8 @@ mod withdrawal;
 
 #[tokio::test]
 async fn test_on_ethereum() -> Result<()> {
+    crate::set_global_tracing_subscriber();
+
     // Steps to run a testnet on OP
     // 1. Check the accounts in env vars and Optimism binaries
     check_env_vars();

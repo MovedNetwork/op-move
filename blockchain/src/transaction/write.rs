@@ -1,6 +1,6 @@
 use {
     alloy::primitives::Address,
-    op_alloy::consensus::TxDeposit,
+    op_alloy::consensus::{OpTxEnvelope, TxDeposit},
     serde::{Deserialize, Serialize},
     std::fmt::Debug,
     umi_execution::transaction::NormalizedExtendedTxEnvelope,
@@ -9,7 +9,9 @@ use {
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ExtendedTransaction {
-    pub inner: NormalizedExtendedTxEnvelope,
+    pub inner: OpTxEnvelope,
+    pub from: Address,
+    pub hash: B256,
     pub block_number: u64,
     pub block_hash: B256,
     pub transaction_index: u64,
@@ -26,26 +28,17 @@ impl ExtendedTransaction {
     ) -> Self {
         Self {
             effective_gas_price,
-            inner,
+            from: inner.from(),
+            hash: inner.tx_hash(),
+            inner: inner.into(),
             block_number,
             block_hash,
             transaction_index,
         }
     }
 
-    pub fn from(&self) -> Address {
-        match &self.inner {
-            NormalizedExtendedTxEnvelope::Canonical(tx) => tx.signer,
-            NormalizedExtendedTxEnvelope::DepositedTx(tx) => tx.from,
-        }
-    }
-
-    pub fn hash(&self) -> B256 {
-        self.inner.trie_hash()
-    }
-
     pub fn deposit_nonce(&self) -> Option<VersionedNonce> {
-        if let NormalizedExtendedTxEnvelope::DepositedTx(tx) = &self.inner {
+        if let OpTxEnvelope::Deposit(tx) = &self.inner {
             inner_get_deposit_nonce(tx.inner())
         } else {
             None

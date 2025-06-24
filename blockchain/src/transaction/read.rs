@@ -23,10 +23,9 @@ impl From<ExtendedTransaction> for TransactionResponse {
             .map(|nonce| (Some(nonce.nonce), Some(nonce.version)))
             .unwrap_or((None, None));
 
-        let from = value.from();
         Self {
             inner: alloy::rpc::types::eth::Transaction {
-                inner: Recovered::new_unchecked(value.inner.into(), from),
+                inner: Recovered::new_unchecked(value.inner.into(), value.from),
                 block_hash: Some(value.block_hash),
                 block_number: Some(value.block_number),
                 transaction_index: Some(value.transaction_index),

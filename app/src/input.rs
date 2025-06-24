@@ -41,8 +41,8 @@ impl TryFrom<Payload> for PayloadForExecution {
 
         for raw_tx in value.transactions {
             let mut slice: &[u8] = raw_tx.as_ref();
-            let tx = NormalizedExtendedTxEnvelope::decode(&mut slice)?;
-            transactions.push(tx);
+            let op_tx = OpTxEnvelope::decode(&mut slice)?;
+            transactions.push(op_tx.try_into()?);
         }
 
         Ok(Self {

@@ -29,7 +29,7 @@ pub const L2_LOWEST_ADDRESS: Address = address!("4200000000000000000000000000000
 pub const L2_HIGHEST_ADDRESS: Address = address!("42000000000000000000000000000000000000ff");
 pub const DEPOSIT_RECEIPT_VERSION: u64 = 1;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UmiTxType {
     Legacy,
     Eip2930,
@@ -220,6 +220,13 @@ impl NormalizedExtendedTxEnvelope {
     pub fn trie_hash(&self) -> B256 {
         self.tx_hash()
     }
+
+    pub fn from(&self) -> Address {
+        match self {
+            Self::Canonical(tx) => tx.signer,
+            Self::DepositedTx(tx) => tx.from,
+        }
+    }
 }
 
 type MoveChanges = umi_state::Changes;
@@ -285,7 +292,7 @@ impl TransactionExecutionOutcome {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NormalizedEthTransaction {
     pub tx_type: UmiTxType,
     pub signer: Address,

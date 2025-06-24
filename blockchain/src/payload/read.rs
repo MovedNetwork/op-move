@@ -3,7 +3,6 @@ use {
     alloy::eips::Encodable2718,
     op_alloy::consensus::OpTxEnvelope,
     std::fmt::Debug,
-    umi_execution::transaction::NormalizedExtendedTxEnvelope,
     umi_shared::primitives::{Address, B256, B2048, Bytes, U64, U256},
 };
 
@@ -21,7 +20,7 @@ pub struct PayloadResponse {
 impl PayloadResponse {
     pub fn from_block_with_transactions(
         block: ExtendedBlock,
-        transactions: impl IntoIterator<Item = NormalizedExtendedTxEnvelope>,
+        transactions: impl IntoIterator<Item = OpTxEnvelope>,
     ) -> Self {
         Self {
             parent_beacon_block_root: block
@@ -61,14 +60,13 @@ pub struct ExecutionPayload {
 impl ExecutionPayload {
     pub fn from_block_with_transactions(
         block: ExtendedBlock,
-        transactions: impl IntoIterator<Item = NormalizedExtendedTxEnvelope>,
+        transactions: impl IntoIterator<Item = OpTxEnvelope>,
     ) -> Self {
         let transactions = transactions
             .into_iter()
             .map(|envelope| {
-                let op_envelope: OpTxEnvelope = envelope.into();
-                let mut bytes = Vec::with_capacity(op_envelope.encode_2718_len());
-                op_envelope.encode_2718(&mut bytes);
+                let mut bytes = Vec::with_capacity(envelope.encode_2718_len());
+                envelope.encode_2718(&mut bytes);
                 bytes.into()
             })
             .collect();

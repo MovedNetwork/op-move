@@ -39,7 +39,7 @@ impl TransactionRepository for RocksDbTransactionRepository<'_> {
         db.write(transactions.into_iter().fold(
             WriteBatchWithTransaction::<false>::default(),
             |mut batch, transaction| {
-                batch.put_cf(&cf, transaction.hash(), transaction.to_value());
+                batch.put_cf(&cf, transaction.hash, transaction.to_value());
                 batch
             },
         ))
@@ -118,15 +118,15 @@ mod tests {
         let signed_tx = tx.into_signed(signature);
         let normalized_tx = NormalizedEthTransaction::try_from(signed_tx).unwrap();
 
-        let transaction = ExtendedTransaction {
-            inner: normalized_tx.into(),
-            block_number: 1,
-            block_hash: B256::new(hex!(
+        let transaction = ExtendedTransaction::new(
+            U256::ONE,
+            normalized_tx.into(),
+            1,
+            B256::new(hex!(
                 "2222223123123121231231231231232222222231231231212312312312312322"
             )),
-            transaction_index: 1,
-            effective_gas_price: U256::ONE,
-        };
+            1,
+        );
 
         let serialized = transaction.to_value();
         let expected_transaction = transaction;
@@ -149,15 +149,15 @@ mod tests {
         };
         let sealed_tx = NormalizedExtendedTxEnvelope::DepositedTx(tx.seal_slow());
 
-        let transaction = ExtendedTransaction {
-            inner: sealed_tx,
-            block_number: 1,
-            block_hash: B256::new(hex!(
+        let transaction = ExtendedTransaction::new(
+            U256::ONE,
+            sealed_tx,
+            1,
+            B256::new(hex!(
                 "2222223123123121231231231231232222222231231231212312312312312322"
             )),
-            transaction_index: 1,
-            effective_gas_price: U256::ONE,
-        };
+            1,
+        );
 
         let serialized = transaction.to_value();
         let expected_transaction = transaction;

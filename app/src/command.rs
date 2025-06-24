@@ -43,11 +43,7 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
             .transactions
             .iter()
             .cloned()
-            .chain(
-                self.mem_pool
-                    .drain()
-                    .map(NormalizedExtendedTxEnvelope::from),
-            )
+            .chain(self.mem_pool.drain().map(Into::into))
             .filter(|tx|
                 // Do not include transactions we have already processed before
                 !self.receipt_repository.contains(&self.receipt_memory, tx.tx_hash()).unwrap())

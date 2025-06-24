@@ -6,7 +6,9 @@ use {
         transaction::HeedTransactionExt,
     },
     heed::RoTxn,
-    umi_blockchain::payload::{PayloadId, PayloadQueries, PayloadResponse},
+    umi_blockchain::payload::{
+        InProgressPayloads, MaybePayloadResponse, PayloadId, PayloadQueries, PayloadResponse,
+    },
     umi_shared::primitives::{B256, ToU64},
 };
 
@@ -19,11 +21,12 @@ pub const DB: &str = "payload";
 #[derive(Debug, Clone)]
 pub struct HeedPayloadQueries {
     env: heed::Env,
+    in_progress: InProgressPayloads,
 }
 
 impl HeedPayloadQueries {
-    pub const fn new(env: heed::Env) -> Self {
-        Self { env }
+    pub const fn new(env: heed::Env, in_progress: InProgressPayloads) -> Self {
+        Self { env, in_progress }
     }
 
     pub fn add_block_hash(&self, id: PayloadId, block_hash: B256) -> Result<(), heed::Error> {
@@ -73,21 +76,27 @@ impl PayloadQueries for HeedPayloadQueries {
         response
     }
 
-    fn by_id(
-        &self,
-        env: &Self::Storage,
-        id: PayloadId,
-    ) -> Result<Option<PayloadResponse>, Self::Err> {
+    fn by_id(&self, env: &Self::Storage, id: PayloadId) -> Result<MaybePayloadResponse, Self::Err> {
+        if let Some(delayed) = self.in_progress.get_delayed(&id) {
+            return Ok(MaybePayloadResponse::Delayed(delayed));
+        }
+
         let transaction = env.read_txn()?;
 
         let db = env.payload_database(&transaction)?;
 
-        db.get(&transaction, &id.to_u64())?
-            .map(|hash| {
-                transaction.commit()?;
-                self.by_hash(env, hash)
-            })
-            .unwrap_or(Ok(None))
+        let Some(hash) = db.get(&transaction, &id.to_u64())? else {
+            return Ok(MaybePayloadResponse::Unknown);
+        };
+        transaction.commit()?;
+        let response = self
+            .by_hash(env, hash)?
+            .map_or(MaybePayloadResponse::Unknown, MaybePayloadResponse::Some);
+        Ok(response)
+    }
+
+    fn get_in_progress(&self) -> InProgressPayloads {
+        self.in_progress.clone()
     }
 }
 

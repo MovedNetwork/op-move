@@ -14,15 +14,18 @@ pub type ReaderDependency = RocksDbReaderDependencies;
 pub fn dependencies(args: umi_server_args::Database) -> Dependency {
     RocksDbDependencies {
         db: Arc::new(create_db(args)),
+        in_progress_payloads: Default::default(),
     }
 }
 
 pub struct RocksDbDependencies {
     db: Arc<umi_storage_rocksdb::RocksDb>,
+    in_progress_payloads: umi_blockchain::payload::InProgressPayloads,
 }
 
 pub struct RocksDbReaderDependencies {
     db: Arc<umi_storage_rocksdb::RocksDb>,
+    in_progress_payloads: umi_blockchain::payload::InProgressPayloads,
 }
 
 impl RocksDbDependencies {
@@ -30,6 +33,7 @@ impl RocksDbDependencies {
     pub fn reader(&self) -> ReaderDependency {
         RocksDbReaderDependencies {
             db: self.db.clone(),
+            in_progress_payloads: self.in_progress_payloads.clone(),
         }
     }
 }
@@ -91,7 +95,10 @@ impl<'db> umi_app::Dependencies<'db> for RocksDbDependencies {
     }
 
     fn payload_queries(&self) -> Self::PayloadQueries {
-        umi_storage_rocksdb::payload::RocksDbPayloadQueries::new(self.db.clone())
+        umi_storage_rocksdb::payload::RocksDbPayloadQueries::new(
+            self.db.clone(),
+            self.in_progress_payloads.clone(),
+        )
     }
 
     fn receipt_queries() -> Self::ReceiptQueries {
@@ -210,7 +217,10 @@ impl<'db> umi_app::Dependencies<'db> for RocksDbReaderDependencies {
     }
 
     fn payload_queries(&self) -> Self::PayloadQueries {
-        umi_storage_rocksdb::payload::RocksDbPayloadQueries::new(self.db.clone())
+        umi_storage_rocksdb::payload::RocksDbPayloadQueries::new(
+            self.db.clone(),
+            self.in_progress_payloads.clone(),
+        )
     }
 
     fn receipt_queries() -> Self::ReceiptQueries {

@@ -2,7 +2,10 @@ use {
     crate::{
         block::{ExtendedBlock, ReadBlockMemory},
         in_memory::SharedMemoryReader,
-        payload::{PayloadId, PayloadQueries, PayloadResponse},
+        payload::{
+            PayloadId, PayloadQueries, PayloadResponse,
+            read::{InProgressPayloads, MaybePayloadResponse},
+        },
         transaction::ReadTransactionMemory,
     },
     std::convert::Infallible,
@@ -10,17 +13,13 @@ use {
 };
 
 #[derive(Debug, Clone)]
-pub struct InMemoryPayloadQueries;
-
-impl Default for InMemoryPayloadQueries {
-    fn default() -> Self {
-        Self::new()
-    }
+pub struct InMemoryPayloadQueries {
+    in_progress: InProgressPayloads,
 }
 
 impl InMemoryPayloadQueries {
-    pub fn new() -> Self {
-        Self
+    pub fn new(in_progress: InProgressPayloads) -> Self {
+        Self { in_progress }
     }
 
     fn block_into_payload(storage: &SharedMemoryReader, block: ExtendedBlock) -> PayloadResponse {
@@ -53,10 +52,21 @@ impl PayloadQueries for InMemoryPayloadQueries {
         &self,
         storage: &Self::Storage,
         id: PayloadId,
-    ) -> Result<Option<PayloadResponse>, Self::Err> {
-        Ok(storage
+    ) -> Result<MaybePayloadResponse, Self::Err> {
+        if let Some(delayed) = self.in_progress.get_delayed(&id) {
+            return Ok(MaybePayloadResponse::Delayed(delayed));
+        }
+
+        let response = storage
             .block_memory
             .by_payload_id(id)
-            .map(|block| Self::block_into_payload(storage, block)))
+            .map_or(MaybePayloadResponse::Unknown, |block| {
+                MaybePayloadResponse::Some(Self::block_into_payload(storage, block))
+            });
+        Ok(response)
+    }
+
+    fn get_in_progress(&self) -> InProgressPayloads {
+        self.in_progress.clone()
     }
 }

@@ -41,7 +41,7 @@ pub mod tests {
                 InMemoryBlockQueries, InMemoryBlockRepository, UmiBlockHash,
             },
             in_memory::shared_memory,
-            payload::InMemoryPayloadQueries,
+            payload::{InMemoryPayloadQueries, InProgressPayloads},
             receipt::{InMemoryReceiptQueries, InMemoryReceiptRepository, receipt_memory},
             state::{InMemoryStateQueries, MockStateQueries},
             transaction::{InMemoryTransactionQueries, InMemoryTransactionRepository},
@@ -96,6 +96,7 @@ pub mod tests {
             &mut evm_storage,
         );
         let (receipt_memory_reader, receipt_memory) = receipt_memory::new();
+        let in_progress_payloads = InProgressPayloads::default();
 
         (
             ApplicationReader {
@@ -103,7 +104,7 @@ pub mod tests {
                 base_token: UmiBaseTokenAccounts::new(AccountAddress::ONE),
                 block_hash_lookup: block_hash_cache.clone(),
                 block_queries: InMemoryBlockQueries,
-                payload_queries: InMemoryPayloadQueries::new(),
+                payload_queries: InMemoryPayloadQueries::new(in_progress_payloads.clone()),
                 receipt_queries: InMemoryReceiptQueries::new(),
                 receipt_memory: receipt_memory_reader.clone(),
                 storage: memory_reader.clone(),
@@ -126,7 +127,7 @@ pub mod tests {
                 on_payload: CommandActor::on_payload_in_memory(),
                 on_tx: CommandActor::on_tx_noop(),
                 on_tx_batch: CommandActor::on_tx_batch_noop(),
-                payload_queries: InMemoryPayloadQueries::new(),
+                payload_queries: InMemoryPayloadQueries::new(in_progress_payloads),
                 receipt_queries: InMemoryReceiptQueries::new(),
                 receipt_repository: InMemoryReceiptRepository::new(),
                 receipt_memory,

@@ -23,6 +23,7 @@ pub struct InMemoryDependencies {
     trie_db: Arc<umi_state::InMemoryTrieDb>,
     evm_storage_tries: umi_evm_ext::state::InMemoryStorageTrieRepository,
     block_hash_cache: SharedBlockHashCache,
+    in_progress_payloads: umi_blockchain::payload::InProgressPayloads,
 }
 
 impl InMemoryDependencies {
@@ -39,6 +40,7 @@ impl InMemoryDependencies {
             trie_db: Arc::new(umi_state::InMemoryTrieDb::empty()),
             evm_storage_tries: umi_evm_ext::state::InMemoryStorageTrieRepository::new(),
             block_hash_cache: SharedBlockHashCache::default(),
+            in_progress_payloads: Default::default(),
         }
     }
 
@@ -54,6 +56,7 @@ impl InMemoryDependencies {
             trie_db: self.trie_db.clone(),
             evm_storage_tries: self.evm_storage_tries.clone(),
             block_hash_cache: self.block_hash_cache.clone(),
+            in_progress_payloads: self.in_progress_payloads.clone(),
         }
     }
 }
@@ -106,7 +109,7 @@ impl<'db> umi_app::Dependencies<'db> for InMemoryDependencies {
     }
 
     fn payload_queries(&self) -> Self::PayloadQueries {
-        umi_blockchain::payload::InMemoryPayloadQueries::new()
+        umi_blockchain::payload::InMemoryPayloadQueries::new(self.in_progress_payloads.clone())
     }
 
     fn receipt_queries() -> Self::ReceiptQueries {

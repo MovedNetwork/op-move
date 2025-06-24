@@ -44,6 +44,10 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
         {
             return;
         }
+        let in_progress_payloads = self.payload_queries.get_in_progress();
+        if in_progress_payloads.start_id(id).is_err() {
+            return;
+        }
 
         // Include transactions from both `payload_attributes` and internal mem-pool
         let transactions_with_metadata = attributes
@@ -135,7 +139,8 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
             .extend(
                 &mut self.storage,
                 transactions
-                    .into_iter()
+                    .iter()
+                    .cloned()
                     .enumerate()
                     .map(|(transaction_index, inner)| {
                         ExtendedTransaction::new(
@@ -150,9 +155,12 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
             .unwrap();
 
         self.block_hash_writer.push(block_number, block_hash);
-        self.block_repository.add(&mut self.storage, block).unwrap();
+        self.block_repository
+            .add(&mut self.storage, block.clone())
+            .unwrap();
 
         (self.on_payload)(self, id, block_hash);
+        in_progress_payloads.finish_id(block, transactions);
     }
 
     pub fn add_transaction(&mut self, tx: TxEnvelope) {

@@ -28,7 +28,7 @@ mod tests {
         umi_blockchain::{
             block::{Eip1559GasFee, InMemoryBlockQueries, InMemoryBlockRepository, UmiBlockHash},
             in_memory::shared_memory,
-            payload::InMemoryPayloadQueries,
+            payload::{InMemoryPayloadQueries, InProgressPayloads},
             receipt::{InMemoryReceiptQueries, InMemoryReceiptRepository, receipt_memory},
             state::InMemoryStateQueries,
             transaction::{InMemoryTransactionQueries, InMemoryTransactionRepository},
@@ -58,13 +58,14 @@ mod tests {
         );
         let evm_storage = InMemoryStorageTrieRepository::new();
         let (receipt_memory_reader, receipt_memory) = receipt_memory::new();
+        let in_progress_payloads = InProgressPayloads::default();
 
         (
             ApplicationReader {
                 genesis_config: genesis_config.clone(),
                 base_token: UmiBaseTokenAccounts::new(AccountAddress::ONE),
                 block_queries: InMemoryBlockQueries,
-                payload_queries: InMemoryPayloadQueries::new(),
+                payload_queries: InMemoryPayloadQueries::new(in_progress_payloads.clone()),
                 receipt_queries: InMemoryReceiptQueries::new(),
                 receipt_memory: receipt_memory_reader.clone(),
                 storage: memory_reader.clone(),
@@ -87,7 +88,7 @@ mod tests {
                 on_payload: CommandActor::on_payload_in_memory(),
                 on_tx: CommandActor::on_tx_noop(),
                 on_tx_batch: CommandActor::on_tx_batch_noop(),
-                payload_queries: InMemoryPayloadQueries::new(),
+                payload_queries: InMemoryPayloadQueries::new(in_progress_payloads),
                 receipt_queries: InMemoryReceiptQueries::new(),
                 receipt_repository: InMemoryReceiptRepository::new(),
                 receipt_memory,

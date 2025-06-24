@@ -17,7 +17,7 @@ use {
     umi_execution::{
         CanonicalExecutionInput, CreateL1GasFee, CreateL2GasFee, DepositExecutionInput, L1GasFee,
         L2GasFeeInput, LogsBloom, execute_transaction,
-        transaction::{NormalizedEthTransaction, NormalizedExtendedTxEnvelope},
+        transaction::{NormalizedEthTransaction, NormalizedExtendedTxEnvelope, WrapReceipt},
     },
     umi_shared::{
         error::Error::{DatabaseState, InvalidTransaction, InvariantViolation, User},

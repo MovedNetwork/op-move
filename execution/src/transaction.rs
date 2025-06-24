@@ -227,26 +227,6 @@ impl NormalizedExtendedTxEnvelope {
         }
     }
 
-    pub fn wrap_receipt(&self, receipt: Receipt, bloom: Bloom) -> OpReceiptEnvelope {
-        match self {
-            Self::Canonical(_) => {
-                // For canonical transactions, we use EIP-1559 receipt format
-                OpReceiptEnvelope::Eip1559(ReceiptWithBloom {
-                    receipt,
-                    logs_bloom: bloom,
-                })
-            }
-            Self::DepositedTx(dep) => OpReceiptEnvelope::Deposit(OpDepositReceiptWithBloom {
-                receipt: OpDepositReceipt {
-                    inner: receipt,
-                    deposit_nonce: Some(dep.nonce()),
-                    deposit_receipt_version: Some(DEPOSIT_RECEIPT_VERSION),
-                },
-                logs_bloom: bloom,
-            }),
-        }
-    }
-
     pub fn trie_hash(&self) -> B256 {
         self.tx_hash()
     }

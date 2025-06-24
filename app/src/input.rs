@@ -1,5 +1,6 @@
 use {
     alloy::{primitives::Bloom, rlp::Decodable},
+    op_alloy::consensus::OpTxEnvelope,
     umi_blockchain::{
         block::{ExtendedBlock, Header},
         payload::{NewPayloadIdInput, PayloadId},

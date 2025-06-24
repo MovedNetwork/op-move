@@ -133,20 +133,10 @@ impl WrapReceipt for NormalizedExtendedTxEnvelope {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NormalizedExtendedTxEnvelope {
     Canonical(NormalizedEthTransaction),
     DepositedTx(Sealed<TxDeposit>),
-}
-
-// TODO: avoid conversion to op-alloy and do it internally
-impl Decodable for NormalizedExtendedTxEnvelope {
-    fn decode(buf: &mut &[u8]) -> alloy::rlp::Result<Self> {
-        let envelope = OpTxEnvelope::decode(buf)?;
-        envelope
-            .try_into()
-            .map_err(|_| alloy::rlp::Error::Custom("Unsupported transaction type"))
-    }
 }
 
 impl Encodable for NormalizedExtendedTxEnvelope {

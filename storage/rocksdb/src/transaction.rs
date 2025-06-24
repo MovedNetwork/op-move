@@ -125,7 +125,7 @@ mod tests {
                 "2222223123123121231231231231232222222231231231212312312312312322"
             )),
             transaction_index: 1,
-            effective_gas_price: U256::from(1),
+            effective_gas_price: U256::ONE,
         };
 
         let serialized = transaction.to_value();
@@ -156,7 +156,7 @@ mod tests {
                 "2222223123123121231231231231232222222231231231212312312312312322"
             )),
             transaction_index: 1,
-            effective_gas_price: U256::from(1),
+            effective_gas_price: U256::ONE,
         };
 
         let serialized = transaction.to_value();

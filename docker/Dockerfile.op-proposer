@@ -1,5 +1,5 @@
 # Add build image
-FROM umi-optimism:latest AS build
+FROM ghcr.io/uminetwork/optimism:latest AS build
 
 # Switch to clean image
 FROM alpine:3.21.2

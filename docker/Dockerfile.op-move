@@ -52,7 +52,7 @@ COPY genesis/aptos.mrb genesis/aptos.mrb
 COPY genesis/sui.mrb genesis/sui.mrb
 
 # Copy L2 genesis config into expected path
-COPY execution/src/tests/res/l2_genesis_tests.json src/tests/optimism/packages/contracts-bedrock/deployments/genesis.json
+COPY execution/src/tests/res/l2_genesis_tests.json server/src/tests/optimism/packages/contracts-bedrock/deployments/genesis.json
 COPY execution/src/tests/res/bridged_tokens_test.json execution/src/tests/res/bridged_tokens_test.json
 
 # Copy built binary

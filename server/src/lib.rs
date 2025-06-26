@@ -51,6 +51,7 @@ struct Claims {
 }
 
 pub fn defaults() -> DefaultLayer {
+    let umi_root_path = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     DefaultLayer::new(OptionalConfig {
         auth: Some(OptionalAuthSocket {
             addr: Some(SocketAddr::V4(SocketAddrV4::new(
@@ -77,13 +78,13 @@ pub fn defaults() -> DefaultLayer {
             ))),
             treasury: Some(AccountAddress::ONE), // TODO: fill in the real address,
             l2_contract_genesis: Some(
-                Path::new("src/tests/optimism/packages/contracts-bedrock/deployments/genesis.json")
+                umi_root_path.join("server/src/tests/optimism/packages/contracts-bedrock/deployments/genesis.json")
                     .into(),
             ),
             token_list: Some(
-                Path::new(Path::new(
+                umi_root_path.join(
                     "execution/src/tests/res/bridged_tokens_test.json",
-                ))
+                )
                 .into(),
             ),
         }),

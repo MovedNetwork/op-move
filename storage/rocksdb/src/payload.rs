@@ -8,7 +8,9 @@ use {
     std::sync::Arc,
     umi_blockchain::{
         block::ExtendedBlock,
-        payload::{PayloadId, PayloadQueries, PayloadResponse},
+        payload::{
+            InProgressPayloads, MaybePayloadResponse, PayloadId, PayloadQueries, PayloadResponse,
+        },
         transaction::ExtendedTransaction,
     },
     umi_shared::primitives::B256,
@@ -25,11 +27,12 @@ impl ToKey for PayloadId {
 #[derive(Debug, Clone)]
 pub struct RocksDbPayloadQueries {
     db: Arc<RocksDb>,
+    in_progress: InProgressPayloads,
 }
 
 impl RocksDbPayloadQueries {
-    pub fn new(db: Arc<RocksDb>) -> Self {
-        Self { db }
+    pub const fn new(db: Arc<RocksDb>, in_progress: InProgressPayloads) -> Self {
+        Self { db, in_progress }
     }
 
     pub fn add_block_hash(&self, id: PayloadId, block_hash: B256) -> Result<(), rocksdb::Error> {
@@ -72,15 +75,23 @@ impl PayloadQueries for RocksDbPayloadQueries {
             .transpose()
     }
 
-    fn by_id(
-        &self,
-        db: &Self::Storage,
-        id: PayloadId,
-    ) -> Result<Option<PayloadResponse>, Self::Err> {
-        db.get_pinned_cf(&cf(db), id.to_key())?
-            .map(|hash| B256::new(hash.as_ref().try_into().unwrap()))
-            .map(|hash| self.by_hash(db, hash))
-            .unwrap_or(Ok(None))
+    fn by_id(&self, db: &Self::Storage, id: PayloadId) -> Result<MaybePayloadResponse, Self::Err> {
+        if let Some(delayed) = self.in_progress.get_delayed(&id) {
+            return Ok(MaybePayloadResponse::Delayed(delayed));
+        }
+
+        let Some(slice) = db.get_pinned_cf(&cf(db), id.to_key())? else {
+            return Ok(MaybePayloadResponse::Unknown);
+        };
+        let hash = B256::new(slice.as_ref().try_into().unwrap());
+        let response = self
+            .by_hash(db, hash)?
+            .map_or(MaybePayloadResponse::Unknown, MaybePayloadResponse::Some);
+        Ok(response)
+    }
+
+    fn get_in_progress(&self) -> InProgressPayloads {
+        self.in_progress.clone()
     }
 }
 

@@ -2,7 +2,12 @@ use {
     crate::{block::ExtendedBlock, payload::id::PayloadId},
     alloy::eips::Encodable2718,
     op_alloy::consensus::OpTxEnvelope,
-    std::fmt::Debug,
+    std::{
+        collections::hash_map::{Entry, HashMap},
+        fmt::Debug,
+        sync::{Arc, RwLock},
+    },
+    tokio::sync::broadcast,
     umi_shared::primitives::{Address, B256, B2048, Bytes, U64, U256},
 };
 
@@ -100,6 +105,74 @@ pub struct BlobsBundle {
     pub blobs: Vec<Bytes>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AlreadyStarted;
+
+pub enum MaybePayloadResponse {
+    Unknown,
+    Some(PayloadResponse),
+    Delayed(broadcast::Receiver<PayloadResponse>),
+}
+
+impl MaybePayloadResponse {
+    pub fn is_some(&self) -> bool {
+        matches!(self, Self::Some(_))
+    }
+
+    pub fn unwrap(self) -> PayloadResponse {
+        match self {
+            Self::Some(response) => response,
+            Self::Unknown | Self::Delayed(_) => {
+                panic!("Unwrap unknown or delayed payload response")
+            }
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct InProgressPayloads {
+    inner: Arc<RwLock<HashMap<PayloadId, broadcast::Sender<PayloadResponse>>>>,
+}
+
+impl InProgressPayloads {
+    pub fn get_delayed(&self, id: &PayloadId) -> Option<broadcast::Receiver<PayloadResponse>> {
+        self.inner
+            .read()
+            .expect("Lock is not poisoned")
+            .get(id)
+            .map(|sender| sender.subscribe())
+    }
+
+    pub fn start_id(&self, id: PayloadId) -> Result<(), AlreadyStarted> {
+        let mut in_progress = self.inner.write().expect("Lock is not poisoned");
+        match in_progress.entry(id) {
+            Entry::Vacant(entry) => {
+                let (sender, _) = broadcast::channel(1);
+                entry.insert(sender);
+                Ok(())
+            }
+            Entry::Occupied(_) => Err(AlreadyStarted),
+        }
+    }
+
+    pub fn finish_id(
+        &self,
+        block: ExtendedBlock,
+        transactions: impl IntoIterator<Item = op_alloy::consensus::OpTxEnvelope>,
+    ) {
+        let id = block.payload_id;
+        let response = PayloadResponse::from_block_with_transactions(block, transactions);
+        if let Some(sender) = self
+            .inner
+            .write()
+            .expect("Lock is not poisoned")
+            .remove(&id)
+        {
+            sender.send(response).ok();
+        }
+    }
+}
+
 pub trait PayloadQueries {
     type Err: Debug;
     type Storage;
@@ -114,7 +187,9 @@ pub trait PayloadQueries {
         &self,
         storage: &Self::Storage,
         id: PayloadId,
-    ) -> Result<Option<PayloadResponse>, Self::Err>;
+    ) -> Result<MaybePayloadResponse, Self::Err>;
+
+    fn get_in_progress(&self) -> InProgressPayloads;
 }
 
 #[cfg(any(feature = "test-doubles", test))]
@@ -137,8 +212,12 @@ mod test_doubles {
             &self,
             _: &Self::Storage,
             _: PayloadId,
-        ) -> Result<Option<PayloadResponse>, Self::Err> {
-            Ok(None)
+        ) -> Result<MaybePayloadResponse, Self::Err> {
+            Ok(MaybePayloadResponse::Unknown)
+        }
+
+        fn get_in_progress(&self) -> InProgressPayloads {
+            InProgressPayloads::default()
         }
     }
 }

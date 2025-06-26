@@ -17,15 +17,18 @@ pub type ReaderDependency = HeedReaderDependencies;
 pub fn dependencies(args: umi_server_args::Database) -> Dependency {
     HeedDependencies {
         db: create_db(args),
+        in_progress_payloads: Default::default(),
     }
 }
 
 pub struct HeedDependencies {
     db: umi_storage_heed::Env,
+    in_progress_payloads: umi_blockchain::payload::InProgressPayloads,
 }
 
 pub struct HeedReaderDependencies {
     db: umi_storage_heed::Env,
+    in_progress_payloads: umi_blockchain::payload::InProgressPayloads,
 }
 
 impl HeedDependencies {
@@ -33,6 +36,7 @@ impl HeedDependencies {
     pub fn reader(&self) -> HeedReaderDependencies {
         HeedReaderDependencies {
             db: self.db.clone(),
+            in_progress_payloads: self.in_progress_payloads.clone(),
         }
     }
 }
@@ -92,7 +96,7 @@ impl<'db> umi_app::Dependencies<'db> for HeedDependencies {
     }
 
     fn payload_queries(&self) -> Self::PayloadQueries {
-        payload::HeedPayloadQueries::new(self.db.clone())
+        payload::HeedPayloadQueries::new(self.db.clone(), self.in_progress_payloads.clone())
     }
 
     fn receipt_queries() -> Self::ReceiptQueries {
@@ -205,7 +209,7 @@ impl<'db> umi_app::Dependencies<'db> for HeedReaderDependencies {
     }
 
     fn payload_queries(&self) -> Self::PayloadQueries {
-        payload::HeedPayloadQueries::new(self.db.clone())
+        payload::HeedPayloadQueries::new(self.db.clone(), self.in_progress_payloads.clone())
     }
 
     fn receipt_queries() -> Self::ReceiptQueries {

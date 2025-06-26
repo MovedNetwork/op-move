@@ -24,7 +24,7 @@ use {
             InMemoryBlockRepository, UmiBlockHash,
         },
         in_memory::shared_memory,
-        payload::InMemoryPayloadQueries,
+        payload::{InMemoryPayloadQueries, InProgressPayloads},
         receipt::{InMemoryReceiptQueries, InMemoryReceiptRepository, receipt_memory},
         state::{BlockHeight, InMemoryStateQueries, MockStateQueries, StateQueries},
         transaction::{InMemoryTransactionQueries, InMemoryTransactionRepository},
@@ -104,6 +104,7 @@ fn create_app_with_given_queries<SQ: StateQueries + Clone + Send + Sync + 'stati
     );
 
     let (receipt_memory_reader, receipt_memory) = receipt_memory::new();
+    let in_progress_payloads = InProgressPayloads::default();
 
     (
         ApplicationReader {
@@ -111,7 +112,7 @@ fn create_app_with_given_queries<SQ: StateQueries + Clone + Send + Sync + 'stati
             base_token: UmiBaseTokenAccounts::new(AccountAddress::ONE),
             block_queries: InMemoryBlockQueries,
             block_hash_lookup: block_hash_cache.clone(),
-            payload_queries: InMemoryPayloadQueries::new(),
+            payload_queries: InMemoryPayloadQueries::new(in_progress_payloads.clone()),
             receipt_queries: InMemoryReceiptQueries::new(),
             receipt_memory: receipt_memory_reader.clone(),
             storage: memory_reader.clone(),
@@ -131,7 +132,7 @@ fn create_app_with_given_queries<SQ: StateQueries + Clone + Send + Sync + 'stati
             on_payload: CommandActor::on_payload_noop(),
             on_tx: CommandActor::on_tx_noop(),
             on_tx_batch: CommandActor::on_tx_batch_noop(),
-            payload_queries: InMemoryPayloadQueries::new(),
+            payload_queries: InMemoryPayloadQueries::new(in_progress_payloads.clone()),
             receipt_queries: InMemoryReceiptQueries::new(),
             receipt_repository: InMemoryReceiptRepository::new(),
             receipt_memory,
@@ -234,6 +235,7 @@ fn create_app_with_fake_queries(
         trie_db,
         genesis_config.initial_state_root,
     );
+    let in_progress_payloads = InProgressPayloads::default();
 
     (
         ApplicationReader {
@@ -241,7 +243,7 @@ fn create_app_with_fake_queries(
             base_token: UmiBaseTokenAccounts::new(AccountAddress::ONE),
             block_hash_lookup: block_hash_cache.clone(),
             block_queries: InMemoryBlockQueries,
-            payload_queries: InMemoryPayloadQueries::new(),
+            payload_queries: InMemoryPayloadQueries::new(in_progress_payloads.clone()),
             receipt_queries: InMemoryReceiptQueries::new(),
             receipt_memory: receipt_reader.clone(),
             storage: memory_reader.clone(),
@@ -261,7 +263,7 @@ fn create_app_with_fake_queries(
             on_payload: CommandActor::on_payload_in_memory(),
             on_tx: CommandActor::on_tx_in_memory(),
             on_tx_batch: CommandActor::on_tx_batch_in_memory(),
-            payload_queries: InMemoryPayloadQueries::new(),
+            payload_queries: InMemoryPayloadQueries::new(in_progress_payloads.clone()),
             receipt_queries: InMemoryReceiptQueries::new(),
             receipt_repository: InMemoryReceiptRepository::new(),
             receipt_memory,
@@ -498,8 +500,8 @@ fn test_one_payload_can_be_fetched_repeatedly() {
 
     app.start_block_build(PayloadForExecution::default(), payload_id);
 
-    let expected_payload = reader.payload(payload_id).unwrap();
-    let actual_payload = reader.payload(payload_id).unwrap();
+    let expected_payload = reader.payload(payload_id).unwrap().unwrap();
+    let actual_payload = reader.payload(payload_id).unwrap().unwrap();
 
     assert_eq!(expected_payload, actual_payload);
 }
@@ -526,7 +528,7 @@ fn test_older_payload_can_be_fetched_again_successfully() {
         payload_id,
     );
 
-    let expected_payload = reader.payload(payload_id).unwrap();
+    let expected_payload = reader.payload(payload_id).unwrap().unwrap();
 
     let tx = create_transaction(1);
 
@@ -548,7 +550,7 @@ fn test_older_payload_can_be_fetched_again_successfully() {
     // make sure the newer payload is fetchable
     let _ = reader.payload(payload_2_id).unwrap();
 
-    let older_payload = reader.payload(payload_id).unwrap();
+    let older_payload = reader.payload(payload_id).unwrap().unwrap();
 
     assert_eq!(expected_payload, older_payload);
 }
@@ -606,7 +608,7 @@ fn test_txs_from_one_account_have_proper_nonce_ordering() {
         );
     }
 
-    let payload = reader.payload(payload_id).unwrap();
+    let payload = reader.payload(payload_id).unwrap().unwrap();
     assert!(
         payload.execution_payload.transactions.len() == 10,
         "Expected 10 transactions in block, but found {:?}",

@@ -135,7 +135,7 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
             .unwrap();
 
         (self.on_payload)(self, id, block_hash);
-        in_progress_payloads.finish_id(block, transactions);
+        in_progress_payloads.finish_id(block, transactions.into_iter().map(Into::into));
     }
 
     pub fn add_transaction(&mut self, tx: NormalizedEthTransaction) {

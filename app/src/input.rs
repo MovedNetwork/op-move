@@ -37,7 +37,7 @@ impl TryFrom<Payload> for PayloadForExecution {
     type Error = umi_shared::error::Error;
 
     fn try_from(value: Payload) -> Result<Self, Self::Error> {
-        let mut transactions = Vec::new();
+        let mut transactions = Vec::with_capacity(value.transactions.len());
 
         for raw_tx in value.transactions {
             let mut slice: &[u8] = raw_tx.as_ref();

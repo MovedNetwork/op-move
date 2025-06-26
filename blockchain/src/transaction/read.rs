@@ -23,16 +23,13 @@ impl From<ExtendedTransaction> for TransactionResponse {
             .map(|nonce| (Some(nonce.nonce), Some(nonce.version)))
             .unwrap_or((None, None));
 
-        let from = value
-            .from()
-            .expect("Block transactions should contain valid signature");
         Self {
             inner: alloy::rpc::types::eth::Transaction {
-                inner: Recovered::new_unchecked(value.inner, from),
+                inner: Recovered::new_unchecked(value.inner, value.from),
                 block_hash: Some(value.block_hash),
                 block_number: Some(value.block_number),
                 transaction_index: Some(value.transaction_index),
-                effective_gas_price: Some(value.effective_gas_price),
+                effective_gas_price: Some(value.effective_gas_price.saturating_to()),
             },
             deposit_nonce,
             deposit_receipt_version,

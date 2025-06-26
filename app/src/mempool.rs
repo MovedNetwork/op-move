@@ -1,41 +1,11 @@
 use {
-    alloy::primitives::{Address, B256},
     move_core_types::account_address::AccountAddress,
-    op_alloy::consensus::OpTxEnvelope,
     std::collections::{BTreeMap, HashMap},
-    umi_execution::L1GasFeeInput,
-    umi_shared::{
-        error::{Error, InvalidTransactionCause},
-        primitives::ToMoveAddress,
-    },
+    umi_execution::transaction::NormalizedEthTransaction,
+    umi_shared::primitives::ToMoveAddress,
 };
 
 type Nonce = u64;
-
-#[derive(Debug, Clone)]
-pub struct PendingTransaction {
-    pub inner: OpTxEnvelope,
-    // Nonce taken out of the envelope for easier ordering
-    pub tx_nonce: Nonce,
-    pub tx_hash: B256,
-    pub l1_gas_fee_input: L1GasFeeInput,
-}
-
-impl PendingTransaction {
-    pub fn new(
-        inner: OpTxEnvelope,
-        tx_nonce: Nonce,
-        tx_hash: B256,
-        l1_gas_fee_input: L1GasFeeInput,
-    ) -> Self {
-        Self {
-            inner,
-            tx_nonce,
-            tx_hash,
-            l1_gas_fee_input,
-        }
-    }
-}
 
 // TODO: add address -> account nonce hashmap into the mempool for faster lookups.
 // That would require figuring out how Aptos increments those so that
@@ -45,44 +15,21 @@ impl PendingTransaction {
 pub struct Mempool {
     // A hashmap for quicker access to each account, backed by an ordered map
     // so that transaction nonces sequencing is preserved.
-    txs: HashMap<AccountAddress, BTreeMap<Nonce, PendingTransaction>>,
+    txs: HashMap<AccountAddress, BTreeMap<Nonce, NormalizedEthTransaction>>,
 }
 
 impl Mempool {
-    /// Insert a [`MempoolTransaction`] into [`Mempool`]. As the key for the underlying
+    /// Insert a [`NormalizedEthTransaction`] into [`Mempool`]. As the key for the underlying
     /// map is derivable from the transaction itself, it doesn't need to be supplied.
-    pub fn insert(&mut self, value: PendingTransaction) -> Option<PendingTransaction> {
-        let address = match self.get_tx_signer(&value) {
-            Ok(addr) => addr.to_move_address(),
-            // TODO: propagate the error?
-            Err(_) => return None,
-        };
-
+    pub fn insert(&mut self, value: NormalizedEthTransaction) -> Option<NormalizedEthTransaction> {
+        let address = value.signer.to_move_address();
         let account_txs = self.txs.entry(address).or_default();
-
-        account_txs.insert(value.tx_nonce, value)
-    }
-
-    /// Recovers the signer of the transaction to use as a mempool key.
-    fn get_tx_signer(&self, tx: &PendingTransaction) -> Result<Address, Error> {
-        match &tx.inner {
-            OpTxEnvelope::Legacy(signed) => Ok(signed.recover_signer()?),
-            OpTxEnvelope::Eip2930(signed) => Ok(signed.recover_signer()?),
-            OpTxEnvelope::Eip1559(signed) => Ok(signed.recover_signer()?),
-            // EVM account abstraction not planned to be supported
-            OpTxEnvelope::Eip7702(_) => Err(Error::InvalidTransaction(
-                InvalidTransactionCause::UnsupportedType,
-            )),
-            // External API only allows canonical transactions in
-            OpTxEnvelope::Deposit(_) => Err(Error::InvariantViolation(
-                umi_shared::error::InvariantViolation::MempoolTransaction,
-            )),
-        }
+        account_txs.insert(value.nonce, value)
     }
 
     /// Drains all transactions from the [`Mempool`], returning them in a sensible order
     /// for block inclusion (ordered by account, then by nonce).
-    pub fn drain(&mut self) -> impl Iterator<Item = PendingTransaction> {
+    pub fn drain(&mut self) -> impl Iterator<Item = NormalizedEthTransaction> {
         let txs = std::mem::take(&mut self.txs);
 
         txs.into_iter()
@@ -95,17 +42,20 @@ mod tests {
     use {
         alloy::{
             consensus::{SignableTransaction, TxEip1559},
-            eips::Encodable2718,
             network::TxSignerSync,
             primitives::{TxKind, ruint::aliases::U256},
             signers::local::PrivateKeySigner,
         },
-        op_alloy::consensus::TxDeposit,
+        umi_shared::primitives::Address,
     };
 
     use super::*;
 
-    fn create_test_tx(signer: &PrivateKeySigner, nonce: u64, to: Address) -> PendingTransaction {
+    fn create_test_tx(
+        signer: &PrivateKeySigner,
+        nonce: u64,
+        to: Address,
+    ) -> NormalizedEthTransaction {
         let mut tx = TxEip1559 {
             chain_id: 1,
             nonce,
@@ -119,10 +69,9 @@ mod tests {
         };
 
         let signature = signer.sign_transaction_sync(&mut tx).unwrap();
-        let envelope = OpTxEnvelope::Eip1559(tx.into_signed(signature));
-        let tx_hash = envelope.tx_hash();
+        let signed_tx = tx.into_signed(signature);
 
-        PendingTransaction::new(envelope, nonce, tx_hash, L1GasFeeInput::default())
+        signed_tx.try_into().unwrap()
     }
 
     #[test]
@@ -166,31 +115,5 @@ mod tests {
         let addr = signer.address().to_move_address();
         assert_eq!(mempool.txs[&addr].len(), 1);
         assert_eq!(mempool.txs[&addr][&0].tx_hash, tx2.tx_hash);
-    }
-
-    #[test]
-    fn test_deposit_transaction_rejected() {
-        let mut mempool = Mempool::default();
-
-        let deposit_tx = TxDeposit {
-            from: Address::random(),
-            to: TxKind::Call(Address::random()),
-            value: U256::from(100),
-            gas_limit: 21000,
-            source_hash: B256::random(),
-            mint: None,
-            is_system_transaction: false,
-            input: Default::default(),
-        }
-        .seal();
-
-        let envelope = OpTxEnvelope::Deposit(deposit_tx);
-        let tx_hash = envelope.tx_hash();
-
-        let pending_tx = PendingTransaction::new(envelope, 0, tx_hash, L1GasFeeInput::default());
-
-        let result = mempool.insert(pending_tx);
-        assert!(result.is_none());
-        assert_eq!(mempool.txs.len(), 0); // Should not be added
     }
 }

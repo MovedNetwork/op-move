@@ -11,7 +11,6 @@ use {
         consensus::{SignableTransaction, TxEnvelope, transaction::TxEip1559},
         network::TxSignerSync,
         primitives::{Address, Bytes, FixedBytes, TxKind, address, hex, keccak256},
-        rlp::Encodable,
     },
     anyhow::Context,
     aptos_types::{

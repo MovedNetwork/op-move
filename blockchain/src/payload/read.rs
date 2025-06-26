@@ -1,6 +1,6 @@
 use {
     crate::{block::ExtendedBlock, payload::id::PayloadId},
-    alloy::eips::eip2718::Encodable2718,
+    alloy::eips::Encodable2718,
     op_alloy::consensus::OpTxEnvelope,
     std::fmt::Debug,
     umi_shared::primitives::{Address, B256, B2048, Bytes, U64, U256},
@@ -64,10 +64,9 @@ impl ExecutionPayload {
     ) -> Self {
         let transactions = transactions
             .into_iter()
-            .map(|tx| {
-                let capacity = tx.eip2718_encoded_length();
-                let mut bytes = Vec::with_capacity(capacity);
-                tx.encode_2718(&mut bytes);
+            .map(|envelope| {
+                let mut bytes = Vec::with_capacity(envelope.encode_2718_len());
+                envelope.encode_2718(&mut bytes);
                 bytes.into()
             })
             .collect();

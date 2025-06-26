@@ -1,6 +1,6 @@
 use {
     super::*,
-    crate::TestDependencies,
+    crate::{Payload, PayloadForExecution, TestDependencies},
     alloy::{
         consensus::{SignableTransaction, TxEip1559, TxEnvelope},
         eips::BlockNumberOrTag::{self, *},
@@ -30,7 +30,11 @@ use {
         transaction::{InMemoryTransactionQueries, InMemoryTransactionRepository},
     },
     umi_evm_ext::state::{BlockHashWriter, InMemoryStorageTrieRepository, StorageTrieRepository},
-    umi_execution::{UmiBaseTokenAccounts, create_vm_session, session_id::SessionId},
+    umi_execution::{
+        UmiBaseTokenAccounts, create_vm_session,
+        session_id::SessionId,
+        transaction::{NormalizedEthTransaction, UmiTxEnvelope},
+    },
     umi_genesis::{
         CreateMoveVm, UmiVm,
         config::{CHAIN_ID, GenesisConfig},
@@ -321,7 +325,7 @@ fn test_build_block_hash() {
         ))),
         ..Default::default()
     }
-    .with_payload_attributes(payload_attributes)
+    .with_payload_attributes(payload_attributes.try_into().unwrap())
     .with_execution_outcome(execution_outcome);
 
     let hash = UmiBlockHash.block_hash(&header);
@@ -379,7 +383,7 @@ fn test_balance_is_fetched_by_height_successfully(
     assert_eq!(actual_balance, expected_balance);
 }
 
-fn create_transaction(nonce: u64) -> TxEnvelope {
+fn create_transaction(nonce: u64) -> NormalizedEthTransaction {
     let to = Address::new(hex!("44223344556677889900ffeeaabbccddee111111"));
     let amount = U256::from(4);
     let signer = Signer::new(&PRIVATE_KEY);
@@ -396,14 +400,16 @@ fn create_transaction(nonce: u64) -> TxEnvelope {
     };
     let signature = signer.inner.sign_transaction_sync(&mut tx).unwrap();
 
-    TxEnvelope::Eip1559(tx.into_signed(signature))
+    let tx_envelope = TxEnvelope::Eip1559(tx.into_signed(signature));
+    let umi_tx: UmiTxEnvelope = tx_envelope.try_into().unwrap();
+    umi_tx.try_into().unwrap()
 }
 
 fn create_transaction_with_max_fee_and_gas_limit(
     nonce: u64,
     max_fee: u128,
     gas_limit: u64,
-) -> TxEnvelope {
+) -> NormalizedEthTransaction {
     let to = Address::new(hex!("44223344556677889900ffeeaabbccddee111111"));
     let amount = U256::from(4);
     let signer = Signer::new(&PRIVATE_KEY);
@@ -420,7 +426,9 @@ fn create_transaction_with_max_fee_and_gas_limit(
     };
     let signature = signer.inner.sign_transaction_sync(&mut tx).unwrap();
 
-    TxEnvelope::Eip1559(tx.into_signed(signature))
+    let tx_envelope = TxEnvelope::Eip1559(tx.into_signed(signature));
+    let umi_tx: UmiTxEnvelope = tx_envelope.try_into().unwrap();
+    umi_tx.try_into().unwrap()
 }
 
 #[test]
@@ -434,7 +442,10 @@ fn test_fetched_balances_are_updated_after_transfer_of_funds() {
     let tx = create_transaction(0);
 
     app.add_transaction(tx);
-    app.start_block_build(Default::default(), U64::from(0x03421ee50df45cacu64));
+    app.start_block_build(
+        PayloadForExecution::default(),
+        U64::from(0x03421ee50df45cacu64),
+    );
 
     let actual_recipient_balance = reader.balance_by_height(to, Latest).unwrap();
     let expected_recipient_balance = amount;
@@ -457,7 +468,10 @@ fn test_fetched_nonces_are_updated_after_executing_transaction() {
     let tx = create_transaction(0);
 
     app.add_transaction(tx);
-    app.start_block_build(Default::default(), U64::from(0x03421ee50df45cacu64));
+    app.start_block_build(
+        PayloadForExecution::default(),
+        U64::from(0x03421ee50df45cacu64),
+    );
 
     let actual_recipient_balance = reader.nonce_by_height(to, Latest).unwrap();
     let expected_recipient_balance = 0;
@@ -482,7 +496,7 @@ fn test_one_payload_can_be_fetched_repeatedly() {
 
     let payload_id = U64::from(0x03421ee50df45cacu64);
 
-    app.start_block_build(Default::default(), payload_id);
+    app.start_block_build(PayloadForExecution::default(), payload_id);
 
     let expected_payload = reader.payload(payload_id).unwrap();
     let actual_payload = reader.payload(payload_id).unwrap();
@@ -506,7 +520,9 @@ fn test_older_payload_can_be_fetched_again_successfully() {
         Payload {
             gas_limit: U64::MAX,
             ..Default::default()
-        },
+        }
+        .try_into()
+        .unwrap(),
         payload_id,
     );
 
@@ -523,7 +539,9 @@ fn test_older_payload_can_be_fetched_again_successfully() {
             timestamp: U64::from(1u64),
             gas_limit: U64::MAX,
             ..Default::default()
-        },
+        }
+        .try_into()
+        .unwrap(),
         payload_2_id,
     );
 
@@ -545,13 +563,13 @@ fn test_txs_from_one_account_have_proper_nonce_ordering() {
 
     for i in 0..10 {
         let tx = create_transaction(i);
-        tx_hashes.push(tx.tx_hash().0.into());
+        tx_hashes.push(tx.tx_hash.0.into());
         app.add_transaction(tx);
     }
 
     let payload_id = U64::from(0x03421ee50df45cacu64);
 
-    app.start_block_build(Default::default(), payload_id);
+    app.start_block_build(PayloadForExecution::default(), payload_id);
 
     for (i, tx_hash) in tx_hashes.iter().enumerate() {
         // Get receipt for this transaction
@@ -662,7 +680,7 @@ fn test_fee_history_eip1559_fields() {
     let (reader, mut app) =
         create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), U256::from(10), 1);
 
-    app.start_block_build(Default::default(), U64::from(1));
+    app.start_block_build(PayloadForExecution::default(), U64::from(1));
 
     let result = reader.fee_history(1, Latest, None);
     assert!(result.is_ok());
@@ -695,7 +713,7 @@ fn test_fee_history_empty_vs_full_blocks(num_txs: usize, expect_zero_ratio: bool
         gas_limit: U64::from(1_000_000),
         ..Default::default()
     };
-    app.start_block_build(payload, U64::from(1));
+    app.start_block_build(payload.try_into().unwrap(), U64::from(1));
 
     let result = reader.fee_history(1, Latest, Some(vec![50.0]));
     assert!(result.is_ok());
@@ -730,7 +748,9 @@ fn test_fee_history_percentile_calculations(
         Payload {
             gas_limit: U64::from(1_000_000),
             ..Default::default()
-        },
+        }
+        .try_into()
+        .unwrap(),
         U64::from(1),
     );
 
@@ -768,7 +788,9 @@ fn test_fee_history_gas_ratio_progression(tx_counts: Vec<usize>, expect_increasi
                 timestamp: U64::from(block_num as u64 + 1),
                 gas_limit: U64::from(1_000_000),
                 ..Default::default()
-            },
+            }
+            .try_into()
+            .unwrap(),
             U64::from(block_num as u64 + 1),
         );
     }
@@ -808,7 +830,9 @@ fn test_fee_history_boundary_percentiles() {
         Payload {
             gas_limit: U64::from(1_000_000),
             ..Default::default()
-        },
+        }
+        .try_into()
+        .unwrap(),
         U64::from(1),
     );
 

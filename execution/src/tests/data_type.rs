@@ -72,8 +72,8 @@ fn test_recursive_struct() {
     // Deploy some other contract to ensure the state is properly initialized.
     ctx.deploy_contract("natives");
     let tx_data = module_bytes_to_tx_data(module_bytes);
-    let (tx_hash, tx) = create_transaction(&mut ctx.signer, TxKind::Create, tx_data);
-    let transaction = TestTransaction::new(tx, tx_hash);
+    let tx = create_transaction(&mut ctx.signer, TxKind::Create, tx_data);
+    let transaction = TestTransaction::new(tx);
     let err = ctx.execute_tx(&transaction).unwrap();
     assert!(format!("{err:?}").contains("RECURSIVE_STRUCT_DEFINITION"));
 }
@@ -211,8 +211,8 @@ fn test_deeply_nested_type() {
     // Try to deploy the module
     let mut ctx = TestContext::new();
     let tx_data = module_bytes_to_tx_data(module_bytes);
-    let (tx_hash, tx) = create_transaction(&mut ctx.signer, TxKind::Create, tx_data);
-    let transaction = TestTransaction::new(tx, tx_hash);
+    let tx = create_transaction(&mut ctx.signer, TxKind::Create, tx_data);
+    let transaction = TestTransaction::new(tx);
     let err = ctx.execute_tx(&transaction).unwrap();
     // The deployment fails because the Aptos code refuses to deserialize
     // the module with too deep recursion.

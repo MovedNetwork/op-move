@@ -10,7 +10,7 @@ use {
     },
     umi_blockchain::{
         block::{BaseGasFee, BlockQueries, BlockResponse, Eip1559GasFee},
-        payload::{PayloadId, PayloadQueries, PayloadResponse},
+        payload::{MaybePayloadResponse, PayloadId, PayloadQueries, PayloadResponse},
         receipt::{ReceiptQueries, TransactionReceipt},
         state::{ProofResponse, StateQueries},
         transaction::{TransactionQueries, TransactionResponse},
@@ -271,11 +271,10 @@ impl<'app, D: Dependencies<'app>> ApplicationReader<'app, D> {
         )?)
     }
 
-    pub fn payload(&self, id: PayloadId) -> Result<PayloadResponse> {
+    pub fn payload(&self, id: PayloadId) -> Result<MaybePayloadResponse> {
         self.payload_queries
             .by_id(&self.storage, id)
-            .map_err(|_| Error::DatabaseState)?
-            .ok_or(Error::User(UserError::InvalidPayloadId(id.into_limbs()[0])))
+            .map_err(|_| Error::DatabaseState)
     }
 
     pub fn payload_by_block_hash(&self, block_hash: B256) -> Result<PayloadResponse> {

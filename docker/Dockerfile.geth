@@ -1,4 +1,4 @@
-FROM umi-foundry:latest AS foundry
+FROM ghcr.io/uminetwork/foundry:latest AS foundry
 FROM alpine:3.21.2 AS build
 WORKDIR /volume
 

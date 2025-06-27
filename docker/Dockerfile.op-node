@@ -1,6 +1,6 @@
-FROM umi-foundry:latest AS foundry
+FROM ghcr.io/uminetwork/foundry:latest AS foundry
 # Add build image
-FROM umi-optimism:latest AS optimism
+FROM ghcr.io/uminetwork/optimism:latest AS optimism
 
 # Switch to clean image
 FROM alpine:3.21.2

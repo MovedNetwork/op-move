@@ -1,16 +1,9 @@
 use {
     crate::{
-        Application, Dependencies, ExecutionOutcome, Payload,
+        Application, Dependencies, ExecutionOutcome, PayloadForExecution,
         input::{WithExecutionOutcome, WithPayloadAttributes},
-        mempool::PendingTransaction,
     },
-    alloy::{
-        consensus::{Receipt, Transaction, TxEnvelope},
-        eips::eip2718::Encodable2718,
-        primitives::{Bloom, keccak256},
-        rlp::{Decodable, Encodable},
-    },
-    op_alloy::consensus::OpTxEnvelope,
+    alloy::{consensus::Receipt, primitives::Bloom, rlp::Encodable},
     umi_blockchain::{
         block::{BaseGasFee, Block, BlockHash, BlockRepository, ExtendedBlock, Header},
         payload::{PayloadId, PayloadQueries},
@@ -23,19 +16,19 @@ use {
     },
     umi_execution::{
         CanonicalExecutionInput, CreateL1GasFee, CreateL2GasFee, DepositExecutionInput, L1GasFee,
-        L1GasFeeInput, L2GasFeeInput, LogsBloom, execute_transaction,
-        transaction::{NormalizedExtendedTxEnvelope, WrapReceipt},
+        L2GasFeeInput, LogsBloom, execute_transaction,
+        transaction::{NormalizedEthTransaction, NormalizedExtendedTxEnvelope, WrapReceipt},
     },
     umi_shared::{
         error::Error::{DatabaseState, InvalidTransaction, InvariantViolation, User},
-        primitives::{B256, ToEthAddress, U64, U256},
+        primitives::{ToEthAddress, U64, U256},
     },
     umi_state::State,
 };
 
 impl<'app, D: Dependencies<'app>> Application<'app, D> {
     #[tracing::instrument(level = "debug", skip(self, attributes))]
-    pub fn start_block_build(&mut self, attributes: Payload, id: PayloadId) {
+    pub fn start_block_build(&mut self, attributes: PayloadForExecution, id: PayloadId) {
         if self
             .payload_queries
             .by_id(&self.storage_reader, id)
@@ -44,29 +37,20 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
         {
             return;
         }
+        let in_progress_payloads = self.payload_queries.get_in_progress();
+        if in_progress_payloads.start_id(id).is_err() {
+            return;
+        }
 
         // Include transactions from both `payload_attributes` and internal mem-pool
-        let transactions_with_metadata = attributes
+        let transactions = attributes
             .transactions
             .iter()
-            .filter_map(|tx_bytes| {
-                let mut slice: &[u8] = tx_bytes.as_ref();
-                let tx_hash = B256::new(keccak256(slice).0);
-                let tx = OpTxEnvelope::decode(&mut slice)
-                    .inspect_err(|_| {
-                        println!("WARN: Failed to RLP decode transaction in payload_attributes")
-                    })
-                    .ok()?;
-                let tx_nonce = tx.nonce();
-                let mempool_tx =
-                    PendingTransaction::new(tx, tx_nonce, tx_hash, L1GasFeeInput::from(slice));
-
-                Some(mempool_tx)
-            })
-            .chain(self.mem_pool.drain())
+            .cloned()
+            .chain(self.mem_pool.drain().map(Into::into))
             .filter(|tx|
                 // Do not include transactions we have already processed before
-                !self.receipt_repository.contains(&self.receipt_memory, tx.tx_hash).unwrap())
+                !self.receipt_repository.contains(&self.receipt_memory, tx.tx_hash()).unwrap())
             .collect::<Vec<_>>();
         let parent = self
             .block_repository
@@ -84,12 +68,8 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
             timestamp: attributes.timestamp.as_limbs()[0],
             prev_randao: attributes.prev_randao,
         };
-        let transactions: Vec<_> = transactions_with_metadata
-            .iter()
-            .map(|tx| tx.inner.clone())
-            .collect();
         let (execution_outcome, receipts) = self.execute_transactions(
-            transactions_with_metadata.into_iter(),
+            transactions.clone().into_iter(),
             base_fee,
             &header_for_execution,
         );
@@ -120,7 +100,6 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
             .with_payload_id(id);
 
         let block_number = block.block.header.number;
-        let base_fee = block.block.header.base_fee_per_gas;
 
         self.receipt_repository
             .extend(
@@ -135,7 +114,8 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
             .extend(
                 &mut self.storage,
                 transactions
-                    .into_iter()
+                    .iter()
+                    .cloned()
                     .enumerate()
                     .map(|(transaction_index, inner)| {
                         ExtendedTransaction::new(
@@ -150,21 +130,16 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
             .unwrap();
 
         self.block_hash_writer.push(block_number, block_hash);
-        self.block_repository.add(&mut self.storage, block).unwrap();
+        self.block_repository
+            .add(&mut self.storage, block.clone())
+            .unwrap();
 
         (self.on_payload)(self, id, block_hash);
+        in_progress_payloads.finish_id(block, transactions.into_iter().map(Into::into));
     }
 
-    pub fn add_transaction(&mut self, tx: TxEnvelope) {
-        let tx_hash = tx.tx_hash().0.into();
-        let mut encoded = Vec::new();
-        tx.encode(&mut encoded);
-        let encoded = encoded.as_slice().into();
-        let nonce = tx.nonce();
-        let inner = OpTxEnvelope::try_from_eth_envelope(tx)
-            .unwrap_or_else(|_| unreachable!("EIP-4844 not supported"));
-        let mempool_tx = PendingTransaction::new(inner, nonce, tx_hash, encoded);
-        self.mem_pool.insert(mempool_tx);
+    pub fn add_transaction(&mut self, tx: NormalizedEthTransaction) {
+        self.mem_pool.insert(tx);
     }
 
     pub fn genesis_update(&mut self, block: ExtendedBlock) {
@@ -174,7 +149,7 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
 
     fn execute_transactions(
         &mut self,
-        transactions: impl Iterator<Item = PendingTransaction>,
+        transactions: impl Iterator<Item = NormalizedExtendedTxEnvelope>,
         base_fee: U256,
         block_header: &HeaderForExecution,
     ) -> (ExecutionOutcome, Vec<ExtendedReceipt>) {
@@ -189,33 +164,27 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
         // https://github.com/ethereum-optimism/specs/blob/9dbc6b0/specs/protocol/deposits.md#kinds-of-deposited-transactions
         let l1_fee = transactions
             .peek()
-            .and_then(|tx| tx.inner.as_deposit())
+            .and_then(|tx| tx.as_deposit())
             .map(|tx| self.l1_fee.for_deposit(tx.input.as_ref()));
         let l2_fee = self.l2_fee.with_default_gas_fee_multiplier();
 
         // TODO: parallel transaction processing?
-        for pending_tx in transactions {
-            let Ok(normalized_tx): Result<NormalizedExtendedTxEnvelope, _> =
-                pending_tx.inner.clone().try_into()
-            else {
-                continue;
-            };
-            // TODO: implement gas limits etc. for `ExtendedTxEnvelope` so that
-            // l2 gas inputs can be constructed at an earlier stage and stored in mempool
+        for normalized_tx in transactions {
             let l2_gas_input = L2GasFeeInput::new(
                 normalized_tx.gas_limit(),
                 normalized_tx.effective_gas_price(base_fee),
             );
+            let tx_hash = normalized_tx.tx_hash();
             let input = match &normalized_tx {
                 NormalizedExtendedTxEnvelope::Canonical(tx) => CanonicalExecutionInput {
                     tx,
-                    tx_hash: &pending_tx.tx_hash,
+                    tx_hash: &tx.tx_hash,
                     state: self.state.resolver(),
                     storage_trie: &self.evm_storage,
                     genesis_config: &self.genesis_config,
                     l1_cost: l1_fee
                         .as_ref()
-                        .map(|v| v.l1_fee(pending_tx.l1_gas_fee_input.clone()))
+                        .map(|v| v.l1_fee(normalized_tx.l1_gas_fee_input()))
                         .unwrap_or(U256::ZERO),
                     l2_fee: l2_fee.clone(),
                     l2_input: l2_gas_input,
@@ -227,7 +196,7 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
                 .into(),
                 NormalizedExtendedTxEnvelope::DepositedTx(tx) => DepositExecutionInput {
                     tx,
-                    tx_hash: &pending_tx.tx_hash,
+                    tx_hash: &tx_hash,
                     state: self.state.resolver(),
                     storage_trie: &self.evm_storage,
                     genesis_config: &self.genesis_config,
@@ -245,19 +214,21 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
 
             let l1_block_info = l1_fee
                 .as_ref()
-                .and_then(|x| x.l1_block_info(pending_tx.l1_gas_fee_input.clone()));
+                .and_then(|x| x.l1_block_info(normalized_tx.l1_gas_fee_input()));
 
             self.on_tx(outcome.changes.move_vm.clone().accounts);
 
             self.state
                 .apply(outcome.changes.move_vm)
                 .unwrap_or_else(|e| {
-                    panic!("ERROR: state update failed for transaction {pending_tx:?}\n{e:?}")
+                    panic!("ERROR: state update failed for transaction {normalized_tx:?}\n{e:?}")
                 });
             self.evm_storage
                 .apply(outcome.changes.evm)
                 .unwrap_or_else(|e| {
-                    panic!("ERROR: EVM storage update failed for transaction {pending_tx:?}\n{e:?}")
+                    panic!(
+                        "ERROR: EVM storage update failed for transaction {normalized_tx:?}\n{e:?}"
+                    )
                 });
 
             cumulative_gas_used = cumulative_gas_used.saturating_add(outcome.gas_used as u128);
@@ -277,7 +248,7 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
                 logs: outcome.logs,
             };
 
-            let receipt = pending_tx.inner.wrap_receipt(receipt, bloom);
+            let receipt = normalized_tx.wrap_receipt(receipt, bloom);
 
             total_tip = total_tip.saturating_add(
                 U256::from(outcome.gas_used).saturating_mul(normalized_tx.tip_per_gas(base_fee)),
@@ -289,7 +260,7 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
             };
 
             receipts.push(ExtendedReceipt {
-                transaction_hash: pending_tx.tx_hash,
+                transaction_hash: normalized_tx.tx_hash(),
                 to: to.copied(),
                 from,
                 receipt,

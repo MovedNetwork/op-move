@@ -47,7 +47,7 @@ impl TransactionRepository for HeedTransactionRepository<'_> {
         let db = env.transaction_database(&db_transaction)?;
 
         transactions.into_iter().try_for_each(|transaction| {
-            db.put(&mut db_transaction, &transaction.hash(), &transaction)
+            db.put(&mut db_transaction, &transaction.hash, &transaction)
         })?;
 
         db_transaction.commit()

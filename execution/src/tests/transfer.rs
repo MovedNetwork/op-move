@@ -1,7 +1,4 @@
-use {
-    super::*, crate::transaction::NormalizedExtendedTxEnvelope, alloy::eips::Encodable2718,
-    op_alloy::consensus::OpTxEnvelope,
-};
+use {super::*, crate::transaction::NormalizedExtendedTxEnvelope, alloy::eips::Encodable2718};
 
 /// Deposits can be made to the L2.
 #[test]
@@ -22,8 +19,7 @@ fn test_deposit_tx() {
         is_system_transaction: false,
         input: hex!("d764ad0b0001000000000000000000000000000000000000000000000000000000000000000000000000000000000000c8088d0362bb4ac757ca77e211c30503d39cef4800000000000000000000000042000000000000000000000000000000000000100000000000000000000000000000000000000000000000056bc75e2d631000000000000000000000000000000000000000000000000000000000000000030d4000000000000000000000000000000000000000000000000000000000000000c000000000000000000000000000000000000000000000000000000000000000a41635f5fd00000000000000000000000084a124e4ec6f0f9914b49dcc71669a8cac556ad600000000000000000000000084a124e4ec6f0f9914b49dcc71669a8cac556ad60000000000000000000000000000000000000000000000056bc75e2d631000000000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000").into(),
     };
-    let tx_hash = OpTxEnvelope::Deposit(tx.clone().seal()).tx_hash();
-    let test_tx = TestTransaction::new(NormalizedExtendedTxEnvelope::DepositedTx(tx), tx_hash);
+    let test_tx = TestTransaction::new(NormalizedExtendedTxEnvelope::DepositedTx(tx.seal()));
 
     let outcome = ctx.execute_tx(&test_tx).unwrap();
     outcome.vm_outcome.unwrap();
@@ -68,14 +64,14 @@ fn test_initiate_withdrawal_zero_balance() {
     let withdraw_amount = U256::from(1_000);
     let l2_parser = address!("4200000000000000000000000000000000000016");
 
-    let (tx_hash, tx) = create_transaction_with_value(
+    let tx = create_transaction_with_value(
         &mut ctx.signer,
         TxKind::Call(l2_parser),
         Vec::new(),
         U256::from(withdraw_amount),
     );
 
-    let transaction = TestTransaction::new(tx, tx_hash);
+    let transaction = TestTransaction::new(tx);
     let outcome = ctx.execute_tx(&transaction).unwrap();
     let err = outcome.vm_outcome.unwrap_err();
     assert!(err.to_string().contains("ABORTED"));

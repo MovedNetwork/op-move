@@ -5,6 +5,7 @@ use {
         schema::{GetPayloadResponseV3, PayloadId},
     },
     umi_app::{ApplicationReader, Dependencies},
+    umi_blockchain::payload::MaybePayloadResponse,
 };
 
 pub async fn execute_v3<'reader>(
@@ -14,11 +15,22 @@ pub async fn execute_v3<'reader>(
     let payload_id: PayloadId = parse_params_1(request)?;
 
     // Spec: https://github.com/ethereum/execution-apis/blob/main/src/engine/cancun.md#specification-2
-    let response = app
-        .payload(payload_id.into())
-        .map(GetPayloadResponseV3::from)?;
+    let response = match app.payload(payload_id.into())? {
+        MaybePayloadResponse::Some(response) => response,
+        MaybePayloadResponse::Delayed(mut rx) => {
+            if let Ok(response) = rx.recv().await {
+                response
+            } else {
+                return Err(JsonRpcError::unknown_payload(payload_id));
+            }
+        }
+        MaybePayloadResponse::Unknown => {
+            return Err(JsonRpcError::unknown_payload(payload_id));
+        }
+    };
 
-    Ok(serde_json::to_value(response).expect("Must be able to JSON-serialize response"))
+    Ok(serde_json::to_value(GetPayloadResponseV3::from(response))
+        .expect("Must be able to JSON-serialize response"))
 }
 
 #[cfg(test)]
@@ -35,7 +47,7 @@ mod tests {
                 InMemoryBlockRepository, UmiBlockHash,
             },
             in_memory::shared_memory,
-            payload::InMemoryPayloadQueries,
+            payload::{InMemoryPayloadQueries, InProgressPayloads},
             receipt::{InMemoryReceiptQueries, InMemoryReceiptRepository, receipt_memory},
             state::InMemoryStateQueries,
             transaction::{InMemoryTransactionQueries, InMemoryTransactionRepository},
@@ -98,6 +110,7 @@ mod tests {
         );
         let (receipt_memory_reader, receipt_memory) = receipt_memory::new();
         let genesis_state_root = genesis_config.initial_state_root;
+        let in_progress_payloads = InProgressPayloads::default();
 
         let mut app = Application::<TestDependencies<_, _, _, _>> {
             mem_pool: Default::default(),
@@ -125,7 +138,7 @@ mod tests {
             receipt_memory,
             receipt_repository: InMemoryReceiptRepository::new(),
             receipt_queries: InMemoryReceiptQueries::new(),
-            payload_queries: InMemoryPayloadQueries::new(),
+            payload_queries: InMemoryPayloadQueries::new(in_progress_payloads.clone()),
             evm_storage: evm_storage.clone(),
             on_tx: CommandActor::on_tx_noop(),
             on_tx_batch: CommandActor::on_tx_batch_noop(),
@@ -166,7 +179,7 @@ mod tests {
             transaction_queries: InMemoryTransactionQueries::new(),
             receipt_memory: receipt_memory_reader,
             receipt_queries: InMemoryReceiptQueries::new(),
-            payload_queries: InMemoryPayloadQueries::new(),
+            payload_queries: InMemoryPayloadQueries::new(in_progress_payloads),
             evm_storage,
         };
         let (queue, state) = umi_app::create(&mut app, 10);

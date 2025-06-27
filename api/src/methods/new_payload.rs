@@ -156,7 +156,7 @@ mod tests {
                 InMemoryBlockRepository, UmiBlockHash,
             },
             in_memory::shared_memory,
-            payload::InMemoryPayloadQueries,
+            payload::{InMemoryPayloadQueries, InProgressPayloads},
             receipt::{InMemoryReceiptQueries, InMemoryReceiptRepository, receipt_memory},
             state::InMemoryStateQueries,
             transaction::{InMemoryTransactionQueries, InMemoryTransactionRepository},
@@ -276,6 +276,7 @@ mod tests {
         );
         let (receipt_memory_reader, receipt_memory) = receipt_memory::new();
         let genesis_state_root = genesis_config.initial_state_root;
+        let in_progress_payloads = InProgressPayloads::default();
 
         let mut app = Application::<TestDependencies<_, _, _, _>> {
             mem_pool: Default::default(),
@@ -295,7 +296,7 @@ mod tests {
             on_payload: CommandActor::on_payload_in_memory(),
             on_tx: CommandActor::on_tx_noop(),
             on_tx_batch: CommandActor::on_tx_batch_noop(),
-            payload_queries: InMemoryPayloadQueries::new(),
+            payload_queries: InMemoryPayloadQueries::new(in_progress_payloads.clone()),
             receipt_queries: InMemoryReceiptQueries::new(),
             receipt_repository: InMemoryReceiptRepository::new(),
             receipt_memory,
@@ -347,7 +348,7 @@ mod tests {
             transaction_queries: InMemoryTransactionQueries::new(),
             receipt_memory: receipt_memory_reader,
             receipt_queries: InMemoryReceiptQueries::new(),
-            payload_queries: InMemoryPayloadQueries::new(),
+            payload_queries: InMemoryPayloadQueries::new(in_progress_payloads),
             evm_storage,
         };
         let (queue, state) = umi_app::create(&mut app, 10);

@@ -16,13 +16,13 @@ fn test_execute_tables_contract() {
 
     let move_address = EVM_ADDRESS.to_move_address();
     let signer_arg = MoveValue::Signer(move_address);
-    let (tx_hash, tx) = utils::create_test_tx(
+    let tx = utils::create_test_tx(
         &mut ctx.signer,
         &module_id,
         "make_test_tables",
         vec![bcs::to_bytes(&signer_arg).unwrap()],
     );
-    let outcome = ctx.execute_tx(&TestTransaction::new(tx, tx_hash)).unwrap();
+    let outcome = ctx.execute_tx(&TestTransaction::new(tx)).unwrap();
     let table_change_set = outcome.changes.move_vm.tables;
 
     // tables.move creates 11 new tables and makes 11 changes

@@ -28,7 +28,7 @@ pub mod tests {
             signers::local::PrivateKeySigner,
         },
         move_core_types::account_address::AccountAddress,
-        op_alloy::consensus::{OpTxEnvelope, TxDeposit},
+        op_alloy::consensus::TxDeposit,
         std::{convert::Infallible, sync::Arc},
         tokio::sync::mpsc::Sender,
         umi_app::{
@@ -41,13 +41,16 @@ pub mod tests {
                 InMemoryBlockQueries, InMemoryBlockRepository, UmiBlockHash,
             },
             in_memory::shared_memory,
-            payload::InMemoryPayloadQueries,
+            payload::{InMemoryPayloadQueries, InProgressPayloads},
             receipt::{InMemoryReceiptQueries, InMemoryReceiptRepository, receipt_memory},
             state::{InMemoryStateQueries, MockStateQueries},
             transaction::{InMemoryTransactionQueries, InMemoryTransactionRepository},
         },
         umi_evm_ext::state::{BlockHashWriter, InMemoryStorageTrieRepository},
-        umi_execution::UmiBaseTokenAccounts,
+        umi_execution::{
+            UmiBaseTokenAccounts,
+            transaction::{NormalizedExtendedTxEnvelope, UmiTxEnvelope},
+        },
         umi_genesis::config::{CHAIN_ID, GenesisConfig},
         umi_shared::primitives::{Address, B256, U64, U256},
         umi_state::{InMemoryState, InMemoryTrieDb},
@@ -96,6 +99,7 @@ pub mod tests {
             &mut evm_storage,
         );
         let (receipt_memory_reader, receipt_memory) = receipt_memory::new();
+        let in_progress_payloads = InProgressPayloads::default();
 
         (
             ApplicationReader {
@@ -103,7 +107,7 @@ pub mod tests {
                 base_token: UmiBaseTokenAccounts::new(AccountAddress::ONE),
                 block_hash_lookup: block_hash_cache.clone(),
                 block_queries: InMemoryBlockQueries,
-                payload_queries: InMemoryPayloadQueries::new(),
+                payload_queries: InMemoryPayloadQueries::new(in_progress_payloads.clone()),
                 receipt_queries: InMemoryReceiptQueries::new(),
                 receipt_memory: receipt_memory_reader.clone(),
                 storage: memory_reader.clone(),
@@ -126,7 +130,7 @@ pub mod tests {
                 on_payload: CommandActor::on_payload_in_memory(),
                 on_tx: CommandActor::on_tx_noop(),
                 on_tx_batch: CommandActor::on_tx_batch_noop(),
-                payload_queries: InMemoryPayloadQueries::new(),
+                payload_queries: InMemoryPayloadQueries::new(in_progress_payloads),
                 receipt_queries: InMemoryReceiptQueries::new(),
                 receipt_repository: InMemoryReceiptRepository::new(),
                 receipt_memory,
@@ -146,7 +150,7 @@ pub mod tests {
     pub async fn deposit_eth(to: &str, channel: &Sender<Command>) {
         let to = Address::from_hex(to).unwrap();
         let amount = parse_ether("1").unwrap();
-        let tx = OpTxEnvelope::Deposit(Sealed::new(TxDeposit {
+        let tx = NormalizedExtendedTxEnvelope::DepositedTx(Sealed::new(TxDeposit {
             to: TxKind::Call(to),
             value: amount,
             source_hash: FixedBytes::default(),
@@ -166,7 +170,7 @@ pub mod tests {
         };
 
         let msg = Command::StartBlockBuild {
-            payload_attributes,
+            payload_attributes: payload_attributes.try_into().unwrap(),
             payload_id: U64::from(0x03421ee50df45cacu64),
         };
         channel.send(msg).await.unwrap();
@@ -188,7 +192,7 @@ pub mod tests {
         let signer = PrivateKeySigner::from_bytes(&PRIVATE_KEY.into()).unwrap();
         let signature = signer.sign_transaction_sync(&mut tx).unwrap();
         let signed_tx = tx.into_signed(signature);
-        let tx = OpTxEnvelope::Eip1559(signed_tx);
+        let tx = UmiTxEnvelope::Eip1559(signed_tx);
 
         let mut encoded = Vec::new();
         tx.encode(&mut encoded);
@@ -199,7 +203,7 @@ pub mod tests {
         };
 
         let msg = Command::StartBlockBuild {
-            payload_attributes,
+            payload_attributes: payload_attributes.try_into().unwrap(),
             payload_id: U64::from(0x03421ee50df45aaau64),
         };
         channel.send(msg).await.unwrap();

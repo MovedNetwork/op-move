@@ -1,4 +1,7 @@
-use {super::*, crate::transaction::NormalizedExtendedTxEnvelope};
+use {
+    super::*,
+    crate::transaction::{NormalizedExtendedTxEnvelope, UmiTxEnvelope},
+};
 
 #[test]
 fn test_move_event_converts_to_eth_log_successfully() {
@@ -35,8 +38,8 @@ fn test_transaction_replay_is_forbidden() {
     let module_id = ctx.deploy_contract("natives");
 
     // Use a transaction to call a function; this passes
-    let (tx_hash, tx) = create_test_tx(&mut ctx.signer, &module_id, "hashing", vec![]);
-    let transaction = TestTransaction::new(tx, tx_hash);
+    let tx = create_test_tx(&mut ctx.signer, &module_id, "hashing", vec![]);
+    let transaction = TestTransaction::new(tx);
     let outcome = ctx.execute_tx(&transaction).unwrap();
     outcome.vm_outcome.unwrap();
     ctx.state.apply(outcome.changes.move_vm).unwrap();
@@ -65,13 +68,13 @@ fn test_transaction_incorrect_destination() {
         Vec::new(),
         vec![],
     );
-    let (tx_hash, tx) = create_transaction(
+    let tx = create_transaction(
         &mut ctx.signer,
         TxKind::Call(Default::default()), // Wrong address!
         TransactionData::EntryFunction(entry_fn).to_bytes().unwrap(),
     );
 
-    let transaction = TestTransaction::new(tx, tx_hash);
+    let transaction = TestTransaction::new(tx);
     let err = ctx.execute_tx(&transaction).unwrap_err();
     assert_eq!(err.to_string(), "tx.to must match payload module address");
 }
@@ -102,10 +105,11 @@ fn test_transaction_chain_id() {
     };
     let signature = ctx.signer.inner.sign_transaction_sync(&mut tx).unwrap();
     let signed_tx = TxEnvelope::Eip1559(tx.into_signed(signature));
-    let tx_hash = *signed_tx.tx_hash();
-    let signed_tx = NormalizedExtendedTxEnvelope::Canonical(signed_tx.try_into().unwrap());
+    let umi_tx: UmiTxEnvelope = signed_tx.try_into().unwrap();
+    let normalized_tx: NormalizedEthTransaction = umi_tx.try_into().unwrap();
+    let signed_tx = NormalizedExtendedTxEnvelope::Canonical(normalized_tx);
 
-    let transaction = TestTransaction::new(signed_tx, tx_hash);
+    let transaction = TestTransaction::new(signed_tx);
     let err = ctx.execute_tx(&transaction).unwrap_err();
     assert_eq!(err.to_string(), "Incorrect chain id");
 }
@@ -136,10 +140,11 @@ fn test_out_of_gas() {
     };
     let signature = ctx.signer.inner.sign_transaction_sync(&mut tx).unwrap();
     let signed_tx = TxEnvelope::Eip1559(tx.into_signed(signature));
-    let tx_hash = *signed_tx.tx_hash();
-    let signed_tx = NormalizedExtendedTxEnvelope::Canonical(signed_tx.try_into().unwrap());
+    let umi_tx: UmiTxEnvelope = signed_tx.try_into().unwrap();
+    let normalized_tx: NormalizedEthTransaction = umi_tx.try_into().unwrap();
+    let signed_tx = NormalizedExtendedTxEnvelope::Canonical(normalized_tx);
 
-    let transaction = TestTransaction::new(signed_tx, tx_hash);
+    let transaction = TestTransaction::new(signed_tx);
     let err = ctx.execute_tx(&transaction).unwrap_err();
     assert_eq!(err.to_string(), "Insufficient intrinsic gas");
 }

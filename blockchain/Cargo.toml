@@ -26,6 +26,7 @@ umi-shared.workspace = true
 umi-state.workspace = true
 op-alloy.workspace = true
 serde.workspace = true
+tokio.workspace = true
 sha2.workspace = true
 evmap.workspace = true
 

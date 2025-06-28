@@ -58,4 +58,10 @@ COPY execution/src/tests/res/bridged_tokens_test.json execution/src/tests/res/br
 # Copy built binary
 COPY --from=build /volume/op-move /volume/op-move
 
-ENTRYPOINT [ "/volume/op-move" ]
+# Copy entrypoint
+COPY docker/op-move.sh entrypoint.sh
+
+# Grant run privileges to copied script
+RUN chmod +x entrypoint.sh
+
+ENTRYPOINT [ "/volume/entrypoint.sh" ]

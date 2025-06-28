@@ -63,6 +63,12 @@ impl ToSaturatedU64 for U256 {
     }
 }
 
+impl ToSaturatedU64 for u128 {
+    fn to_saturated_u64(self) -> u64 {
+        self.try_into().unwrap_or(u64::MAX)
+    }
+}
+
 pub trait ToU256 {
     fn to_u256(self) -> U256;
 }

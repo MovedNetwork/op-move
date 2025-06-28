@@ -1,5 +1,5 @@
 use {
-    crate::{create_genesis_block, dependency, initialize_app},
+    crate::{dependency, initialize_app},
     alloy::{
         consensus::transaction::TxEnvelope,
         eips::{BlockNumberOrTag, Encodable2718},
@@ -10,7 +10,12 @@ use {
     std::future::Future,
     umi_api::schema::{ForkchoiceUpdatedResponseV1, GetBlockResponse, GetPayloadResponseV3},
     umi_app::{ApplicationReader, CommandQueue, Dependencies},
-    umi_blockchain::{payload::StatePayloadId, receipt::TransactionReceipt},
+    umi_blockchain::{
+        block::{Block, BlockHash, ExtendedBlock, Header},
+        payload::StatePayloadId,
+        receipt::TransactionReceipt,
+    },
+    umi_execution::U256,
     umi_genesis::config::GenesisConfig,
     umi_server_args::Database,
 };
@@ -33,9 +38,9 @@ impl TestContext<'static> {
     {
         let db = Database::default();
         let genesis_config = GenesisConfig::default();
-        let (mut app, reader) = initialize_app(db, &GenesisConfig::default());
+        let (mut app, reader) = initialize_app(db, &genesis_config);
 
-        let genesis_block = create_genesis_block(&app.block_hash, &genesis_config);
+        let genesis_block = create_test_genesis_block(&app.block_hash, &genesis_config);
         let head = genesis_block.hash;
         let timestamp = genesis_block.block.header.timestamp;
         app.genesis_update(genesis_block);
@@ -201,4 +206,19 @@ pub async fn handle_request<'reader, T: DeserializeOwned>(
 
     let result: T = serde_json::from_value(response.result.expect("If not error then has result"))?;
     Ok(result)
+}
+
+/// Test genesis block differs primarily in that it makes gas free and has Move state root.
+fn create_test_genesis_block(
+    block_hash: &impl BlockHash,
+    genesis_config: &GenesisConfig,
+) -> ExtendedBlock {
+    let genesis_header = Header {
+        state_root: genesis_config.initial_state_root,
+        ..Default::default()
+    };
+    let hash = block_hash.block_hash(&genesis_header);
+    let genesis_block = Block::new(genesis_header, Vec::new());
+
+    genesis_block.with_hash(hash).with_value(U256::ZERO)
 }

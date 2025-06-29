@@ -217,8 +217,11 @@ impl OptionalConfig {
             (Some(ours), Some(theirs)) => Some(ours.apply(theirs)),
             (ours, theirs) => theirs.or(ours),
         };
+        self.genesis = match (self.genesis, genesis) {
+            (Some(ours), Some(theirs)) => Some(ours.apply(theirs)),
+            (ours, theirs) => theirs.or(ours),
+        };
         self.max_buffered_commands = max_buffered_commands.or(self.max_buffered_commands);
-        self.genesis = genesis.or(self.genesis);
 
         self
     }

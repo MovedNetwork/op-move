@@ -12,6 +12,8 @@ services:
     build:
       context: ./
       dockerfile: ./docker/Dockerfile.optimism
+      additional_contexts:
+        ghcr.io/uminetwork/foundry: "service:foundry"
     depends_on:
       - foundry
     deploy:
@@ -24,6 +26,9 @@ services:
     build:
       context: ./
       dockerfile: ./docker/Dockerfile.op-node
+      additional_contexts:
+        ghcr.io/uminetwork/optimism: "service:optimism"
+        ghcr.io/uminetwork/foundry: "service:foundry"
     environment:
       JWT_SECRET: "f3099a1d969c4f5aba1a94434c368a84f8d950121feb4a398a67f78453853d1d"
     networks:
@@ -39,6 +44,9 @@ services:
     build:
       context: ./
       dockerfile: ./docker/Dockerfile.op-batcher
+      additional_contexts:
+        ghcr.io/uminetwork/optimism: "service:optimism"
+        ghcr.io/uminetwork/foundry: "service:foundry"
     networks:
       - localnet
     depends_on:
@@ -52,6 +60,9 @@ services:
     build:
       context: ./
       dockerfile: ./docker/Dockerfile.op-proposer
+      additional_contexts:
+        ghcr.io/uminetwork/optimism: "service:optimism"
+        ghcr.io/uminetwork/foundry: "service:foundry"
     networks:
       - localnet
     depends_on:
@@ -65,6 +76,9 @@ services:
     build:
       context: ./
       dockerfile: ./docker/Dockerfile.op-geth
+      additional_contexts:
+        ghcr.io/uminetwork/optimism: "service:optimism"
+        ghcr.io/uminetwork/foundry: "service:foundry"
     environment:
       JWT_SECRET: "f3099a1d969c4f5aba1a94434c368a84f8d950121feb4a398a67f78453853d1d"
     networks:
@@ -119,6 +133,8 @@ services:
     build:
       context: ./
       dockerfile: ./docker/Dockerfile.geth
+      additional_contexts:
+        ghcr.io/uminetwork/foundry: "service:foundry"
     networks:
       - localnet
     depends_on:

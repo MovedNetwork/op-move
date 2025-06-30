@@ -82,21 +82,21 @@ impl BlockRepository for HeedBlockRepository<'_> {
 }
 
 #[derive(Debug, Clone)]
-pub struct HeedBlockQueries<'db>(PhantomData<&'db ()>);
+pub struct HeedBlockQueries;
 
-impl Default for HeedBlockQueries<'_> {
+impl Default for HeedBlockQueries {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl HeedBlockQueries<'_> {
+impl HeedBlockQueries {
     pub const fn new() -> Self {
-        Self(PhantomData)
+        Self
     }
 }
 
-impl BlockQueries for HeedBlockQueries<'_> {
+impl BlockQueries for HeedBlockQueries {
     type Err = heed::Error;
     type Storage = heed::Env;
 

@@ -1,7 +1,8 @@
 use {
     crate::dependency::shared::*,
     std::sync::Arc,
-    umi_app::{Application, CommandActor, SharedBlockHashCache},
+    umi_app::{Application, CommandActor, HybridBlockHashCache},
+    umi_blockchain::block::InMemoryBlockQueries,
     umi_genesis::config::GenesisConfig,
 };
 
@@ -22,7 +23,8 @@ pub struct InMemoryDependencies {
     receipt_memory: Option<umi_blockchain::receipt::ReceiptMemory>,
     trie_db: Arc<umi_state::InMemoryTrieDb>,
     evm_storage_tries: umi_evm_ext::state::InMemoryStorageTrieRepository,
-    block_hash_cache: SharedBlockHashCache,
+    block_hash_cache:
+        HybridBlockHashCache<umi_blockchain::in_memory::SharedMemoryReader, InMemoryBlockQueries>,
     in_progress_payloads: umi_blockchain::payload::InProgressPayloads,
 }
 
@@ -33,13 +35,13 @@ impl InMemoryDependencies {
             umi_blockchain::receipt::receipt_memory::new();
 
         Self {
-            memory_reader,
+            memory_reader: memory_reader.clone(),
             memory: Some(memory),
             receipt_memory_reader,
             receipt_memory: Some(receipt_memory),
             trie_db: Arc::new(umi_state::InMemoryTrieDb::empty()),
             evm_storage_tries: umi_evm_ext::state::InMemoryStorageTrieRepository::new(),
-            block_hash_cache: SharedBlockHashCache::default(),
+            block_hash_cache: HybridBlockHashCache::new(memory_reader, InMemoryBlockQueries),
             in_progress_payloads: Default::default(),
         }
     }
@@ -70,8 +72,14 @@ impl Default for InMemoryDependencies {
 impl<'db> umi_app::Dependencies<'db> for InMemoryDependencies {
     type BlockQueries = umi_blockchain::block::InMemoryBlockQueries;
     type BlockRepository = umi_blockchain::block::InMemoryBlockRepository;
-    type BlockHashLookup = umi_app::SharedBlockHashCache;
-    type BlockHashWriter = umi_app::SharedBlockHashCache;
+    type BlockHashLookup = umi_app::HybridBlockHashCache<
+        umi_blockchain::in_memory::SharedMemoryReader,
+        InMemoryBlockQueries,
+    >;
+    type BlockHashWriter = umi_app::HybridBlockHashCache<
+        umi_blockchain::in_memory::SharedMemoryReader,
+        InMemoryBlockQueries,
+    >;
     type OnPayload = umi_app::OnPayload<Application<'db, Self>>;
     type OnTx = umi_app::OnTx<Application<'db, Self>>;
     type OnTxBatch = umi_app::OnTxBatch<Application<'db, Self>>;

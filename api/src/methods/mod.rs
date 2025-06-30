@@ -32,8 +32,8 @@ pub mod tests {
         std::{convert::Infallible, sync::Arc},
         tokio::sync::mpsc::Sender,
         umi_app::{
-            Application, ApplicationReader, Command, CommandActor, DependenciesThreadSafe, Payload,
-            SharedBlockHashCache, TestDependencies,
+            Application, ApplicationReader, Command, CommandActor, DependenciesThreadSafe,
+            HybridBlockHashCache, Payload, TestDependencies,
         },
         umi_blockchain::{
             block::{
@@ -64,7 +64,6 @@ pub mod tests {
         Application<'static, TestDependencies>,
     ) {
         let genesis_config = GenesisConfig::default();
-        let mut block_hash_cache = SharedBlockHashCache::default();
 
         let head_hash = B256::new(hex!(
             "e56ec7ba741931e8c55b7f654a6e56ed61cf8b8279bf5e3ef6ac86a11eb33a9d"
@@ -78,6 +77,8 @@ pub mod tests {
             .with_value(U256::ZERO);
 
         let (memory_reader, mut memory) = shared_memory::new();
+        let mut block_hash_cache =
+            HybridBlockHashCache::new(memory_reader.clone(), InMemoryBlockQueries);
         let mut repository = InMemoryBlockRepository::new();
         repository.add(&mut memory, genesis_block).unwrap();
         block_hash_cache.push(0, head_hash);
@@ -247,28 +248,28 @@ pub mod tests {
             }
         }
 
-        let block_hash_cache = SharedBlockHashCache::default();
+        let block_hash_cache = HybridBlockHashCache::new((), StubLatest(height));
 
         Box::new((
             ApplicationReader::<
                 TestDependencies<
+                    MockStateQueries,
                     _,
-                    InMemoryState,
                     _,
                     UmiBlockHash,
-                    _,
-                    SharedBlockHashCache,
-                    _,
+                    StubLatest,
                     (),
-                    _,
-                    _,
                     (),
-                    _,
-                    _,
-                    _,
-                    _,
-                    _,
-                    _,
+                    (),
+                    (),
+                    (),
+                    (),
+                    (),
+                    (),
+                    HybridBlockHashCache<(), StubLatest>,
+                    HybridBlockHashCache<(), StubLatest>,
+                    (),
+                    (),
                     (),
                     Eip1559GasFee,
                     U256,
@@ -287,28 +288,7 @@ pub mod tests {
                 evm_storage: (),
                 transaction_queries: (),
             },
-            Application::<
-                TestDependencies<
-                    _,
-                    _,
-                    _,
-                    _,
-                    SharedBlockHashCache,
-                    _,
-                    _,
-                    _,
-                    _,
-                    _,
-                    _,
-                    _,
-                    _,
-                    _,
-                    _,
-                    _,
-                    _,
-                    _,
-                >,
-            > {
+            Application::<TestDependencies<_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _>> {
                 genesis_config: GenesisConfig::default(),
                 mem_pool: Default::default(),
                 gas_fee: Eip1559GasFee::default(),

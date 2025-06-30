@@ -1,31 +1,37 @@
 use {
     crate::dependency::shared::*,
     std::sync::Arc,
-    umi_app::{Application, CommandActor, SharedBlockHashCache, SharedHybridBlockHashCache},
+    umi_app::{Application, CommandActor, HybridBlockHashCache},
     umi_blockchain::state::EthTrieStateQueries,
     umi_genesis::config::GenesisConfig,
     umi_state::{EthTrieState, State},
-    umi_storage_rocksdb::RocksEthTrieDb,
+    umi_storage_rocksdb::{block, RocksEthTrieDb},
 };
 
 pub type Dependency = RocksDbDependencies;
 pub type ReaderDependency = RocksDbReaderDependencies;
 
 pub fn dependencies(args: umi_server_args::Database) -> Dependency {
+    let db = Arc::new(create_db(args));
     RocksDbDependencies {
-        db: Arc::new(create_db(args)),
+        db: db.clone(),
         in_progress_payloads: Default::default(),
+        block_hash_lookup: HybridBlockHashCache::new(db, block::RocksDbBlockQueries::new()),
     }
 }
 
 pub struct RocksDbDependencies {
     db: Arc<umi_storage_rocksdb::RocksDb>,
     in_progress_payloads: umi_blockchain::payload::InProgressPayloads,
+    block_hash_lookup:
+        HybridBlockHashCache<Arc<umi_storage_rocksdb::RocksDb>, block::RocksDbBlockQueries>,
 }
 
 pub struct RocksDbReaderDependencies {
     db: Arc<umi_storage_rocksdb::RocksDb>,
     in_progress_payloads: umi_blockchain::payload::InProgressPayloads,
+    block_hash_lookup:
+        HybridBlockHashCache<Arc<umi_storage_rocksdb::RocksDb>, block::RocksDbBlockQueries>,
 }
 
 impl RocksDbDependencies {
@@ -34,14 +40,15 @@ impl RocksDbDependencies {
         RocksDbReaderDependencies {
             db: self.db.clone(),
             in_progress_payloads: self.in_progress_payloads.clone(),
+            block_hash_lookup: self.block_hash_lookup.clone(),
         }
     }
 }
 
 impl<'db> umi_app::Dependencies<'db> for RocksDbDependencies {
-    type BlockHashLookup = SharedBlockHashCache;
-    type BlockHashWriter = SharedBlockHashCache;
-    type BlockQueries = umi_storage_rocksdb::block::RocksDbBlockQueries<'db>;
+    type BlockHashLookup = HybridBlockHashCache<Self::SharedStorageReader, Self::BlockQueries>;
+    type BlockHashWriter = HybridBlockHashCache<Self::SharedStorageReader, Self::BlockQueries>;
+    type BlockQueries = umi_storage_rocksdb::block::RocksDbBlockQueries;
     type BlockRepository = umi_storage_rocksdb::block::RocksDbBlockRepository<'db>;
     type OnPayload = umi_app::OnPayload<Application<'db, Self>>;
     type OnTx = umi_app::OnTx<Application<'db, Self>>;
@@ -62,11 +69,11 @@ impl<'db> umi_app::Dependencies<'db> for RocksDbDependencies {
         umi_storage_rocksdb::transaction::RocksDbTransactionRepository<'db>;
 
     fn block_hash_lookup(&self) -> Self::BlockHashLookup {
-        SharedBlockHashCache::new()
+        self.block_hash_lookup.clone()
     }
 
     fn block_hash_writer(&self) -> Self::BlockHashWriter {
-        SharedBlockHashCache::new()
+        self.block_hash_lookup.clone()
     }
 
     fn block_queries() -> Self::BlockQueries {
@@ -153,11 +160,9 @@ impl<'db> umi_app::Dependencies<'db> for RocksDbDependencies {
 }
 
 impl<'db> umi_app::Dependencies<'db> for RocksDbReaderDependencies {
-    type BlockHashLookup =
-        SharedHybridBlockHashCache<Self::SharedStorageReader, Self::BlockQueries>;
-    type BlockHashWriter =
-        SharedHybridBlockHashCache<Self::SharedStorageReader, Self::BlockQueries>;
-    type BlockQueries = umi_storage_rocksdb::block::RocksDbBlockQueries<'db>;
+    type BlockHashLookup = HybridBlockHashCache<Self::SharedStorageReader, Self::BlockQueries>;
+    type BlockHashWriter = HybridBlockHashCache<Self::SharedStorageReader, Self::BlockQueries>;
+    type BlockQueries = umi_storage_rocksdb::block::RocksDbBlockQueries;
     type BlockRepository = umi_storage_rocksdb::block::RocksDbBlockRepository<'db>;
     type OnPayload = umi_app::OnPayload<Application<'db, Self>>;
     type OnTx = umi_app::OnTx<Application<'db, Self>>;
@@ -178,17 +183,11 @@ impl<'db> umi_app::Dependencies<'db> for RocksDbReaderDependencies {
         umi_storage_rocksdb::transaction::RocksDbTransactionRepository<'db>;
 
     fn block_hash_lookup(&self) -> Self::BlockHashLookup {
-        SharedHybridBlockHashCache::new(
-            self.db.clone(),
-            umi_storage_rocksdb::block::RocksDbBlockQueries::new(),
-        )
+        self.block_hash_lookup.clone()
     }
 
     fn block_hash_writer(&self) -> Self::BlockHashWriter {
-        SharedHybridBlockHashCache::new(
-            self.db.clone(),
-            umi_storage_rocksdb::block::RocksDbBlockQueries::new(),
-        )
+        self.block_hash_lookup.clone()
     }
 
     fn block_queries() -> Self::BlockQueries {

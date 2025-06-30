@@ -74,7 +74,6 @@ fn create_app_with_given_queries<SQ: StateQueries + Clone + Send + Sync + 'stati
     Application<'static, TestDependencies<SQ>>,
 ) {
     let genesis_config = GenesisConfig::default();
-    let mut block_hash_cache = SharedBlockHashCache::default();
 
     let head_hash = B256::new(hex!(
         "e56ec7ba741931e8c55b7f654a6e56ed61cf8b8279bf5e3ef6ac86a11eb33a9d"
@@ -82,6 +81,8 @@ fn create_app_with_given_queries<SQ: StateQueries + Clone + Send + Sync + 'stati
     let genesis_block = Block::default().with_hash(head_hash).with_value(U256::ZERO);
 
     let (memory_reader, mut memory) = shared_memory::new();
+    let mut block_hash_cache =
+        HybridBlockHashCache::new(memory_reader.clone(), InMemoryBlockQueries);
     let mut repository = InMemoryBlockRepository::new();
 
     for i in 0..=height {
@@ -196,7 +197,6 @@ fn create_app_with_fake_queries(
     Application<'static, TestDependencies>,
 ) {
     let genesis_config = GenesisConfig::default();
-    let mut block_hash_cache = SharedBlockHashCache::default();
 
     let head_hash = B256::new(hex!(
         "e56ec7ba741931e8c55b7f654a6e56ed61cf8b8279bf5e3ef6ac86a11eb33a9d"
@@ -204,6 +204,8 @@ fn create_app_with_fake_queries(
     let genesis_block = Block::default().with_hash(head_hash).with_value(U256::ZERO);
 
     let (memory_reader, mut memory) = shared_memory::new();
+    let mut block_hash_cache =
+        HybridBlockHashCache::new(memory_reader.clone(), InMemoryBlockQueries);
     let mut repository = InMemoryBlockRepository::new();
     repository.add(&mut memory, genesis_block.clone()).unwrap();
     block_hash_cache.push(0, head_hash);

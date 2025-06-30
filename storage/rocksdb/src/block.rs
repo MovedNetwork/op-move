@@ -65,21 +65,21 @@ impl BlockRepository for RocksDbBlockRepository<'_> {
 }
 
 #[derive(Debug, Clone)]
-pub struct RocksDbBlockQueries<'db>(PhantomData<&'db ()>);
+pub struct RocksDbBlockQueries;
 
-impl Default for RocksDbBlockQueries<'_> {
+impl Default for RocksDbBlockQueries {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl RocksDbBlockQueries<'_> {
+impl RocksDbBlockQueries {
     pub const fn new() -> Self {
-        Self(PhantomData)
+        Self
     }
 }
 
-impl BlockQueries for RocksDbBlockQueries<'_> {
+impl BlockQueries for RocksDbBlockQueries {
     type Err = rocksdb::Error;
     type Storage = Arc<RocksDb>;
 

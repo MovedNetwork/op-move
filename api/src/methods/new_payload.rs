@@ -149,13 +149,13 @@ mod tests {
         crate::methods::{forkchoice_updated, get_payload},
         alloy::primitives::hex,
         std::sync::Arc,
-        umi_app::{Application, CommandActor, SharedBlockHashCache, TestDependencies},
+        umi_app::{Application, CommandActor, HybridBlockHashCache, TestDependencies},
         umi_blockchain::{
             block::{
                 Block, BlockRepository, Eip1559GasFee, InMemoryBlockQueries,
                 InMemoryBlockRepository, UmiBlockHash,
             },
-            in_memory::shared_memory,
+            in_memory::{SharedMemoryReader, shared_memory},
             payload::{InMemoryPayloadQueries, InProgressPayloads},
             receipt::{InMemoryReceiptQueries, InMemoryReceiptRepository, receipt_memory},
             state::InMemoryStateQueries,
@@ -250,7 +250,6 @@ mod tests {
     #[tokio::test]
     async fn test_execute_v3() {
         let genesis_config = GenesisConfig::default();
-        let mut block_hash_cache = SharedBlockHashCache::default();
 
         // Set known block height
         let head_hash = B256::new(hex!(
@@ -259,6 +258,8 @@ mod tests {
         let genesis_block = Block::default().with_hash(head_hash).with_value(U256::ZERO);
 
         let (memory_reader, mut memory) = shared_memory::new();
+        let mut block_hash_cache =
+            HybridBlockHashCache::new(memory_reader.clone(), InMemoryBlockQueries);
         let mut repository = InMemoryBlockRepository::new();
         repository.add(&mut memory, genesis_block).unwrap();
         block_hash_cache.push(0, head_hash);
@@ -318,22 +319,22 @@ mod tests {
             TestDependencies<
                 _,
                 InMemoryState,
-                _,
+                (),
                 UmiBlockHash,
                 _,
-                SharedBlockHashCache,
-                _,
-                (),
+                InMemoryBlockRepository,
                 _,
                 _,
-                (),
+                InMemoryReceiptRepository,
                 _,
                 _,
                 _,
                 _,
+                HybridBlockHashCache<SharedMemoryReader, InMemoryBlockQueries>,
+                HybridBlockHashCache<SharedMemoryReader, InMemoryBlockQueries>,
                 _,
                 _,
-                (),
+                InMemoryTransactionRepository,
                 Eip1559GasFee,
                 U256,
                 U256,

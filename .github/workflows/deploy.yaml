@@ -20,6 +20,8 @@ jobs:
       packages: write
       contents: read
     steps:
+      - name: Free up disk space
+        run: rm -rf /opt/hostedtoolcache
       - name: Clone repository
         uses: actions/checkout@v4
       - name: Log in to the registry

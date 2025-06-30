@@ -19,17 +19,17 @@ RUN --mount=type=cache,target=/root/.cargo/registry --mount=type=cache,target=/r
     # Build
     && source $HOME/.profile \
     && cargo build --release --features cast/aws-kms,forge/aws-kms --manifest-path foundry/Cargo.toml \
-    && mkdir out \
-    && mv foundry/target/release/forge out/forge \
-    && mv foundry/target/release/cast out/cast \
-    && mv foundry/target/release/anvil out/anvil \
-    && mv foundry/target/release/chisel out/chisel \
-    && strip out/forge \
-    && strip out/cast \
-    && strip out/chisel \
-    && strip out/anvil \
+    && mkdir foundry/out \
+    && mv foundry/target/release/forge foundry/out/forge \
+    && mv foundry/target/release/cast foundry/out/cast \
+    && mv foundry/target/release/anvil foundry/out/anvil \
+    && mv foundry/target/release/chisel foundry/out/chisel \
+    && strip foundry/out/forge \
+    && strip foundry/out/cast \
+    && strip foundry/out/chisel \
+    && strip foundry/out/anvil \
     # Cleanup
     && apk del clang lld curl build-base linux-headers git \
-    && find foundry -maxdepth 1 -mindepth 1 ! -name target -exec rm -rf {} \; \
+    && find foundry -maxdepth 1 -mindepth 1 ! -name target ! -name out -exec rm -rf {} \; \
     && find ~/.cargo -maxdepth 1 -mindepth 1 ! -name git ! -name registry -exec rm -rf {} \; \
     && rm -rf rustup.sh /tmp/* ~/.rustup ;

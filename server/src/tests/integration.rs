@@ -27,7 +27,7 @@ use {
         str::FromStr,
         time::{Duration, Instant},
     },
-    tokio::{fs, runtime::Runtime},
+    tokio::fs,
     umi_execution::transaction::{ScriptOrDeployment, TransactionData},
     umi_server_args::{ConfigBuilder, DefaultLayer, OptionalAuthSocket, OptionalConfig},
     umi_shared::primitives::ToMoveAddress,
@@ -95,7 +95,7 @@ async fn test_on_ethereum() -> Result<()> {
     // 12. Cleanup generated files and folders
     hb.shutdown();
     cleanup_files();
-    op_move.shutdown_background();
+    op_move.abort();
     cleanup_processes(vec![geth, op_geth, op_node, op_batcher, op_proposer])
 }
 
@@ -346,9 +346,8 @@ fn init_and_start_op_geth() -> Result<Child> {
     Ok(op_geth_process)
 }
 
-fn run_op_move(jwt_secret: String) -> Runtime {
-    let op_move_runtime = Runtime::new().unwrap();
-    op_move_runtime.spawn(crate::run(
+fn run_op_move(jwt_secret: String) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(crate::run(
         ConfigBuilder::new()
             .layer(defaults())
             .layer(DefaultLayer::new(OptionalConfig {
@@ -360,8 +359,7 @@ fn run_op_move(jwt_secret: String) -> Runtime {
             }))
             .try_build()
             .unwrap(),
-    ));
-    op_move_runtime
+    ))
 }
 
 fn run_op() -> Result<(Child, Child, Child)> {

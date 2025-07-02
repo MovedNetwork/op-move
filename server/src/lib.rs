@@ -12,7 +12,7 @@ use {
     },
     tracing_subscriber::fmt::format::FmtSpan,
     umi_api::method_name::MethodName,
-    umi_app::{Application, ApplicationReader, Command, CommandQueue, Dependencies},
+    umi_app::{Application, ApplicationReader, CommandQueue, Dependencies},
     umi_blockchain::{
         block::{Block, BlockHash, BlockQueries, ExtendedBlock, Header},
         payload::{NewPayloadId, StatePayloadId},
@@ -24,7 +24,7 @@ use {
     },
     umi_shared::{
         hex,
-        primitives::{B256, U256},
+        primitives::{ToSaturatedU64, B2048, B256, B64, U256},
     },
     warp::{
         http::{header::CONTENT_TYPE, HeaderMap, HeaderValue, StatusCode},
@@ -40,7 +40,6 @@ use {
 
 mod allow;
 mod dependency;
-mod geth_genesis;
 mod mirror;
 #[cfg(test)]
 mod tests;
@@ -74,7 +73,7 @@ pub fn defaults() -> DefaultLayer {
         genesis: Some(OptionalGenesis {
             chain_id: Some(42069),
             initial_state_root: Some(B256::new(hex!(
-                "0x4805267476cb522274ec2fe790b4dc6e889ed0d57377f90770d4a658f6b8e4ae"
+                "4805267476cb522274ec2fe790b4dc6e889ed0d57377f90770d4a658f6b8e4ae"
             ))),
             treasury: Some(AccountAddress::ONE), // TODO: fill in the real address,
             l2_contract_genesis: Some(
@@ -261,9 +260,40 @@ fn create_genesis_block(
     block_hash: &impl BlockHash,
     genesis_config: &GenesisConfig,
 ) -> ExtendedBlock {
+    const EMPTY_ROOT: B256 = B256::new(hex!(
+        "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
+    ));
+    const EMPTY_OMMERS_ROOT_HASH: B256 = B256::new(hex!(
+        "1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
+    ));
+
     let genesis_header = Header {
-        state_root: genesis_config.initial_state_root,
-        ..Default::default()
+        base_fee_per_gas: genesis_config
+            .l2_contract_genesis
+            .base_fee_per_gas
+            .map(ToSaturatedU64::to_saturated_u64),
+        blob_gas_used: genesis_config.l2_contract_genesis.blob_gas_used,
+        difficulty: genesis_config.l2_contract_genesis.difficulty,
+        excess_blob_gas: genesis_config.l2_contract_genesis.excess_blob_gas,
+        extra_data: genesis_config.l2_contract_genesis.extra_data.clone(),
+        gas_limit: genesis_config.l2_contract_genesis.gas_limit,
+        gas_used: 0,
+        logs_bloom: B2048::ZERO.into(),
+        mix_hash: genesis_config.l2_contract_genesis.mix_hash,
+        nonce: B64::from(genesis_config.l2_contract_genesis.nonce),
+        number: genesis_config.l2_contract_genesis.number.unwrap_or(0),
+        parent_beacon_block_root: Some(B256::ZERO),
+        parent_hash: B256::ZERO,
+        receipts_root: EMPTY_ROOT,
+        state_root: B256::new(hex!(
+            "30b67e4b5ef34eacb9e083c07fd5578982c2cb4e0ee1dc0a14d72b99a28ed80e"
+        )),
+        timestamp: genesis_config.l2_contract_genesis.timestamp,
+        transactions_root: EMPTY_ROOT,
+        withdrawals_root: Some(EMPTY_ROOT),
+        beneficiary: genesis_config.l2_contract_genesis.coinbase,
+        ommers_hash: EMPTY_OMMERS_ROOT_HASH,
+        requests_hash: None,
     };
     let hash = block_hash.block_hash(&genesis_header);
     let genesis_block = Block::new(genesis_header, Vec::new());
@@ -331,38 +361,37 @@ async fn mirror<'reader>(
         .map(|x| x.to_str().unwrap().contains("gzip"))
         .unwrap_or(false);
     let request: Result<serde_json::Value, _> = serde_json::from_slice(&body);
-    let (geth_response_parts, geth_response_bytes, parsed_geth_response) =
-        match proxy(path, query, method, headers.clone(), body, port).await {
-            Ok(response) => {
-                let (parts, body) = response.into_parts();
-                let raw_bytes = hyper::body::to_bytes(body)
-                    .await
-                    .expect("Failed to get geth response");
-                let bytes = if is_zipped {
-                    match try_decompress(&raw_bytes) {
-                        Ok(x) => x,
-                        Err(e) => {
-                            println!("WARN: gz decompression failed: {e:?}");
-                            let body = hyper::Body::from(raw_bytes);
-                            return Ok(Response::from_parts(parts, body));
-                        }
-                    }
-                } else {
-                    raw_bytes.to_vec()
-                };
-                match serde_json::from_slice::<serde_json::Value>(&bytes) {
-                    Ok(parsed_response) => (parts, raw_bytes, parsed_response),
-                    Err(_) => {
-                        println!("Request: {:?}", &request);
-                        println!("headers: {headers:?}");
-                        println!("WARN: op-geth non-json response: {:?}", bytes);
-                        let body = hyper::Body::from(bytes);
+    let parsed_geth_response = match proxy(path, query, method, headers.clone(), body, port).await {
+        Ok(response) => {
+            let (parts, body) = response.into_parts();
+            let raw_bytes = hyper::body::to_bytes(body)
+                .await
+                .expect("Failed to get geth response");
+            let bytes = if is_zipped {
+                match try_decompress(&raw_bytes) {
+                    Ok(x) => x,
+                    Err(e) => {
+                        println!("WARN: gz decompression failed: {e:?}");
+                        let body = hyper::Body::from(raw_bytes);
                         return Ok(Response::from_parts(parts, body));
                     }
                 }
+            } else {
+                raw_bytes.to_vec()
+            };
+            match serde_json::from_slice::<serde_json::Value>(&bytes) {
+                Ok(parsed_response) => parsed_response,
+                Err(_) => {
+                    println!("Request: {:?}", &request);
+                    println!("headers: {headers:?}");
+                    println!("WARN: op-geth non-json response: {:?}", bytes);
+                    let body = hyper::Body::from(bytes);
+                    return Ok(Response::from_parts(parts, body));
+                }
             }
-            Err(e) => return Err(e),
-        };
+        }
+        Err(e) => return Err(e),
+    };
 
     let request = request.expect("geth responded, so body must have been JSON");
     let op_move_response =
@@ -374,16 +403,6 @@ async fn mirror<'reader>(
         port,
     };
     tracing::info!("{}", serde_json::to_string(&log).unwrap());
-
-    // TODO: this is a hack because we currently can't compute the genesis
-    // hash expected by op-node.
-    if geth_genesis::is_genesis_block_request(&request).unwrap_or(false) {
-        let block = geth_genesis::extract_genesis_block(&parsed_geth_response)
-            .expect("Must get genesis from geth");
-        queue.send(Command::GenesisUpdate { block }).await;
-        let body = hyper::Body::from(geth_response_bytes);
-        return Ok(Response::from_parts(geth_response_parts, body));
-    }
 
     let body = hyper::Body::from(serde_json::to_vec(&op_move_response).unwrap());
     Ok(Response::new(body))

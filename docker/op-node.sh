@@ -15,8 +15,15 @@ L1_RPC_URL="http://geth:58138"
 L2_RPC_URL="http://op-move:8551"
 OP_GETH_ADDR="op-geth"
 OP_GETH_PORT="9551"
+OP_MOVE_ADDR="op-move"
+OP_MOVE_PORT="8545"
 L2_ALLOCS="${WORKDIR}/state-dump-42069.json"
 TIMEOUT_SECS=1500
+
+# Remove genesis config to prevent other services using outdated genesis
+if [ ! -f "${ROLLUP_FILE}" ]; then
+    rm -f "${SHARED}/genesis.json"
+fi
 
 export DEPLOY_CONFIG_PATH="${DEPLOY_CONFIG}"
 
@@ -65,9 +72,12 @@ if [ ! -f "${ROLLUP_FILE}" ]; then
         --l1-rpc "${L1_RPC_URL}"
 fi
 
+cp -f "${GENESIS_FILE}" "${SHARED}/genesis.json"
+
 echo "${JWT_SECRET}" > "${JWT_FILE}"
 
 wait-for-it -t "${TIMEOUT_SECS}" "${OP_GETH_ADDR}:${OP_GETH_PORT}"
+wait-for-it -t "${TIMEOUT_SECS}" "${OP_MOVE_ADDR}:${OP_MOVE_PORT}"
 
 op-node \
     --l1.beacon.ignore \

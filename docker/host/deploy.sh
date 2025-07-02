@@ -16,6 +16,3 @@ docker compose pull
 
 # Deploy the stack
 docker stack deploy --resolve-image never -c docker-compose.yml -d umi
-
-# Update op-move
-docker service update umi_op-move

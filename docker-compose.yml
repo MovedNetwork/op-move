@@ -128,6 +128,8 @@ services:
       OP_GETH_ADDR: "op-geth"
     networks:
       - localnet
+    depends_on:
+      - op-node
     volumes:
       - ./docker/volumes/shared:/volume/shared
       - ./docker/volumes/db:/volume/db

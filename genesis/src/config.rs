@@ -95,7 +95,7 @@ impl Default for GenesisConfig {
         Self {
             chain_id: CHAIN_ID,
             initial_state_root: B256::from(hex!(
-                "0x4805267476cb522274ec2fe790b4dc6e889ed0d57377f90770d4a658f6b8e4ae"
+                "4805267476cb522274ec2fe790b4dc6e889ed0d57377f90770d4a658f6b8e4ae"
             )),
             gas_costs: GasCosts::default(),
             treasury: AccountAddress::ONE, // todo: fill in the real address

@@ -371,7 +371,7 @@ async fn mirror<'reader>(
                 match try_decompress(&raw_bytes) {
                     Ok(x) => x,
                     Err(e) => {
-                        println!("WARN: gz decompression failed: {e:?}");
+                        tracing::warn!("gz decompression failed: {e:?}");
                         let body = hyper::Body::from(raw_bytes);
                         return Ok(Response::from_parts(parts, body));
                     }
@@ -382,9 +382,9 @@ async fn mirror<'reader>(
             match serde_json::from_slice::<serde_json::Value>(&bytes) {
                 Ok(parsed_response) => parsed_response,
                 Err(_) => {
-                    println!("Request: {:?}", &request);
-                    println!("headers: {headers:?}");
-                    println!("WARN: op-geth non-json response: {:?}", bytes);
+                    tracing::warn!(
+                        "op-geth non-json response={bytes:?} request={request:?} headers={headers:?}"
+                    );
                     let body = hyper::Body::from(bytes);
                     return Ok(Response::from_parts(parts, body));
                 }

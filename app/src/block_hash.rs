@@ -34,11 +34,10 @@ impl BlockHashRingBuffer {
     pub fn push(&mut self, block_number: u64, block_hash: B256) {
         // Ensure blocks are added in sequence (detect potential reorgs)
         if block_number > 0 && self.latest_block > 0 && block_number != self.latest_block + 1 {
-            // TODO: what to do here?
-            println!(
-                "WARN: Block hash buffer - expected block {}, got {}",
+            tracing::warn!(
+                "Block hash buffer - expected block {}, got {}",
                 self.latest_block + 1,
-                block_number
+                block_number,
             );
         }
 

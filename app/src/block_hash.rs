@@ -131,14 +131,15 @@ where
         }
     }
 
-    pub fn try_from_storage(storage: S, block_query: B) -> Result<Self, B::Err> {
-        let ring_buffer = BlockHashRingBuffer::try_from_storage(&storage, &block_query)?;
+    pub fn from_storage_or_new(storage: S, block_query: B) -> Self {
+        let ring_buffer = BlockHashRingBuffer::try_from_storage(&storage, &block_query)
+            .unwrap_or_else(|_| BlockHashRingBuffer::default());
 
-        Ok(Self {
+        Self {
             ring_buffer: Arc::new(RwLock::new(ring_buffer)),
             storage,
             block_query,
-        })
+        }
     }
 }
 
@@ -301,8 +302,7 @@ mod tests {
 
     #[test]
     fn test_hybrid_cache_ring_buffer_hit() {
-        let mut cache =
-            HybridBlockHashCache::try_from_storage(MockStorage, &MockBlockQueries).unwrap();
+        let mut cache = HybridBlockHashCache::from_storage_or_new(MockStorage, &MockBlockQueries);
 
         let hash = B256::from([42u8; 32]);
         cache.push(100, hash);
@@ -312,7 +312,7 @@ mod tests {
 
     #[test]
     fn test_hybrid_cache_storage_fallback() {
-        let cache = HybridBlockHashCache::try_from_storage(MockStorage, &MockBlockQueries).unwrap();
+        let cache = HybridBlockHashCache::from_storage_or_new(MockStorage, &MockBlockQueries);
 
         // Should fall back to storage for block 1500
         let expected_hash = B256::from([((1500 % 256) as u8); 32]);
@@ -321,7 +321,7 @@ mod tests {
 
     #[test]
     fn test_hybrid_cache_storage_miss() {
-        let cache = HybridBlockHashCache::try_from_storage(MockStorage, &MockBlockQueries).unwrap();
+        let cache = HybridBlockHashCache::from_storage_or_new(MockStorage, &MockBlockQueries);
 
         // Should return None for blocks not in ring buffer or storage
         assert_eq!(cache.hash_by_number(500), None);
@@ -329,8 +329,7 @@ mod tests {
 
     #[test]
     fn test_hybrid_cache_priority() {
-        let mut cache =
-            HybridBlockHashCache::try_from_storage(MockStorage, &MockBlockQueries).unwrap();
+        let mut cache = HybridBlockHashCache::from_storage_or_new(MockStorage, &MockBlockQueries);
 
         // Add block 1500 to ring buffer with different hash than storage would return
         let ring_buffer_hash = B256::from([99u8; 32]);

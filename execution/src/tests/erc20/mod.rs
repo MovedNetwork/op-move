@@ -5,15 +5,20 @@ use {
     umi_evm_ext::EvmNativeOutcome,
 };
 
+mod interface;
+mod move_impl;
+mod tx_impl;
+
 #[test]
 fn test_erc20_failed_transfer() {
+    use {interface::Erc20Token, move_impl::MoveImpl};
     let mut ctx = TestContext::new();
 
     let mint_amount = U256::from(1234u64);
     let token_address = deploy_mock_erc20(&mut ctx, mint_amount);
 
-    let sender_balance = balance_of(&ctx, token_address, EVM_ADDRESS);
-    let receiver_balance = balance_of(&ctx, token_address, ALT_EVM_ADDRESS);
+    let sender_balance = MoveImpl::balance_of(&ctx, token_address, EVM_ADDRESS);
+    let receiver_balance = MoveImpl::balance_of(&ctx, token_address, ALT_EVM_ADDRESS);
 
     // intentionally bigger than the initial mint amount (1234)
     let transfer_amount = U256::from(1250u64);
@@ -26,40 +31,50 @@ fn test_erc20_failed_transfer() {
     );
     assert!(err.to_string().contains("ABORTED"));
 
-    let new_sender_balance = balance_of(&ctx, token_address, EVM_ADDRESS);
-    let new_receiver_balance = balance_of(&ctx, token_address, ALT_EVM_ADDRESS);
+    let new_sender_balance = MoveImpl::balance_of(&ctx, token_address, EVM_ADDRESS);
+    let new_receiver_balance = MoveImpl::balance_of(&ctx, token_address, ALT_EVM_ADDRESS);
     assert_eq!(new_sender_balance, sender_balance);
     assert_eq!(new_receiver_balance, receiver_balance);
 }
 
 #[test]
 fn test_erc20_transfer() {
+    generic_test_erc20_transfer::<move_impl::MoveImpl>();
+    generic_test_erc20_transfer::<tx_impl::TxImpl>();
+}
+
+fn generic_test_erc20_transfer<E: interface::Erc20Token>() {
     let mut ctx = TestContext::new();
 
     let mint_amount = U256::from(1234u64);
     let token_address = deploy_mock_erc20(&mut ctx, mint_amount);
 
-    let initial_sender_balance = balance_of(&ctx, token_address, EVM_ADDRESS);
-    let initial_receiver_balance = balance_of(&ctx, token_address, ALT_EVM_ADDRESS);
+    let initial_sender_balance = E::balance_of(&ctx, token_address, EVM_ADDRESS);
+    let initial_receiver_balance = E::balance_of(&ctx, token_address, ALT_EVM_ADDRESS);
     assert_eq!(initial_sender_balance, mint_amount);
     assert_eq!(initial_receiver_balance, U256::ZERO);
 
     let transfer_amount = U256::from(123u64);
-    transfer(
+    E::transfer(
         &mut ctx,
         EVM_ADDRESS,
         token_address,
         ALT_EVM_ADDRESS,
         transfer_amount,
     );
-    let sender_balance = balance_of(&ctx, token_address, EVM_ADDRESS);
-    let receiver_balance = balance_of(&ctx, token_address, ALT_EVM_ADDRESS);
+    let sender_balance = E::balance_of(&ctx, token_address, EVM_ADDRESS);
+    let receiver_balance = E::balance_of(&ctx, token_address, ALT_EVM_ADDRESS);
     assert_eq!(sender_balance, initial_sender_balance - transfer_amount);
     assert_eq!(receiver_balance, transfer_amount);
 }
 
 #[test]
 fn test_erc20_transfer_from() {
+    generic_test_erc20_transfer_from::<move_impl::MoveImpl>();
+    generic_test_erc20_transfer_from::<tx_impl::TxImpl>();
+}
+
+fn generic_test_erc20_transfer_from<E: interface::Erc20Token>() {
     let mut ctx = TestContext::new();
 
     let mint_amount = U256::from(1234u64);
@@ -69,8 +84,8 @@ fn test_erc20_transfer_from() {
     let token_address = deploy_mock_erc20(&mut ctx, mint_amount);
 
     // ERC20 are minted to sender account
-    let initial_sender_balance = balance_of(&ctx, token_address, EVM_ADDRESS);
-    let initial_receiver_balance = balance_of(&ctx, token_address, ALT_EVM_ADDRESS);
+    let initial_sender_balance = E::balance_of(&ctx, token_address, EVM_ADDRESS);
+    let initial_receiver_balance = E::balance_of(&ctx, token_address, ALT_EVM_ADDRESS);
     assert_eq!(initial_sender_balance, mint_amount);
     assert_eq!(initial_receiver_balance, U256::ZERO);
 
@@ -86,10 +101,10 @@ fn test_erc20_transfer_from() {
 
     assert!(err.to_string().contains("ABORTED"));
 
-    let receiver_allowance = allowance(&ctx, token_address, EVM_ADDRESS, ALT_EVM_ADDRESS);
+    let receiver_allowance = E::allowance(&ctx, token_address, EVM_ADDRESS, ALT_EVM_ADDRESS);
     assert_eq!(receiver_allowance, U256::ZERO);
 
-    let outcome = approve(
+    let outcome = E::approve(
         &mut ctx,
         EVM_ADDRESS,
         token_address,
@@ -98,11 +113,11 @@ fn test_erc20_transfer_from() {
     );
     assert!(outcome.is_success);
 
-    let receiver_allowance = allowance(&ctx, token_address, EVM_ADDRESS, ALT_EVM_ADDRESS);
+    let receiver_allowance = E::allowance(&ctx, token_address, EVM_ADDRESS, ALT_EVM_ADDRESS);
     assert_eq!(receiver_allowance, approve_amount);
 
     // trying to send a sum less than total allowance succeeds
-    let outcome = transfer_from(
+    let outcome = E::transfer_from(
         &mut ctx,
         ALT_EVM_ADDRESS,
         token_address,
@@ -112,13 +127,13 @@ fn test_erc20_transfer_from() {
     );
     assert!(outcome.is_success);
 
-    let sender_balance = balance_of(&ctx, token_address, EVM_ADDRESS);
-    let receiver_balance = balance_of(&ctx, token_address, ALT_EVM_ADDRESS);
+    let sender_balance = E::balance_of(&ctx, token_address, EVM_ADDRESS);
+    let receiver_balance = E::balance_of(&ctx, token_address, ALT_EVM_ADDRESS);
     assert_eq!(sender_balance, initial_sender_balance - transfer_amount);
     assert_eq!(receiver_balance, initial_receiver_balance + transfer_amount);
 
     // the allowance is decreased by the transfer amount
-    let receiver_allowance = allowance(&ctx, token_address, EVM_ADDRESS, ALT_EVM_ADDRESS);
+    let receiver_allowance = E::allowance(&ctx, token_address, EVM_ADDRESS, ALT_EVM_ADDRESS);
     assert_eq!(receiver_allowance, approve_amount - transfer_amount);
 
     // trying to send a sum larger than current allowance fails, i.e. no partial transfers
@@ -135,21 +150,26 @@ fn test_erc20_transfer_from() {
 
 #[test]
 fn test_erc20_metadata() {
+    generic_test_erc20_metadata::<move_impl::MoveImpl>();
+    generic_test_erc20_metadata::<tx_impl::TxImpl>();
+}
+
+fn generic_test_erc20_metadata<E: interface::Erc20Token>() {
     let mut ctx = TestContext::new();
 
     let mint_amount = U256::from(1234u64);
     let token_address = deploy_mock_erc20(&mut ctx, mint_amount);
 
-    let total_supply = total_supply(&ctx, token_address);
+    let total_supply = E::total_supply(&ctx, token_address);
     assert_eq!(total_supply, mint_amount);
 
-    let name = name(&ctx, token_address);
+    let name = E::name(&ctx, token_address);
     assert_eq!(name, "Gold");
 
-    let symbol = symbol(&ctx, token_address);
+    let symbol = E::symbol(&ctx, token_address);
     assert_eq!(symbol, "AU");
 
-    let decimals = decimals(&ctx, token_address);
+    let decimals = E::decimals(&ctx, token_address);
     // As it wasn't set during creation, should be 18 by default
     assert_eq!(decimals, 18u8);
 }
@@ -176,20 +196,6 @@ fn deploy_mock_erc20(ctx: &mut TestContext, mint_amount: U256) -> Address {
     outcome.logs[0].address
 }
 
-fn balance_of(ctx: &TestContext, token_address: Address, account_address: Address) -> U256 {
-    let outcome = ctx
-        .quick_call(
-            vec![
-                MoveValue::Address(token_address.to_move_address()),
-                MoveValue::Address(account_address.to_move_address()),
-            ],
-            "erc20",
-            "balance_of",
-        )
-        .0;
-    U256::from_be_slice(&outcome.output)
-}
-
 fn transfer_err(
     ctx: &TestContext,
     caller_address: Address,
@@ -206,85 +212,6 @@ fn transfer_err(
         ],
         "erc20",
         "transfer",
-    )
-}
-
-fn transfer(
-    ctx: &mut TestContext,
-    caller_address: Address,
-    token_address: Address,
-    to_address: Address,
-    transfer_amount: U256,
-) -> EvmNativeOutcome {
-    ctx.quick_send(
-        vec![
-            MoveValue::Signer(caller_address.to_move_address()),
-            MoveValue::Address(token_address.to_move_address()),
-            MoveValue::Address(to_address.to_move_address()),
-            MoveValue::U256(transfer_amount.to_move_u256()),
-        ],
-        "erc20",
-        "transfer",
-    )
-}
-
-fn allowance(
-    ctx: &TestContext,
-    token_address: Address,
-    owner_address: Address,
-    spender_address: Address,
-) -> U256 {
-    let outcome = ctx
-        .quick_call(
-            vec![
-                MoveValue::Address(token_address.to_move_address()),
-                MoveValue::Address(owner_address.to_move_address()),
-                MoveValue::Address(spender_address.to_move_address()),
-            ],
-            "erc20",
-            "allowance",
-        )
-        .0;
-    U256::from_be_slice(&outcome.output)
-}
-
-fn approve(
-    ctx: &mut TestContext,
-    caller_address: Address,
-    token_address: Address,
-    spender_address: Address,
-    approve_amount: U256,
-) -> EvmNativeOutcome {
-    ctx.quick_send(
-        vec![
-            MoveValue::Signer(caller_address.to_move_address()),
-            MoveValue::Address(token_address.to_move_address()),
-            MoveValue::Address(spender_address.to_move_address()),
-            MoveValue::U256(approve_amount.to_move_u256()),
-        ],
-        "erc20",
-        "approve",
-    )
-}
-
-fn transfer_from(
-    ctx: &mut TestContext,
-    caller_address: Address,
-    token_address: Address,
-    from_address: Address,
-    to_address: Address,
-    transfer_amount: U256,
-) -> EvmNativeOutcome {
-    ctx.quick_send(
-        vec![
-            MoveValue::Signer(caller_address.to_move_address()),
-            MoveValue::Address(token_address.to_move_address()),
-            MoveValue::Address(from_address.to_move_address()),
-            MoveValue::Address(to_address.to_move_address()),
-            MoveValue::U256(transfer_amount.to_move_u256()),
-        ],
-        "erc20",
-        "transfer_from",
     )
 }
 
@@ -307,51 +234,4 @@ fn transfer_from_err(
         "erc20",
         "transfer_from",
     )
-}
-
-fn total_supply(ctx: &TestContext, token_address: Address) -> U256 {
-    let outcome = ctx
-        .quick_call(
-            vec![MoveValue::Address(token_address.to_move_address())],
-            "erc20",
-            "total_supply",
-        )
-        .0;
-    U256::from_be_slice(&outcome.output)
-}
-
-fn decimals(ctx: &TestContext, token_address: Address) -> u8 {
-    let outcome = ctx
-        .quick_call(
-            vec![MoveValue::Address(token_address.to_move_address())],
-            "erc20",
-            "decimals",
-        )
-        .0;
-    let val = U256::from_be_slice(&outcome.output);
-    val.as_limbs()[0] as u8
-}
-
-fn name(ctx: &TestContext, token_address: Address) -> String {
-    let outcome = ctx
-        .quick_call(
-            vec![MoveValue::Address(token_address.to_move_address())],
-            "erc20",
-            "name",
-        )
-        .0;
-    let name = outcome.output;
-    String::abi_decode(&name, true).unwrap()
-}
-
-fn symbol(ctx: &TestContext, token_address: Address) -> String {
-    let outcome = ctx
-        .quick_call(
-            vec![MoveValue::Address(token_address.to_move_address())],
-            "erc20",
-            "symbol",
-        )
-        .0;
-    let symbol = outcome.output;
-    String::abi_decode(&symbol, true).unwrap()
 }

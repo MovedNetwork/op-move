@@ -463,6 +463,15 @@ impl TestContext {
         )
     }
 
+    /// Gets the nonce for an address.
+    pub fn get_nonce(&self, address: Address) -> u64 {
+        quick_get_nonce(
+            &address.to_move_address(),
+            self.state.resolver(),
+            &self.evm_storage,
+        )
+    }
+
     /// (Even more) low-level MoveVM function calls. Unlike [`Self::execute`]
     /// or [`Self::execute_tx`], doesn't create a tx and let it go through
     /// verification / gas metering / visibility checks, instead directly

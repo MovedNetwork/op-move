@@ -1,7 +1,7 @@
 use {
     crate::dependency::shared::*,
     std::sync::Arc,
-    umi_app::{Application, CommandActor, SharedBlockHashCache, SharedHybridBlockHashCache},
+    umi_app::{Application, CommandActor, HybridBlockHashCache},
     umi_blockchain::state::EthTrieStateQueries,
     umi_genesis::config::GenesisConfig,
     umi_state::{EthTrieState, State},
@@ -15,20 +15,24 @@ pub type Dependency = HeedDependencies;
 pub type ReaderDependency = HeedReaderDependencies;
 
 pub fn dependencies(args: umi_server_args::Database) -> Dependency {
+    let db = create_db(args);
     HeedDependencies {
-        db: create_db(args),
+        db: db.clone(),
         in_progress_payloads: Default::default(),
+        block_hash_lookup: HybridBlockHashCache::new(db, block::HeedBlockQueries::new()),
     }
 }
 
 pub struct HeedDependencies {
     db: umi_storage_heed::Env,
     in_progress_payloads: umi_blockchain::payload::InProgressPayloads,
+    block_hash_lookup: HybridBlockHashCache<umi_storage_heed::Env, block::HeedBlockQueries>,
 }
 
 pub struct HeedReaderDependencies {
     db: umi_storage_heed::Env,
     in_progress_payloads: umi_blockchain::payload::InProgressPayloads,
+    block_hash_lookup: HybridBlockHashCache<umi_storage_heed::Env, block::HeedBlockQueries>,
 }
 
 impl HeedDependencies {
@@ -37,14 +41,15 @@ impl HeedDependencies {
         HeedReaderDependencies {
             db: self.db.clone(),
             in_progress_payloads: self.in_progress_payloads.clone(),
+            block_hash_lookup: self.block_hash_lookup.clone(),
         }
     }
 }
 
 impl<'db> umi_app::Dependencies<'db> for HeedDependencies {
-    type BlockHashLookup = SharedBlockHashCache;
-    type BlockHashWriter = SharedBlockHashCache;
-    type BlockQueries = block::HeedBlockQueries<'db>;
+    type BlockHashLookup = HybridBlockHashCache<Self::SharedStorageReader, Self::BlockQueries>;
+    type BlockHashWriter = HybridBlockHashCache<Self::SharedStorageReader, Self::BlockQueries>;
+    type BlockQueries = block::HeedBlockQueries;
     type BlockRepository = block::HeedBlockRepository<'db>;
     type OnPayload = umi_app::OnPayload<Application<'db, Self>>;
     type OnTx = umi_app::OnTx<Application<'db, Self>>;
@@ -63,11 +68,11 @@ impl<'db> umi_app::Dependencies<'db> for HeedDependencies {
     type TransactionRepository = transaction::HeedTransactionRepository<'db>;
 
     fn block_hash_lookup(&self) -> Self::BlockHashLookup {
-        SharedBlockHashCache::new()
+        self.block_hash_lookup.clone()
     }
 
     fn block_hash_writer(&self) -> Self::BlockHashWriter {
-        SharedBlockHashCache::new()
+        self.block_hash_lookup.clone()
     }
 
     fn block_queries() -> Self::BlockQueries {
@@ -153,11 +158,9 @@ impl<'db> umi_app::Dependencies<'db> for HeedDependencies {
 }
 
 impl<'db> umi_app::Dependencies<'db> for HeedReaderDependencies {
-    type BlockHashLookup =
-        SharedHybridBlockHashCache<Self::SharedStorageReader, Self::BlockQueries>;
-    type BlockHashWriter =
-        SharedHybridBlockHashCache<Self::SharedStorageReader, Self::BlockQueries>;
-    type BlockQueries = block::HeedBlockQueries<'db>;
+    type BlockHashLookup = HybridBlockHashCache<Self::SharedStorageReader, Self::BlockQueries>;
+    type BlockHashWriter = HybridBlockHashCache<Self::SharedStorageReader, Self::BlockQueries>;
+    type BlockQueries = block::HeedBlockQueries;
     type BlockRepository = block::HeedBlockRepository<'db>;
     type OnPayload = umi_app::OnPayload<Application<'db, Self>>;
     type OnTx = umi_app::OnTx<Application<'db, Self>>;
@@ -176,11 +179,11 @@ impl<'db> umi_app::Dependencies<'db> for HeedReaderDependencies {
     type TransactionRepository = transaction::HeedTransactionRepository<'db>;
 
     fn block_hash_lookup(&self) -> Self::BlockHashLookup {
-        SharedHybridBlockHashCache::new(self.db.clone(), block::HeedBlockQueries::new())
+        self.block_hash_lookup.clone()
     }
 
     fn block_hash_writer(&self) -> Self::BlockHashWriter {
-        SharedHybridBlockHashCache::new(self.db.clone(), block::HeedBlockQueries::new())
+        self.block_hash_lookup.clone()
     }
 
     fn block_queries() -> Self::BlockQueries {

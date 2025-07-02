@@ -16,7 +16,7 @@ struct BlockHashEntry {
     hash: B256,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct BlockHashRingBuffer {
     entries: VecDeque<BlockHashEntry>,
     /// Block number of the latest block stored for validation purposes
@@ -114,59 +114,8 @@ impl BlockHashWriter for BlockHashRingBuffer {
 }
 
 #[derive(Debug, Clone)]
-pub struct SharedBlockHashCache {
-    inner: Arc<RwLock<BlockHashRingBuffer>>,
-}
-
-impl SharedBlockHashCache {
-    pub fn new() -> Self {
-        Self {
-            inner: Arc::new(RwLock::new(BlockHashRingBuffer::new())),
-        }
-    }
-
-    pub fn try_from_storage<S, B>(storage: &S, block_query: &B) -> Result<Self, B::Err>
-    where
-        B: BlockQueries<Storage = S>,
-    {
-        let buf = BlockHashRingBuffer::try_from_storage(storage, block_query)?;
-
-        Ok(Self {
-            inner: Arc::new(RwLock::new(buf)),
-        })
-    }
-}
-
-impl Default for SharedBlockHashCache {
-    fn default() -> Self {
-        Self {
-            inner: Arc::new(RwLock::new(BlockHashRingBuffer::default())),
-        }
-    }
-}
-
-impl BlockHashLookup for SharedBlockHashCache {
-    fn hash_by_number(&self, number: u64) -> Option<B256> {
-        if let Ok(cache) = self.inner.read() {
-            cache.hash_by_number(number)
-        } else {
-            // TODO: deal with poisoning?
-            None
-        }
-    }
-}
-
-impl BlockHashWriter for SharedBlockHashCache {
-    fn push(&mut self, height: u64, hash: B256) {
-        if let Ok(mut cache) = self.inner.write() {
-            cache.push(height, hash)
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
 pub struct HybridBlockHashCache<S, B> {
-    ring_buffer: BlockHashRingBuffer,
+    ring_buffer: Arc<RwLock<BlockHashRingBuffer>>,
     storage: S,
     block_query: B,
 }
@@ -175,9 +124,9 @@ impl<S, B> HybridBlockHashCache<S, B>
 where
     B: BlockQueries<Storage = S>,
 {
-    pub const fn new(storage: S, block_query: B) -> Self {
+    pub fn new(storage: S, block_query: B) -> Self {
         Self {
-            ring_buffer: BlockHashRingBuffer::new(),
+            ring_buffer: Arc::new(RwLock::new(BlockHashRingBuffer::new())),
             storage,
             block_query,
         }
@@ -187,7 +136,7 @@ where
         let ring_buffer = BlockHashRingBuffer::try_from_storage(&storage, &block_query)?;
 
         Ok(Self {
-            ring_buffer,
+            ring_buffer: Arc::new(RwLock::new(ring_buffer)),
             storage,
             block_query,
         })
@@ -199,7 +148,12 @@ where
     B: BlockQueries<Storage = S>,
 {
     fn hash_by_number(&self, block_number: u64) -> Option<B256> {
-        if let Some(hash) = self.ring_buffer.hash_by_number(block_number) {
+        if let Some(hash) = self
+            .ring_buffer
+            .read()
+            .expect("Lock not poisoned")
+            .hash_by_number(block_number)
+        {
             return Some(hash);
         }
 
@@ -219,59 +173,10 @@ where
     B: BlockQueries<Storage = S>,
 {
     fn push(&mut self, height: u64, hash: B256) {
-        self.ring_buffer.push(height, hash);
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct SharedHybridBlockHashCache<S, B> {
-    inner: Arc<RwLock<HybridBlockHashCache<S, B>>>,
-}
-
-impl<S, B> SharedHybridBlockHashCache<S, B>
-where
-    S: Clone,
-    B: Clone + BlockQueries<Storage = S>,
-{
-    pub fn new(storage: S, block_query: B) -> Self {
-        Self {
-            inner: Arc::new(RwLock::new(HybridBlockHashCache::new(storage, block_query))),
-        }
-    }
-
-    pub fn try_from_storage(storage: S, block_query: B) -> Result<Self, B::Err> {
-        let cache = HybridBlockHashCache::try_from_storage(storage, block_query)?;
-
-        Ok(Self {
-            inner: Arc::new(RwLock::new(cache)),
-        })
-    }
-}
-
-impl<S, B> BlockHashLookup for SharedHybridBlockHashCache<S, B>
-where
-    S: Clone,
-    B: Clone + BlockQueries<Storage = S>,
-{
-    fn hash_by_number(&self, number: u64) -> Option<B256> {
-        if let Ok(cache) = self.inner.read() {
-            cache.hash_by_number(number)
-        } else {
-            // TODO: deal with poisoning?
-            None
-        }
-    }
-}
-
-impl<S, B> BlockHashWriter for SharedHybridBlockHashCache<S, B>
-where
-    S: Clone,
-    B: Clone + BlockQueries<Storage = S>,
-{
-    fn push(&mut self, height: u64, hash: B256) {
-        if let Ok(mut cache) = self.inner.write() {
-            cache.push(height, hash)
-        }
+        self.ring_buffer
+            .write()
+            .expect("Lock not poisoned")
+            .push(height, hash);
     }
 }
 

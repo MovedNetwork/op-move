@@ -7,24 +7,18 @@ use {
     alloy::{
         primitives::utils::parse_ether,
         providers::{self, network::AnyNetwork},
-        sol,
     },
     aptos_types::transaction::EntryFunction,
     move_core_types::{ident_str, language_storage::ModuleId, value::MoveValue},
     move_vm_types::{value_serde::ValueSerDeContext, values::Value},
     revm::primitives::{TxKind, U256},
     umi_evm_ext::{
-        CODE_LAYOUT, EVM_NATIVE_ADDRESS, EVM_NATIVE_MODULE, state::InMemoryStorageTrieRepository,
+        CODE_LAYOUT, EVM_NATIVE_ADDRESS, EVM_NATIVE_MODULE, erc20::abi_bindings::Erc20,
+        state::InMemoryStorageTrieRepository,
     },
     umi_shared::primitives::{ToEthAddress, ToMoveAddress, ToMoveU256},
     umi_state::{InMemoryState, State},
 };
-
-sol!(
-    #[sol(rpc)]
-    ERC20,
-    "../server/src/tests/res/ERC20.json"
-);
 
 /// Tests that EVM native works by deploying an ERC-20 contract and
 /// then having a user transfer some tokens between accounts.
@@ -39,7 +33,7 @@ fn test_evm() {
     let provider = providers::builder::<AnyNetwork>()
         .with_recommended_fillers()
         .on_http("http://localhost:1234".parse().unwrap());
-    let deploy = ERC20::deploy_builder(
+    let deploy = Erc20::deploy_builder(
         &provider,
         "Gold".into(),
         "AU".into(),
@@ -55,7 +49,7 @@ fn test_evm() {
     // The ERC-20 contract produces a log because it minted some tokens.
     // We can use this log to get the address of the newly deployed contract.
     let contract_address = outcome.logs[0].address;
-    let deployed_contract = ERC20::new(contract_address, &provider);
+    let deployed_contract = Erc20::new(contract_address, &provider);
     let contract_move_address = contract_address.to_move_address();
 
     // -------- Transfer ERC-20 tokens

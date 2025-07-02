@@ -1,6 +1,6 @@
 use {
     super::*,
-    alloy::{network::AnyNetwork, primitives::U256, providers, sol, sol_types::SolValue},
+    alloy::{network::AnyNetwork, primitives::U256, providers, sol_types::SolValue},
     move_binary_format::errors::VMError,
     umi_evm_ext::EvmNativeOutcome,
 };
@@ -155,17 +155,13 @@ fn test_erc20_metadata() {
 }
 
 fn deploy_mock_erc20(ctx: &mut TestContext, mint_amount: U256) -> Address {
-    sol!(
-        #[sol(rpc)]
-        ERC20,
-        "../server/src/tests/res/ERC20.json"
-    );
+    use umi_evm_ext::erc20::abi_bindings::Erc20;
 
     // We just need a mock to get proper calldata
     let mock_provider = providers::builder::<AnyNetwork>()
         .with_recommended_fillers()
         .on_http("http://localhost:1234".parse().unwrap());
-    let deploy = ERC20::deploy_builder(
+    let deploy = Erc20::deploy_builder(
         &mock_provider,
         "Gold".into(),
         "AU".into(),

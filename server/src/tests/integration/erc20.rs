@@ -3,15 +3,13 @@ use {
     super::*,
     alloy::sol_types::SolEvent,
     move_vm_runtime::session::SerializedReturnValues,
-    umi_evm_ext::{extract_evm_result, EVM_NATIVE_ADDRESS, EVM_NATIVE_OUTCOME_LAYOUT},
+    umi_evm_ext::{
+        erc20::abi_bindings::Erc20, extract_evm_result, EVM_NATIVE_ADDRESS,
+        EVM_NATIVE_OUTCOME_LAYOUT,
+    },
     umi_shared::primitives::{ToEthAddress, ToMoveU256},
 };
 
-alloy::sol!(
-    #[sol(rpc)]
-    Erc20,
-    "src/tests/res/ERC20.json"
-);
 mod erc20_factory {
     alloy::sol!(
         #[sol(rpc)]

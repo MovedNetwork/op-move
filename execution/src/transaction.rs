@@ -508,7 +508,16 @@ impl TransactionData {
                     // transaction as a base token transfer between EOAs.
                     Ok(Self::EoaBaseTokenTransfer(to))
                 } else {
-                    let tx_data: SerializableTransactionData = bcs::from_bytes(&tx.data)?;
+                    let tx_data: SerializableTransactionData =
+                        bcs::from_bytes(&tx.data).or_else(|e| {
+                            if umi_evm_ext::erc20::Erc20Methods::try_parse(&tx.data).is_some() {
+                                Ok(SerializableTransactionData::EvmContract {
+                                    data: Cow::Borrowed(&tx.data),
+                                })
+                            } else {
+                                Err(e)
+                            }
+                        })?;
                     // Inner value should be an entry function type or EVM contract.
                     match tx_data {
                         SerializableTransactionData::EntryFunction(entry_fn) => {

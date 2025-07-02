@@ -72,7 +72,7 @@ pub(super) mod fallible {
                 Err(error) if tries.next().is_none() => panic!("{error}"),
                 Err(error) => {
                     let duration = Duration::from_secs(1);
-                    eprintln!("WARN: Failed to create state {error}, retrying in {duration:?}...");
+                    tracing::warn!("Failed to create state {error}, retrying in {duration:?}...");
                     std::thread::sleep(duration);
                 }
             }

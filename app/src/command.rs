@@ -207,8 +207,11 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
             };
             let outcome = match execute_transaction(input, &mut self.resolver_cache) {
                 Ok(outcome) => outcome,
+                e @ (Err(InvalidTransaction(_)) | Err(DatabaseState)) => {
+                    tracing::warn!("Filtered invalid transaction. hash={tx_hash:?} reason={e:?}");
+                    continue;
+                }
                 Err(User(e)) => unreachable!("User errors are handled in execution {e:?}"),
-                Err(InvalidTransaction(_)) | Err(DatabaseState) => continue,
                 Err(InvariantViolation(e)) => panic!("ERROR: execution error {e:?}"),
             };
 

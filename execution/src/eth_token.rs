@@ -200,8 +200,6 @@ pub fn transfer_eth<G: GasMeter>(
         &[],
     )?;
 
-    // FIXME: transfer function can fail if user has insufficient balance or if the gas meter
-    // is depleted, which is a potential attack vector
     session.execute_entry_function(
         function,
         vec![

@@ -288,7 +288,7 @@ pub fn get_eth_balance<G: GasMeter>(
             module_storage,
         )
         .map_err(|e| {
-            println!("{e:?}");
+            tracing::error!("get_eth_balance error: {e:?}");
 
             umi_shared::error::Error::eth_token_invariant_violation(
                 EthToken::GetBalanceAlwaysSucceeds,

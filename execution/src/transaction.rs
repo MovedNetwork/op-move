@@ -510,6 +510,10 @@ impl TransactionData {
                 } else {
                     let tx_data: SerializableTransactionData =
                         bcs::from_bytes(&tx.data).or_else(|e| {
+                            // If the data is not BCS-serialized then check if it
+                            // matches the ERC-20 ABI encoding. This allows Ethereum tools
+                            // like Metamask to directly interact with ERC-20 tokens on
+                            // our network.
                             if umi_evm_ext::erc20::Erc20Methods::try_parse(&tx.data).is_some() {
                                 Ok(SerializableTransactionData::EvmContract {
                                     data: Cow::Borrowed(&tx.data),

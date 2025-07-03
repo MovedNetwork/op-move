@@ -69,7 +69,7 @@ pub async fn deploy_l1_token(from_wallet: &PrivateKeySigner, rpc_url: &str) -> R
     )
     .await?;
 
-    let bridge_address = Address::from_str(&get_deployed_address("L1StandardBridgeProxy")?)?;
+    let bridge_address = Address::from_str(&get_deployed_address("l1StandardBridgeProxyAddress")?)?;
     contract
         .approve(bridge_address, U256::MAX)
         .send()
@@ -130,7 +130,7 @@ pub async fn deposit_l1_token(
         .wallet(EthereumWallet::from(from_wallet.to_owned()))
         .on_http(Url::parse(rpc_url)?);
 
-    let bridge_address = Address::from_str(&get_deployed_address("L1StandardBridgeProxy")?)?;
+    let bridge_address = Address::from_str(&get_deployed_address("l1StandardBridgeProxyAddress")?)?;
     let bridge_contract = bridge_l1::L1StandardBridge::new(bridge_address, provider);
     let receipt = bridge_contract
         .depositERC20(

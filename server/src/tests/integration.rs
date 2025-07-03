@@ -4,7 +4,7 @@ use {
         contract::CallBuilder,
         dyn_abi::EventExt,
         network::{EthereumWallet, TransactionBuilder},
-        primitives::{address, utils::parse_ether, Address, B256, U256},
+        primitives::{address, hex, utils::parse_ether, Address, B256, U256},
         providers::{Provider, ProviderBuilder},
         rpc::types::eth::TransactionRequest,
         signers::{
@@ -28,6 +28,7 @@ use {
         time::{Duration, Instant},
     },
     tokio::fs,
+    toml::Value as TomlValue,
     umi_execution::transaction::{ScriptOrDeployment, TransactionData},
     umi_server_args::{ConfigBuilder, DefaultLayer, OptionalAuthSocket, OptionalConfig},
     umi_shared::primitives::ToMoveAddress,
@@ -59,17 +60,15 @@ async fn test_on_ethereum() -> Result<()> {
     fund_accounts().await?;
     check_factory_deployer().await?;
 
-    // 3. Execute config.sh to generate a quickstart configuration file
-    generate_config();
-
-    // 4. Execute forge script to deploy the L1 contracts onto Ethereum
+    // 3. Use op-deployer to deploy the L1 contracts onto Ethereum
     deploy_l1_contracts();
 
-    // 5. Execute L2Genesis forge script to generate state dumps
-    state_dump();
+    deploy_l2_chain();
 
-    // 6. Generate genesis and jwt files and copy under deployments
-    generate_genesis();
+    // 4. Generate JSON files needed by op-geth and op-node
+    generate_genesis_and_rollup_config();
+
+    // 6. Generate jwt files and copy under deployments
     let jwt_secret = generate_jwt()?;
 
     // Background task to send transactions to L1 at regular intervals.
@@ -79,9 +78,11 @@ async fn test_on_ethereum() -> Result<()> {
 
     // 7. Init op-geth to start accepting requests
     let op_geth = init_and_start_op_geth()?;
+    eprintln!("op geth started");
 
     // 8. Start op-move to accept requests from the sequencer
     let op_move = run_op_move(jwt_secret);
+    eprintln!("op move started");
 
     // 9. In separate threads run op-node, op-batcher, op-proposer
     let (op_node, op_batcher, op_proposer) = run_op()?;
@@ -114,26 +115,23 @@ fn check_env_vars() {
 }
 
 fn check_programs() {
-    assert!(is_program_in_path("geth"));
-    assert!(is_program_in_path("op-geth"));
-    assert!(is_program_in_path("op-node"));
-    assert!(is_program_in_path("op-batcher"));
-    assert!(is_program_in_path("op-proposer"));
+    assert!(is_program_in_path("geth-new"));
+    assert!(is_program_in_path("op-geth-new"));
+    assert!(is_program_in_path("op-node-new"));
+    assert!(is_program_in_path("op-batcher-new"));
+    assert!(is_program_in_path("op-proposer-new"));
+    assert!(is_program_in_path("op-deployer"));
     assert!(is_program_in_path("cast"));
 }
 
 async fn fund_accounts() -> Result<()> {
     let from_wallet = get_prefunded_wallet().await?;
-    // Normally we just fund these accounts once, but for some reason to generate a genesis file
-    // we need at least 98 transactions on geth. So we repeat the transactions just to catch up.
-    for _ in 0..10 {
-        l1_send_ethers(&from_wallet, var("ADMIN_ADDRESS")?.parse()?, "10", true).await?;
-        l1_send_ethers(&from_wallet, var("BATCHER_ADDRESS")?.parse()?, "10", true).await?;
-        l1_send_ethers(&from_wallet, var("PROPOSER_ADDRESS")?.parse()?, "10", true).await?;
-        let factory_deployer_address = address!("3fAB184622Dc19b6109349B94811493BF2a45362");
-        l1_send_ethers(&from_wallet, factory_deployer_address, "1", true).await?;
-        l1_send_ethers(&from_wallet, heartbeat::ADDRESS, "10", true).await?;
-    }
+    l1_send_ethers(&from_wallet, var("ADMIN_ADDRESS")?.parse()?, "10", true).await?;
+    l1_send_ethers(&from_wallet, var("BATCHER_ADDRESS")?.parse()?, "10", true).await?;
+    l1_send_ethers(&from_wallet, var("PROPOSER_ADDRESS")?.parse()?, "10", true).await?;
+    let factory_deployer_address = address!("3fAB184622Dc19b6109349B94811493BF2a45362");
+    l1_send_ethers(&from_wallet, factory_deployer_address, "1", true).await?;
+    l1_send_ethers(&from_wallet, heartbeat::ADDRESS, "10", true).await?;
     Ok(())
 }
 
@@ -160,87 +158,256 @@ async fn check_factory_deployer() -> Result<()> {
         check_output(output);
     }
     assert_eq!(get_code_size(factory_address).await?, 69);
+    eprintln!("factory deployed");
     Ok(())
 }
 
-fn generate_config() {
-    let genesis_file = "optimism/packages/contracts-bedrock/deploy-config/umi.json";
-    let output = Command::new("./config.sh")
-        .current_dir("src/tests")
-        .env("DEPLOY_CONFIG_PATH", genesis_file)
-        .output()
-        .context("Call to config failed")
-        .unwrap();
-    check_output(output);
-}
-
 fn deploy_l1_contracts() {
-    let mut salt = [0; 32]; // 32 byte, u256 random salt for CREATE2 contract deployments
-    rand_bytes(&mut salt).unwrap();
-    let child_process = Command::new("forge")
+    let admin_address = &var("ADMIN_ADDRESS").expect("Missing admin address");
+    let l1_rpc_url = &var("L1_RPC_URL").expect("Missing Ethereum L1 RPC URL");
+    let private_key = &var("ADMIN_PRIVATE_KEY").expect("Missing admin private key");
+
+    std::fs::create_dir("src/tests/optimism/packages/contracts-bedrock/deployments/").unwrap();
+    File::create("src/tests/optimism/packages/contracts-bedrock/deployments/proxy-output.json")
+        .unwrap();
+    let bootstrap_process = Command::new("op-deployer")
         .current_dir("src/tests/optimism/packages/contracts-bedrock")
-        .env("DEPLOYMENT_CONTEXT", "umi")
-        .env("DEPLOY_CONFIG_PATH", "deploy-config/umi.json")
-        .env("IMPL_SALT", hex::encode(salt))
         .args([
-            "script",
-            "scripts/Deploy.s.sol:Deploy",
+            "bootstrap",
+            "proxy",
             "--private-key",
-            &var("ADMIN_PRIVATE_KEY").expect("Missing admin private key"),
-            "--broadcast",
-            "--rpc-url",
-            &var("L1_RPC_URL").expect("Missing Ethereum L1 RPC URL"),
-            "--slow",
-            "--legacy",
-            "--non-interactive",
+            private_key,
+            "--l1-rpc-url",
+            l1_rpc_url,
+            "--artifacts-locator",
+            "tag://op-contracts/v3.0.0",
+            "--proxy-owner",
+            admin_address,
+            "--outfile",
+            "deployments/proxy-output.json",
         ])
         .spawn()
         .unwrap();
-    check_output(child_process.wait_with_output().unwrap());
-}
+    check_output(bootstrap_process.wait_with_output().unwrap());
 
-fn state_dump() {
-    let output = Command::new("forge")
-        .current_dir("src/tests/optimism/packages/contracts-bedrock")
-        // Include contract address path in env var only for the genesis script.
-        // Globally setting this will make the L1 contracts deployment fail.
-        .env("CONTRACT_ADDRESSES_PATH", "deployments/1337-deploy.json")
-        .env("DEPLOY_CONFIG_PATH", "deploy-config/umi.json")
-        .args([
-            "script",
-            "scripts/L2Genesis.s.sol:L2Genesis",
-            "--sig",
-            "runWithAllUpgrades()",
-        ])
-        .output()
-        .context("Call to state dump failed")
-        .unwrap();
-    check_output(output);
-}
-
-fn generate_genesis() {
-    let output = Command::new("op-node")
+    File::create(
+        "src/tests/optimism/packages/contracts-bedrock/deployments/superchain-output.json",
+    )
+    .unwrap();
+    let bootstrap_process = Command::new("op-deployer")
         .current_dir("src/tests/optimism/packages/contracts-bedrock")
         .args([
-            "genesis",
-            "l2",
-            "--deploy-config",
-            "deploy-config/umi.json",
-            "--l1-deployments",
-            "deployments/1337-deploy.json",
-            "--l2-allocs",
-            "state-dump-42069.json",
-            "--outfile.l2",
-            "deployments/genesis.json",
-            "--outfile.rollup",
-            "deployments/rollup.json",
-            "--l1-rpc",
-            &var("L1_RPC_URL").expect("Missing Ethereum L1 RPC URL"),
+            "bootstrap",
+            "superchain",
+            "--private-key",
+            private_key,
+            "--l1-rpc-url",
+            l1_rpc_url,
+            "--artifacts-locator",
+            "tag://op-contracts/v3.0.0",
+            "--superchain-proxy-admin-owner",
+            admin_address,
+            "--protocol-versions-owner",
+            admin_address,
+            "--guardian",
+            admin_address,
+            "--outfile",
+            "deployments/superchain-output.json",
+            // the most current OP stack version (https://specs.optimism.io/protocol/superchain-upgrades.html#op-stack-protocol-versions),
+            // v9.0.0, hex encoded according to the above spec
+            "--required-protocol-version",
+            "0x0000000000000000000000000000000000000009000000000000000000000000",
+            "--recommended-protocol-version",
+            "0x0000000000000000000000000000000000000009000000000000000000000000",
         ])
+        .spawn()
+        .unwrap();
+    check_output(bootstrap_process.wait_with_output().unwrap());
+
+    let filename =
+        "src/tests/optimism/packages/contracts-bedrock/deployments/superchain-output.json";
+    let mut deploy_file =
+        File::open(filename).expect("Superchain output should exist after the previous step");
+    let mut content = String::new();
+    deploy_file.read_to_string(&mut content).unwrap();
+    let root: Value = serde_json::from_str(&content).unwrap();
+    let proxy_admin = root.get("proxyAdminAddress").unwrap().as_str().unwrap();
+    let config_proxy = dbg!(root
+        .get("superchainConfigProxyAddress")
+        .unwrap()
+        .as_str()
+        .unwrap());
+    let protocol_versions_proxy = root
+        .get("protocolVersionsProxyAddress")
+        .unwrap()
+        .as_str()
+        .unwrap();
+
+    File::create(
+        "src/tests/optimism/packages/contracts-bedrock/deployments/bootstrap-implementations.json",
+    )
+    .unwrap();
+    let bootstrap_process = Command::new("op-deployer")
+        .current_dir("src/tests/optimism/packages/contracts-bedrock")
+        .args([
+            "bootstrap",
+            "implementations",
+            "--private-key",
+            private_key,
+            "--l1-rpc-url",
+            l1_rpc_url,
+            "--outfile",
+            "deployments/bootstrap-implementations.json",
+            "--upgrade-controller",
+            admin_address,
+            "--artifacts-locator",
+            "tag://op-contracts/v3.0.0",
+            "--l1-contracts-release",
+            "tag://op-contracts/v3.0.0",
+            "--superchain-proxy-admin",
+            proxy_admin,
+            "--superchain-config-proxy",
+            config_proxy,
+            "--protocol-versions-proxy",
+            protocol_versions_proxy,
+        ])
+        .spawn()
+        .unwrap();
+    check_output(bootstrap_process.wait_with_output().unwrap());
+    eprintln!("l1 deployed");
+}
+
+fn deploy_l2_chain() {
+    // TODO: generate the intent file via op-deployer init instead of copying a readymade
+    let l1_rpc_url = &var("L1_RPC_URL").expect("Missing Ethereum L1 RPC URL");
+    let private_key = &var("ADMIN_PRIVATE_KEY").expect("Missing admin private key");
+
+    let init_process = Command::new("op-deployer")
+        .current_dir("src/tests/optimism/packages/contracts-bedrock")
+        .args([
+            "init",
+            "--l2-chain-ids",
+            "42069",
+            "--l1-chain-id",
+            "1337",
+            "--intent-type",
+            "custom",
+        ])
+        .spawn()
+        .unwrap();
+    check_output(init_process.wait_with_output().unwrap());
+
+    populate_intent_file();
+
+    let apply_process = Command::new("op-deployer")
+        .current_dir("src/tests/optimism/packages/contracts-bedrock")
+        .args([
+            "apply",
+            "--private-key",
+            private_key,
+            "--l1-rpc-url",
+            l1_rpc_url,
+        ])
+        .spawn()
+        .unwrap();
+    check_output(apply_process.wait_with_output().unwrap());
+}
+
+fn populate_intent_file() {
+    let admin_addr = var("ADMIN_ADDRESS").expect("Missing admin address");
+
+    let intent_content =
+        std::fs::read_to_string("src/tests/optimism/packages/contracts-bedrock/intent.toml")
+            .unwrap();
+    let mut config: TomlValue = toml::from_str(&intent_content).unwrap();
+
+    config["l1ContractsLocator"] = TomlValue::String("tag://op-contracts/v3.0.0".to_string());
+    config["l2ContractsLocator"] = TomlValue::String("tag://op-contracts/v3.0.0".to_string());
+
+    // Update superchainRoles
+    config["superchainRoles"]["proxyAdminOwner"] = TomlValue::String(admin_addr.clone());
+    config["superchainRoles"]["protocolVersionsOwner"] = TomlValue::String(admin_addr.clone());
+    config["superchainRoles"]["guardian"] = TomlValue::String(admin_addr.clone());
+
+    // Update chains[0]
+    config["chains"][0]["baseFeeVaultRecipient"] = TomlValue::String(admin_addr.clone());
+    config["chains"][0]["l1FeeVaultRecipient"] = TomlValue::String(admin_addr.clone());
+    config["chains"][0]["sequencerFeeVaultRecipient"] = TomlValue::String(admin_addr.clone());
+    config["chains"][0]["eip1559DenominatorCanyon"] = TomlValue::Integer(50);
+    config["chains"][0]["eip1559Denominator"] = TomlValue::Integer(50);
+    config["chains"][0]["eip1559Elasticity"] = TomlValue::Integer(6);
+
+    // Update chain roles
+    config["chains"][0]["roles"]["l1ProxyAdminOwner"] = TomlValue::String(admin_addr.clone());
+    config["chains"][0]["roles"]["l2ProxyAdminOwner"] = TomlValue::String(admin_addr.clone());
+    config["chains"][0]["roles"]["systemConfigOwner"] = TomlValue::String(admin_addr.clone());
+    config["chains"][0]["roles"]["unsafeBlockSigner"] = TomlValue::String(admin_addr.clone());
+    config["chains"][0]["roles"]["batcher"] =
+        TomlValue::String(var("BATCHER_ADDRESS").expect("Missing batcher address"));
+    config["chains"][0]["roles"]["proposer"] =
+        TomlValue::String(var("PROPOSER_ADDRESS").expect("Missing proposer address"));
+    // TODO:
+    config["chains"][0]["roles"]["challenger"] =
+        TomlValue::String("0x0000000000000000000000000000000000000001".to_string());
+
+    // Write back as TOML
+    let output = dbg!(toml::to_string_pretty(&config).unwrap());
+    std::fs::write(
+        "src/tests/optimism/packages/contracts-bedrock/intent.toml",
+        output,
+    )
+    .unwrap();
+}
+
+fn generate_genesis_and_rollup_config() {
+    let l1_deployments =
+        File::create("src/tests/optimism/packages/contracts-bedrock/deployments/l1.json").unwrap();
+    let l2_chain_id = "42069";
+    let output = Command::new("op-deployer")
+        .current_dir("src/tests/optimism/packages/contracts-bedrock")
+        .args(["inspect", "l1", l2_chain_id])
+        .stdout(l1_deployments)
         .output()
-        .context("Call to state dump failed")
+        .context("Call to inspect L1 failed")
         .unwrap();
     check_output(output);
+
+    let genesis =
+        File::create("src/tests/optimism/packages/contracts-bedrock/deployments/genesis.json")
+            .unwrap();
+    let output = Command::new("op-deployer")
+        .current_dir("src/tests/optimism/packages/contracts-bedrock")
+        .args(["inspect", "genesis", l2_chain_id])
+        .stdout(genesis)
+        .output()
+        .context("Call to inspect genesis failed")
+        .unwrap();
+    check_output(output);
+
+    let rollup =
+        File::create("src/tests/optimism/packages/contracts-bedrock/deployments/rollup.json")
+            .unwrap();
+    let output = Command::new("op-deployer")
+        .current_dir("src/tests/optimism/packages/contracts-bedrock")
+        .args(["inspect", "rollup", l2_chain_id])
+        .stdout(rollup)
+        .output()
+        .context("Call to inspect rollup failed")
+        .unwrap();
+    check_output(output);
+
+    // let deploy_config =
+    //     File::create("src/tests/optimism/packages/contracts-bedrock/deployments/rollup.json")
+    //         .unwrap();
+    // let output = Command::new("op-deployer")
+    //     .current_dir("src/tests/optimism/packages/contracts-bedrock")
+    //     .args(["inspect", "rollup", "--workdir", "deployments", l2_chain_id])
+    //     .stdout(rollup)
+    //     .output()
+    //     .context("Call to inspect rollup failed")
+    //     .unwrap();
+    // check_output(output);
+    eprintln!("genesis gened");
 }
 
 fn generate_jwt() -> Result<String> {
@@ -253,7 +420,7 @@ fn generate_jwt() -> Result<String> {
 
 async fn start_geth() -> Result<Child> {
     let geth_logs = File::create("geth.log").unwrap();
-    let geth_process = Command::new("geth")
+    let geth_process = Command::new("geth-new")
         .current_dir("src/tests/optimism/")
         .args([
             // Ephemeral proof-of-authority network with a pre-funded developer account,
@@ -271,6 +438,8 @@ async fn start_geth() -> Result<Child> {
             "*",
             "--http.api",
             "web3,debug,eth,txpool,net,engine",
+            // "--state.scheme",
+            // "hash",
         ])
         .stderr(geth_logs)
         .spawn()?;
@@ -281,7 +450,7 @@ async fn start_geth() -> Result<Child> {
 
 fn init_and_start_op_geth() -> Result<Child> {
     // Initialize the datadir with genesis
-    let output = Command::new("op-geth")
+    let output = Command::new("op-geth-new")
         .current_dir("src/tests/optimism/packages/contracts-bedrock")
         .args([
             "init",
@@ -294,7 +463,7 @@ fn init_and_start_op_geth() -> Result<Child> {
     check_output(output);
     let op_geth_logs = File::create("op_geth.log").unwrap();
     // Run geth as a child process, so we can continue with the test
-    let op_geth_process = Command::new("op-geth")
+    let op_geth_process = Command::new("op-geth-new")
         // Geth fails to start IPC when the directory name is too long, so simply keeping it short
         .current_dir("src/tests/optimism/packages/contracts-bedrock")
         .args([
@@ -322,8 +491,8 @@ fn init_and_start_op_geth() -> Result<Child> {
             "debug,eth,txpool,net,engine",
             "--syncmode",
             "full",
-            "--gcmode",
-            "archive",
+            // "--gcmode",
+            // "archive",
             "--nodiscover",
             "--maxpeers",
             "0",
@@ -338,6 +507,8 @@ fn init_and_start_op_geth() -> Result<Child> {
             "--authrpc.jwtsecret",
             "deployments/jwt.txt",
             "--rollup.disabletxpoolgossip",
+            // "--state.scheme",
+            // "hash",
         ])
         .stderr(op_geth_logs)
         .spawn()?;
@@ -364,7 +535,7 @@ fn run_op_move(jwt_secret: String) -> tokio::task::JoinHandle<()> {
 
 fn run_op() -> Result<(Child, Child, Child)> {
     let op_node_logs = File::create("op_node.log").unwrap();
-    let op_node_process = Command::new("op-node")
+    let op_node_process = Command::new("op-node-new")
         .current_dir("src/tests/optimism/packages/contracts-bedrock")
         .args([
             "--l1.beacon.ignore",
@@ -396,7 +567,7 @@ fn run_op() -> Result<(Child, Child, Child)> {
         .spawn()?;
 
     let op_batcher_logs = File::create("op_batcher.log").unwrap();
-    let op_batcher_process = Command::new("op-batcher")
+    let op_batcher_process = Command::new("op-batcher-new")
         .args([
             "--l2-eth-rpc",
             "http://localhost:8545",
@@ -428,7 +599,7 @@ fn run_op() -> Result<(Child, Child, Child)> {
         .spawn()?;
 
     let op_proposer_logs = File::create("op_proposer.log").unwrap();
-    let op_proposer_process = Command::new("op-proposer")
+    let op_proposer_process = Command::new("op-proposer-new")
         .args([
             "--poll-interval",
             "12s",
@@ -436,8 +607,8 @@ fn run_op() -> Result<(Child, Child, Child)> {
             "8560",
             "--rollup-rpc",
             "http://localhost:8547",
-            "--l2oo-address",
-            &get_deployed_address("L2OutputOracleProxy")?,
+            // "--l2oo-address",
+            // &get_deployed_address("L2OutputOracleProxy")?,
             "--private-key",
             &var("PROPOSER_PRIVATE_KEY").expect("Missing proposer private key"),
             "--l1-eth-rpc",
@@ -454,15 +625,16 @@ fn run_op() -> Result<(Child, Child, Child)> {
 
 async fn use_optimism_bridge() -> Result<()> {
     pause(Some(Duration::from_secs(OP_START_IN_SECS)));
+    eprintln!("bridging");
 
     // Deposit via standard bridge
     deposit_eth_to_l2(Address::from_str(&get_deployed_address(
-        "L1StandardBridgeProxy",
+        "l1StandardBridgeProxyAddress",
     )?)?)
     .await?;
     // Deposit via Optimism Portal
     deposit_eth_to_l2(Address::from_str(&get_deployed_address(
-        "OptimismPortalProxy",
+        "optimismPortalProxyAddress",
     )?)?)
     .await?;
 
@@ -597,21 +769,16 @@ fn cleanup_files() {
     std::fs::remove_dir_all(format!("{}/broadcast", base)).ok();
     std::fs::remove_dir_all(format!("{}/cache", base)).ok();
     std::fs::remove_dir_all(format!("{}/forge-artifacts", base)).ok();
-    std::fs::remove_file(format!("{}/deploy-config/umi.json", base)).ok();
-    std::fs::remove_file(format!("{}/deployments/1337-deploy.json", base)).ok();
-    std::fs::remove_file(format!("{}/deployments/31337-deploy.json", base)).ok();
-    std::fs::remove_file(format!("{}/state-dump-42069.json", base)).ok();
-    std::fs::remove_file(format!("{}/state-dump-42069-delta.json", base)).ok();
-    std::fs::remove_file(format!("{}/state-dump-42069-ecotone.json", base)).ok();
-    std::fs::remove_file(format!("{}/deployments/genesis.json", base)).ok();
-    std::fs::remove_file(format!("{}/deployments/jwt.txt", base)).ok();
-    std::fs::remove_file(format!("{}/deployments/rollup.json", base)).ok();
+    std::fs::remove_dir_all(format!("{}/deployments", base)).ok();
     std::fs::remove_dir_all("src/tests/optimism/datadir").ok();
+    std::fs::remove_file(format!("{}/state.json", base)).ok();
+    std::fs::remove_file(format!("{}/intent.toml", base)).ok();
 }
 
 fn cleanup_processes(processes: Vec<Child>) -> Result<()> {
     for mut process in processes {
         process.kill()?;
+        process.wait()?;
     }
     Ok(())
 }
@@ -700,13 +867,13 @@ fn is_program_in_path(program: &str) -> bool {
 }
 
 fn get_deployed_address(field: &str) -> Result<String> {
-    // Read the oracle address from the list of deployed contract addresses
-    let filename = "src/tests/optimism/packages/contracts-bedrock/deployments/1337-deploy.json";
+    let filename = "src/tests/optimism/packages/contracts-bedrock/deployments/l1.json";
     let mut deploy_file = File::open(filename)?;
     let mut content = String::new();
     deploy_file.read_to_string(&mut content)?;
     let root: Value = serde_json::from_str(&content)?;
-    Ok(root.get(field).unwrap().as_str().unwrap().to_string())
+    let op_chain = root.get("opChainDeployment").unwrap();
+    Ok(op_chain.get(field).unwrap().as_str().unwrap().to_string())
 }
 
 async fn get_prefunded_wallet() -> Result<LocalSigner<SigningKey>> {

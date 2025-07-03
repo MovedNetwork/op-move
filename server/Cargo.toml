@@ -51,9 +51,10 @@ dotenvy.workspace = true
 eth_trie.workspace = true
 move-binary-format.workspace = true
 move-vm-runtime.workspace = true
+openssl.workspace = true
+toml.workspace = true
 umi-evm-ext.workspace = true
 umi-genesis-image.workspace = true
-openssl.workspace = true
 
 [[bin]]
 name = "op-move"

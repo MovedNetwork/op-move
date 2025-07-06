@@ -27,6 +27,10 @@ jobs:
           GCP_STORAGE_BUCKET: "integration-test-binaries"
           SOURCE_DIR: "*"
           DEST_DIR: "~/go/bin/"
+      - name: Debug_List_Cur_Dir
+        run: ls
+      - name: Debug_Json_File
+        run: less json_file.json
       - name: Debug_List_Files
         run: ls ~/go/bin/
       - name: Test

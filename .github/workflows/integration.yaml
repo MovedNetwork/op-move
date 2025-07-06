@@ -21,18 +21,21 @@ jobs:
           toolchain: stable
       - name: Free up disk space
         run: rm -rf /opt/hostedtoolcache
-      - name: Debug_Env_Var
-        run: echo ${{ secrets.GCP_SERVICE_ACCOUNT_KEY_FILE }}
-      - uses: braineanear/gcp-storage-download@main
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v1
         with:
-          GCP_SERVICE_ACCOUNT_KEY_FILE: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY_FILE }}
-          GCP_STORAGE_BUCKET: "integration-test-binaries"
-          SOURCE_DIR: "*"
-          DEST_DIR: "~/go/bin/"
+          workload_identity_provider: projects/blockchain-451501/locations/global/workloadIdentityPools/your-identity-pool/providers/your-provider
+          service_account: github-ci@your-project.iam.gserviceaccount.com
       - name: Debug_List_Cur_Dir
         run: ls
-      - name: Debug_Json_File
-        run: less json_file.json
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+      - name: Download files from GCS
+        run: |
+          gsutil cp -r gs://integration-test-binaries/* ~/go/bin
+
       - name: Debug_List_Files
         run: ls ~/go/bin/
       - name: Test

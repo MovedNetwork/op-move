@@ -12,8 +12,8 @@
   ],
   "author": "Umi Team",
   "devDependencies": {
-    "hardhat": "2.22.19",
-    "mocha": "11.1.0"
+    "hardhat": "2.25.0",
+    "mocha": "11.7.1"
   },
   "scripts": {
     "lint:fix": "prettier --write 'src/**/*.{js,ts}' 'test/**/*.{js,ts}' && tslint --fix --config tslint.json --project tsconfig.json",
@@ -28,7 +28,7 @@
     "@types/mocha": "10.0.10",
     "neverthrow": "8.2.0",
     "toml": "3.0.0",
-    "typescript": "5.8.2"
+    "typescript": "5.8.3"
   },
   "peerDependencies": {
     "hardhat": "2"

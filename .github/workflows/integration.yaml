@@ -21,6 +21,8 @@ jobs:
           toolchain: stable
       - name: Free up disk space
         run: rm -rf /opt/hostedtoolcache
+      - name: Debug_Env_Var
+        run: echo ${{ secrets.GCP_SERVICE_ACCOUNT_KEY_FILE }}
       - uses: braineanear/gcp-storage-download@main
         with:
           GCP_SERVICE_ACCOUNT_KEY_FILE: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY_FILE }}

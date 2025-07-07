@@ -1,7 +1,8 @@
-import { BCS, getRustConfig } from '@benfen/bcs';
+import { bcs } from "@mysten/bcs";
 import * as ChildProcess from 'child_process';
 import * as Fs from 'fs';
 import { TASK_COMPILE_GET_COMPILATION_TASKS } from 'hardhat/builtin-tasks/task-names';
+import { TASK_COMPILE_SOLIDITY } from 'hardhat/builtin-tasks/task-names';
 import { subtask, types } from 'hardhat/config';
 import { Artifacts } from 'hardhat/internal/artifacts';
 import { err, ok, Result } from 'neverthrow';
@@ -194,16 +195,10 @@ async function loadBytecode(packagePath: string, contractName: string): Promise<
         return err(new ChainedError(`Failed to load bytecode from ${bytecodePath}`, readFileRes.error));
     }
 
-    const bcs = new BCS(getRustConfig());
-    // Modules are encapsulated in an enum along with script transactions
-    bcs.registerEnumType('ScriptOrModule', {
-        Script: 'Vec<u8>',
-        Module: 'Vec<u8>',
-    });
     // Extract the byte array to serialize within the higher level enum
     const code = Uint8Array.from(Buffer.from(readFileRes.value, 'hex'));
-    const module = bcs.ser('ScriptOrModule', { Module: code });
-    return ok(module.toString('hex'));
+    const evmContract = UMI_SERIALIZER.serialize({ Module: code }).toBytes();
+    return ok(Buffer.from(evmContract).toString('hex'));
 }
 
 async function listCompiledContracts(packagePath: string): Promise<Result<string[], ChainedError>> {
@@ -317,6 +312,24 @@ async function buildPackageAndGenerateArtifacts(hardhatRootPath: string, package
 
 /***************************************************************************************
  *
+ *   Bytecode serializer from the generated Solidity or Move contract bytecode.
+ *
+ **************************************************************************************/
+const UMI_SERIALIZER = bcs.enum('ScriptOrDeployment', {
+    Script: bcs.byteVector(),
+    Module: bcs.byteVector(),
+    EvmContract: bcs.byteVector(),
+});
+
+const serializeSolidityBytecode = (bytecode: string): string => {
+    // Extract the byte array to serialize within the higher level enum
+    const code = Uint8Array.from(Buffer.from(bytecode.replace('0x', ''), 'hex'));
+    const evmContract = UMI_SERIALIZER.serialize({ EvmContract: code }).toBytes();
+    return '0x' + Buffer.from(evmContract).toString('hex');
+};
+
+/***************************************************************************************
+ *
  *   Move Compile Subtask (Entrypoint)
  *
  *   This adds a new subtask "compile:move" which is added to the queue when one runs
@@ -377,5 +390,16 @@ subtask(TASK_COMPILE_MOVE)
             throw new Error("Failed to build one or more Move packages");
         }
     })
+
+subtask(TASK_COMPILE_SOLIDITY)
+    .setAction(async (_, {artifacts}, runSuper) => {
+        await runSuper();
+        const names = await artifacts.getAllFullyQualifiedNames();
+        names.forEach(name => {
+            const artifact = artifacts.readArtifactSync(name);
+            artifact.bytecode = serializeSolidityBytecode(artifact.bytecode);
+            artifacts.saveArtifactAndDebugFile(artifact);
+        });
+    });
 
 module.exports = {};

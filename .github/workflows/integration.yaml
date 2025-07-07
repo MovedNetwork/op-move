@@ -31,13 +31,10 @@ jobs:
         with:
           service_account: github-ci@your-project.iam.gserviceaccount.com
           credentials_json: '${{ secrets.GOOGLE_CREDENTIALS }}'
-      - name: Debug_List_Cur_Dir
-        run: ls
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
       - name: Download files from GCS
-        run: |
-          gsutil cp -r gs://integration-test-binaries/* ~/go/bin
+        run: gsutil cp -r gs://integration-test-binaries ~/go/bin
 
       - name: Debug_List_Files
         run: ls ~/go/bin/

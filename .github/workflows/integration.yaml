@@ -22,6 +22,8 @@ jobs:
       - name: Free up disk space
         run: rm -rf /opt/hostedtoolcache
 
+      - name: Show PATH
+        run: echo $PATH
       - name: Authenticate to Google Cloud
         id: auth
         uses: google-github-actions/auth@v1

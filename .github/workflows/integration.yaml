@@ -13,6 +13,9 @@ jobs:
   integration:
     name: Integration
     runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write'
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -29,7 +32,7 @@ jobs:
           credentials_json: '${{ secrets.GOOGLE_CREDENTIALS }}'
       - name: Set up cloud SDK
         uses: google-github-actions/setup-gcloud@v1
-      - name: Download files from Cloud Storage
+      - name: Download files from cloud storage
         run: |
           gcloud storage cp -r gs://integration-test-binaries/* /usr/local/bin/
           chmod +x /usr/local/bin/geth /usr/local/bin/op-*

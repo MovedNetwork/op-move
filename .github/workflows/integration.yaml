@@ -34,7 +34,7 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
       - name: Download files from Google Cloud Storage
-        run: gsutil cp -r gs://integration-test-binaries/ ~/go/bin/
+        run: gcloud storage cp -r gs://integration-test-binaries/ ~/go/bin/
 
       - name: Debug_List_Files
         run: ls ~/go/bin/

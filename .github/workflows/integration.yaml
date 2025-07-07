@@ -22,8 +22,6 @@ jobs:
       - name: Free up disk space
         run: rm -rf /opt/hostedtoolcache
 
-      - name: Show PATH
-        run: echo $PATH
       - name: Authenticate to Google Cloud
         id: auth
         uses: google-github-actions/auth@v1
@@ -33,7 +31,7 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
       - name: Download files from Google Cloud Storage
-        run: gcloud storage cp -r gs://integration-test-binaries/ ~/go/bin/
+        run: gcloud storage cp -r gs://integration-test-binaries/ /usr/local/bin/
 
       - name: Debug_List_Files
         run: ls ~/go/bin/

@@ -35,17 +35,18 @@ jobs:
           gcloud storage cp -r gs://integration-test-binaries/* /usr/local/bin/
           chmod +x /usr/local/bin/geth /usr/local/bin/op-*
 
-      - name: Debug_List_Files
-        run: ls -al /usr/local/bin/
+      - name: Clone Optimism
+        run:  git clone --branch v1.7.6 --depth 1 https://github.com/ethereum-optimism/optimism.git
+
+      - name: Check optimism
+        run: |
+          ls server/src/tests
+          cd server/src/tests/optimism
+          git tag
+
 #      - name: Integration test
 #        run: cargo test --release test_on_ethereum
-      - name: Mock log files
-        run: |
-          echo "test geth" > server/geth.log
-          echo "test op-batcher" > server/op_batcher.log
-          echo "test op-geth" > server/op_geth.log
-          echo "test op-node" > server/op_node.log
-          echo "test op-proposer" > server/op_proposer.log
+
       - uses: actions/upload-artifact@v4
         with:
           name: Logs

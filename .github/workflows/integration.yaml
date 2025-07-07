@@ -31,10 +31,10 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
       - name: Download files from Google Cloud Storage
-        run: gcloud storage cp -r gs://integration-test-binaries/ /usr/local/bin/
+        run: gcloud storage cp -r gs://integration-test-binaries/* /usr/local/bin/
 
       - name: Debug_List_Files
-        run: ls ~/go/bin/
+        run: ls -al /usr/local/bin/
       - name: Test
         run: cargo test --release test_on_ethereum
       - uses: actions/upload-artifact@v4

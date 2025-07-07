@@ -13,6 +13,9 @@ jobs:
   integration:
     name: Integration
     runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write'
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -28,6 +31,7 @@ jobs:
         with:
           workload_identity_provider: projects/blockchain-451501/locations/global/workloadIdentityPools/your-identity-pool/providers/your-provider
           service_account: github-ci@your-project.iam.gserviceaccount.com
+          credentials_json: '${{ secrets.GOOGLE_CREDENTIALS }}'
       - name: Debug_List_Cur_Dir
         run: ls
       - name: Set up Cloud SDK

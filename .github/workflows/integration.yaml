@@ -36,7 +36,7 @@ jobs:
           chmod +x /usr/local/bin/geth /usr/local/bin/op-*
 
       - name: Clone Optimism
-        run:  git clone --branch v1.7.6 --depth 1 https://github.com/ethereum-optimism/optimism.git
+        run:  git clone --branch v1.7.6 --depth 1 https://github.com/ethereum-optimism/optimism.git server/src/tests
 
       - name: Check optimism
         run: |

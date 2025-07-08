@@ -397,8 +397,11 @@ subtask(TASK_COMPILE_SOLIDITY)
         const names = await artifacts.getAllFullyQualifiedNames();
         names.forEach(name => {
             const artifact = artifacts.readArtifactSync(name);
-            artifact.bytecode = serializeSolidityBytecode(artifact.bytecode);
-            artifacts.saveArtifactAndDebugFile(artifact);
+            // Only update fresh builds. On a fresh build, the deployed and contract bytecodes start with same bytes.
+            if (artifact.bytecode.slice(0, 6) === artifact.deployedBytecode.slice(0, 6)) {
+                artifact.bytecode = serializeSolidityBytecode(artifact.bytecode);
+                artifacts.saveArtifactAndDebugFile(artifact);
+            }
         });
     });
 

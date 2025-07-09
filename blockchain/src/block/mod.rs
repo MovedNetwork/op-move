@@ -6,7 +6,14 @@
 
 mod gas;
 mod hash;
+
+// Safety: Unwraps allowed here because
+// (1) in-memory backend is only used in tests
+// (2) all unwraps come from `RwLock` poisoning, which should never happen
+// if the rest of the code does not panic.
+#[allow(clippy::unwrap_used)]
 mod in_memory;
+
 mod read;
 mod write;
 

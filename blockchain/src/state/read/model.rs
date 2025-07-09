@@ -1,19 +1,26 @@
 use {
     alloy::{
+        consensus::constants::KECCAK_EMPTY,
         primitives::keccak256,
         rpc::types::{EIP1186AccountProofResponse, EIP1186StorageProof},
     },
     eth_trie::{DB, EthTrie, Trie},
-    move_core_types::account_address::AccountAddress,
+    move_binary_format::errors::PartialVMError,
+    move_core_types::{account_address::AccountAddress, vm_status::StatusCode},
     move_table_extension::TableResolver,
-    move_vm_types::resolver::MoveResolver,
+    move_vm_types::{
+        resolver::{ModuleResolver, MoveResolver, ResourceResolver},
+        value_serde::ValueSerDeContext,
+        values::VMValueCast,
+    },
     std::error,
     umi_evm_ext::{
-        ResolverBackedDB,
+        CODE_LAYOUT, EVM_NATIVE_ADDRESS, ResolverBackedDB,
         state::{self, StorageTrieRepository},
+        type_utils::{account_info_struct_tag, code_hash_struct_tag},
     },
     umi_execution::{quick_get_eth_balance, quick_get_nonce},
-    umi_shared::primitives::{Address, B256, KeyHashable, U256},
+    umi_shared::primitives::{Address, B256, Bytes, KeyHashable, ToEthAddress, U256},
     umi_state::nodes::TreeKey,
 };
 
@@ -80,6 +87,61 @@ pub trait StateQueries {
         storage_slots: &[U256],
         height: BlockHeight,
     ) -> Result<ProofResponse, state::Error>;
+
+    /// Queries the blockchain state version corresponding with block `height` for the  
+    /// `account` EVM bytecode.
+    fn evm_bytecode_at(
+        &self,
+        account: AccountAddress,
+        height: BlockHeight,
+    ) -> Result<Option<Bytes>, state::Error> {
+        let address = account.to_eth_address();
+        let resolver = self.resolver_at(height)?;
+        let struct_tag = account_info_struct_tag(&address);
+
+        let meta_data = resolver.get_module_metadata(&struct_tag.module_id());
+        let (Some(resource), _) = resolver.get_resource_bytes_with_metadata_and_layout(
+            &EVM_NATIVE_ADDRESS,
+            &struct_tag,
+            &meta_data,
+            None,
+        )?
+        else {
+            return Ok(None);
+        };
+
+        let account = state::Account::try_deserialize(&resource)
+            .expect("EVM account info should be deserializable");
+
+        let code_hash = account.inner.code_hash;
+
+        if code_hash == KECCAK_EMPTY {
+            return Ok(Some(Bytes::new()));
+        }
+
+        let struct_tag = code_hash_struct_tag(&code_hash);
+        let meta_data = resolver.get_module_metadata(&struct_tag.module_id());
+        let resource = resolver
+            .get_resource_bytes_with_metadata_and_layout(
+                &EVM_NATIVE_ADDRESS,
+                &struct_tag,
+                &meta_data,
+                None,
+            )?
+            .0
+            .ok_or_else(|| {
+                PartialVMError::new(StatusCode::MISSING_DATA).with_message(format!(
+                    "Missing EVM code corresponding to code hash {}",
+                    struct_tag.name
+                ))
+            })?;
+        let value = ValueSerDeContext::new()
+            .deserialize(&resource, &CODE_LAYOUT)
+            .expect("EVM bytecode should be deserializable");
+        let bytes: Vec<u8> = value.cast()?;
+
+        Ok(Some(bytes.into()))
+    }
 
     fn resolver_at(
         &self,

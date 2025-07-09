@@ -41,7 +41,7 @@ impl DbWithRoot for RocksEthStorageTrieDb {
         Ok(self
             .db
             .get_cf(self.root_cf(), self.account.as_slice())?
-            .map(|v| B256::new(v.try_into().unwrap())))
+            .map(|v| B256::from_slice(&v)))
     }
 
     fn put_root(&self, root: B256) -> Result<(), rocksdb::Error> {

@@ -2,8 +2,11 @@ use {
     super::tag_validation::{validate_entry_type_tag, validate_entry_value},
     crate::{ADDRESS_LAYOUT, SIGNER_LAYOUT, U256_LAYOUT, layout::has_value_invariants},
     alloy::primitives::Address,
-    aptos_types::transaction::{EntryFunction, Module, Script},
-    move_binary_format::CompiledModule,
+    aptos_types::{
+        transaction::{EntryFunction, Module, Script},
+        vm_status::StatusCode,
+    },
+    move_binary_format::{CompiledModule, errors::PartialVMError},
     move_core_types::{
         account_address::AccountAddress,
         effects::{ChangeSet, Op},
@@ -191,8 +194,7 @@ pub(super) fn execute_evm_contract<G: GasMeter, MS: ModuleStorage>(
 ) -> umi_shared::error::Result<EvmNativeOutcome> {
     let module = ModuleId::new(EVM_NATIVE_ADDRESS, EVM_NATIVE_MODULE.into());
     let function_name = EVM_CALL_FN_NAME;
-    // Unwraps in serialization are safe because the layouts match the types.
-    let args: Vec<Vec<u8>> = [
+    let args: Result<Vec<Vec<u8>>, Error> = [
         (Value::master_signer(*signer), &SIGNER_LAYOUT),
         (Value::address(*contract), &ADDRESS_LAYOUT),
         (Value::u256(value.to_move_u256()), &U256_LAYOUT),
@@ -200,10 +202,12 @@ pub(super) fn execute_evm_contract<G: GasMeter, MS: ModuleStorage>(
     ]
     .into_iter()
     .map(|(value, layout)| {
-        ValueSerDeContext::new()
-            .serialize(&value, layout)
-            .unwrap()
-            .unwrap()
+        Ok(ValueSerDeContext::new()
+            .serialize(&value, layout)?
+            .ok_or_else(|| {
+                PartialVMError::new(StatusCode::VALUE_SERIALIZATION_ERROR)
+                    .with_message("Failed to serialize EVM contract call args".into())
+            })?)
     })
     .collect();
     let outcome = session
@@ -211,7 +215,7 @@ pub(super) fn execute_evm_contract<G: GasMeter, MS: ModuleStorage>(
             &module,
             function_name,
             Vec::new(),
-            args,
+            args?,
             gas_meter,
             traversal_context,
             module_storage,
@@ -263,7 +267,9 @@ pub(super) fn deploy_module(
         } else {
             Op::New(bytes)
         };
-        writes.add_module_op(module_id, op).unwrap();
+        writes
+            .add_module_op(module_id, op)
+            .expect("No duplicate module IDs in `VerifiedModuleBundle`");
     }
 
     Ok((module.self_id(), writes))

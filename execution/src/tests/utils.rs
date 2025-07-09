@@ -461,6 +461,7 @@ impl TestContext {
             self.state.resolver(),
             &self.evm_storage,
         )
+        .unwrap()
     }
 
     /// Gets the nonce for an address.

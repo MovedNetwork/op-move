@@ -36,11 +36,11 @@ impl<'app, D: Dependencies<'app>> ApplicationReader<'app, D> {
     }
 
     pub fn balance_by_height(&self, address: Address, height: BlockNumberOrTag) -> Result<U256> {
-        Ok(self.state_queries.balance_at(
+        self.state_queries.balance_at(
             &self.evm_storage,
             address.to_move_address(),
             self.resolve_height(height)?,
-        )?)
+        )
     }
 
     pub fn nonce_by_height(&self, address: Address, height: BlockNumberOrTag) -> Result<u64> {

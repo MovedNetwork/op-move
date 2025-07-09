@@ -19,6 +19,8 @@ fn main() {
     save(&vm, &genesis_config, &storage_trie);
 }
 
+// Safety: genesis-image is only used in tests
+#[allow(clippy::unwrap_used)]
 pub fn save(
     vm: &UmiVm,
     config: &GenesisConfig,

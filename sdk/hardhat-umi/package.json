@@ -1,6 +1,6 @@
 {
   "name": "@moved/hardhat-plugin",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A plugin for Hardhat to support the development of Move smart contracts on the Umi Network.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

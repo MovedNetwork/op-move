@@ -50,7 +50,9 @@ struct Claims {
 }
 
 pub fn defaults() -> DefaultLayer {
-    let umi_root_path = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let umi_root_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("Cargo manifest has a parent");
     DefaultLayer::new(OptionalConfig {
         auth: Some(OptionalAuthSocket {
             addr: Some(SocketAddr::V4(SocketAddrV4::new(
@@ -113,7 +115,7 @@ pub async fn run(args: Config) {
         args.genesis.l2_contract_genesis.as_ref(),
         args.genesis.token_list.as_ref(),
     )
-    .unwrap();
+    .expect("Must construct genesis config to run the app");
 
     let deps = dependency::dependencies(args.db);
     let reader = {
@@ -122,7 +124,11 @@ pub async fn run(args: Config) {
         move || ApplicationReader::new(deps, &genesis_config)
     };
     let app = move || Application::new(deps, &genesis_config).with_genesis(&genesis_config);
-    let jwt = DecodingKey::from_secret(hex::decode(args.auth.jwt_secret).unwrap().as_slice());
+    let jwt = DecodingKey::from_secret(
+        hex::decode(args.auth.jwt_secret)
+            .expect("JWT secret must be valid")
+            .as_slice(),
+    );
 
     umi_app::run(
         (reader, app),
@@ -144,7 +150,10 @@ pub async fn run(args: Config) {
         },
     )
     .await
-    .unwrap();
+    .inspect_err(|e| {
+        tracing::error!("Failed to join spawned server task: {e:?}");
+    })
+    .ok();
 }
 
 fn serve(
@@ -212,7 +221,7 @@ impl<'db, D: Dependencies<'db>> GenesisStateExt for Application<'db, D> {
     fn is_state_empty(&self) -> bool {
         self.block_queries
             .latest(&self.storage_reader)
-            .unwrap()
+            .expect("Must access block queries to run app")
             .is_none()
     }
 
@@ -359,7 +368,8 @@ async fn mirror<'reader>(
 
     let is_zipped = headers
         .get("accept-encoding")
-        .map(|x| x.to_str().unwrap().contains("gzip"))
+        .and_then(|x| x.to_str().ok())
+        .map(|x| x.contains("gzip"))
         .unwrap_or(false);
     let request: Result<serde_json::Value, _> = serde_json::from_slice(&body);
     let parsed_geth_response = match proxy(path, query, method, headers.clone(), body, port).await {
@@ -403,9 +413,13 @@ async fn mirror<'reader>(
         op_move_response: &op_move_response,
         port,
     };
-    tracing::info!("{}", serde_json::to_string(&log).unwrap());
+    serde_json::to_string(&log)
+        .map(|json| tracing::info!("{json}"))
+        .ok();
 
-    let body = hyper::Body::from(serde_json::to_vec(&op_move_response).unwrap());
+    let body = hyper::Body::from(
+        serde_json::to_vec(&op_move_response).expect("Must be able to serialize response"),
+    );
     Ok(Response::new(body))
 }
 

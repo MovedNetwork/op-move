@@ -90,7 +90,7 @@ impl Default for GenesisConfig {
     fn default() -> Self {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
-            .unwrap()
+            .expect("Cargo manifest has a parent directory")
             .join("execution/src/tests/res/bridged_tokens_test.json");
         Self {
             chain_id: CHAIN_ID,

@@ -2,7 +2,7 @@ use {
     alloy::{primitives::Bloom, rlp::Decodable},
     op_alloy::consensus::OpTxEnvelope,
     umi_blockchain::{
-        block::{ExtendedBlock, Header},
+        block::Header,
         payload::{NewPayloadIdInput, PayloadId},
     },
     umi_execution::transaction::{NormalizedEthTransaction, NormalizedExtendedTxEnvelope},
@@ -67,9 +67,6 @@ pub enum Command {
     },
     AddTransaction {
         tx: NormalizedEthTransaction,
-    },
-    GenesisUpdate {
-        block: ExtendedBlock,
     },
 }
 

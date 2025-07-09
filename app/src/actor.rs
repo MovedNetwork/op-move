@@ -24,10 +24,17 @@ pub struct CommandActor<'actor, 'app, D: Dependencies<'app>> {
     app: &'actor mut Application<'app, D>,
 }
 
+// Marker struct for errors where the app has no choice but to
+// stop receiving commands and drop.
+#[derive(Debug)]
+pub(crate) struct UnrecoverableAppFailure;
+
 impl<'app, D: DependenciesThreadSafe<'app>> CommandActor<'_, 'app, D> {
     pub async fn work(mut self) {
         while let Some(msg) = self.rx.recv().await {
-            Self::handle_command(&mut *self.app, msg);
+            if Self::handle_command(&mut *self.app, msg).is_err() {
+                break;
+            }
         }
     }
 }
@@ -37,14 +44,19 @@ impl<'actor, 'app, D: Dependencies<'app>> CommandActor<'actor, 'app, D> {
         Self { rx, app }
     }
 
-    pub fn handle_command(mut app: impl DerefMut<Target = Application<'app, D>>, msg: Command) {
+    fn handle_command(
+        mut app: impl DerefMut<Target = Application<'app, D>>,
+        msg: Command,
+    ) -> Result<(), UnrecoverableAppFailure> {
         match msg {
             Command::StartBlockBuild {
                 payload_attributes,
                 payload_id,
             } => app.start_block_build(payload_attributes, payload_id),
-            Command::AddTransaction { tx } => app.add_transaction(tx),
-            Command::GenesisUpdate { block } => app.genesis_update(block),
+            Command::AddTransaction { tx } => {
+                app.add_transaction(tx);
+                Ok(())
+            }
         }
     }
 

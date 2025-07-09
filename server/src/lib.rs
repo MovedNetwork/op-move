@@ -240,7 +240,8 @@ impl<'db, D: Dependencies<'db>> GenesisStateExt for Application<'db, D> {
         );
 
         let genesis_block = create_genesis_block(&self.block_hash, genesis_config);
-        self.genesis_update(genesis_block);
+        self.genesis_update(genesis_block)
+            .expect("Must add genesis block to state");
     }
 }
 

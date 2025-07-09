@@ -242,7 +242,7 @@ pub async fn l2_erc20_balance_of(token: Address, account: Address, rpc_url: &str
             EVM_NATIVE_OUTCOME_LAYOUT.clone(),
         )]),
     };
-    let evm_result = extract_evm_result(return_values);
+    let evm_result = extract_evm_result(return_values).unwrap();
 
     Ok(U256::from_be_slice(&evm_result.output))
 }
@@ -287,7 +287,7 @@ pub async fn l2_erc20_allowance(
             EVM_NATIVE_OUTCOME_LAYOUT.clone(),
         )]),
     };
-    let evm_result = extract_evm_result(return_values);
+    let evm_result = extract_evm_result(return_values).unwrap();
 
     Ok(U256::from_be_slice(&evm_result.output))
 }

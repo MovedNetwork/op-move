@@ -100,7 +100,7 @@ pub(super) fn execute_deposited_transaction<
         )
         .map_err(Error::from)
         .and_then(|values| {
-            let evm_outcome = extract_evm_result(values);
+            let evm_outcome = extract_evm_result(values)?;
             if !evm_outcome.is_success {
                 return Err(UserError::DepositFailure(evm_outcome.output).into());
             }
@@ -145,7 +145,7 @@ pub(super) fn execute_deposited_transaction<
     let mut logs = events.logs();
     logs.extend(evm_logs);
     let gas_used = total_gas_used(&gas_meter, input.genesis_config);
-    let evm_changes = extract_evm_changes(&extensions);
+    let evm_changes = extract_evm_changes(&extensions)?;
     changes
         .squash(evm_changes.accounts)
         .expect("EVM changes must merge with other session changes");

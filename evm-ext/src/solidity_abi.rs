@@ -73,8 +73,12 @@ pub fn abi_encode_params(
     );
 
     // Safety: unwrap is safe because of the length check above
-    let value = args.pop_back().unwrap();
-    let prefix = args.pop_back().unwrap().value_as::<Vec<u8>>()?;
+    let value = args
+        .pop_back()
+        .ok_or(SafeNativeError::InvariantViolation(PartialVMError::new(
+            StatusCode::INDEX_OUT_OF_BOUNDS,
+        )))?;
+    let prefix = safely_pop_arg!(args, Vec<u8>);
     let ty_arg = safely_pop_type_arg!(ty_args);
 
     // Charge for the lookup of the type (twice because we need to get annotated and not).

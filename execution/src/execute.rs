@@ -164,7 +164,7 @@ pub(super) fn deploy_evm_contract<G: GasMeter, MS: ModuleStorage>(
         )
         .map_err(|e| User(UserError::Vm(e)))?;
 
-    let evm_outcome = extract_evm_result(outcome);
+    let evm_outcome = extract_evm_result(outcome)?;
 
     if !evm_outcome.is_success {
         return Err(User(UserError::EvmContractCreationFailure));
@@ -218,7 +218,7 @@ pub(super) fn execute_evm_contract<G: GasMeter, MS: ModuleStorage>(
         )
         .map_err(|e| User(UserError::Vm(e)))?;
 
-    let evm_outcome = extract_evm_result(outcome);
+    let evm_outcome = extract_evm_result(outcome)?;
 
     Ok(evm_outcome)
 }

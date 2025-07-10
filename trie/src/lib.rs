@@ -1,5 +1,5 @@
 pub use {
-    constructor::{FromOptRoot, TryFromOptRoot},
+    constructor::TryFromOptRoot,
     staging::StagingEthTrieDb,
 };
 

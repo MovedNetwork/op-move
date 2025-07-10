@@ -29,10 +29,7 @@ use {
         hyper::Response,
         Filter, Rejection, Reply,
     },
-    warp_reverse_proxy::{
-        extract_request_data_filter, Method,
-        Request,
-    },
+    warp_reverse_proxy::{extract_request_data_filter, Method, Request},
 };
 
 mod allow;

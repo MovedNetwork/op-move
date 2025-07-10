@@ -59,10 +59,11 @@ impl From<SerdeChanges<Bytes, Bytes>> for ChangeSet {
         for (acc, changes) in value.accounts {
             for (id, op) in changes.modules {
                 set.add_module_op(ModuleId::new(acc, id), op.into())
-                    .unwrap();
+                    .expect("Duplicate IDs are impossible in a map");
             }
             for (id, op) in changes.resources {
-                set.add_resource_op(acc, id, op.into()).unwrap();
+                set.add_resource_op(acc, id, op.into())
+                    .expect("Duplicate IDs are impossible in a map");
             }
         }
 

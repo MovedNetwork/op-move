@@ -21,7 +21,7 @@ impl StateQueries for MockStateQueries {
         _evm_storage: &impl StorageTrieRepository,
         account: AccountAddress,
         height: BlockHeight,
-    ) -> Result<Balance, state::Error> {
+    ) -> umi_shared::error::Result<Balance> {
         assert_eq!(account, self.0);
         assert_eq!(height, self.1);
 

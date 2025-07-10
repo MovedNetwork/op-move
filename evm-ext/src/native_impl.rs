@@ -139,10 +139,7 @@ fn evm_create(
     debug_assert!(ty_args.is_empty(), "No ty_args in EVM native");
     debug_assert_eq!(args.len(), 3, "EVM native args should be from, value, data");
 
-    // Safety: unwrap is safe because of the length check above
-    // Note: the `safely_pop_vec_arg` macro does not work well for `Vec<u8>`
-    // because it has a special runtime representation.
-    let data = args.pop_back().unwrap().value_as::<Vec<u8>>()?;
+    let data = safely_pop_arg!(args, Vec<u8>);
     let value = safely_pop_arg!(args, move_core_types::u256::U256);
     let caller = safely_pop_arg!(args, AccountAddress);
 
@@ -230,10 +227,7 @@ fn pop_evm_args(mut args: VecDeque<Value>) -> SafeNativeResult<EvmCallArgs> {
         "EVM native args should be from, to, value, data"
     );
 
-    // Safety: unwrap is safe because of the length check above
-    // Note: the `safely_pop_vec_arg` macro does not work well for `Vec<u8>`
-    // because it has a special runtime representation.
-    let data = args.pop_back().unwrap().value_as::<Vec<u8>>()?;
+    let data = safely_pop_arg!(args, Vec<u8>);
     let value = safely_pop_arg!(args, move_core_types::u256::U256);
     let to = safely_pop_arg!(args, AccountAddress);
     let caller = safely_pop_arg!(args, AccountAddress);

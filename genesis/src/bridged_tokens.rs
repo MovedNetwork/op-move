@@ -95,7 +95,7 @@ pub fn deploy_bridged_tokens(
             anyhow::bail!("Bridged token deployment failed: EVM outcome");
         }
     }
-    let new_changes = extract_evm_changes_from_native(&ctx);
+    let new_changes = extract_evm_changes_from_native(&ctx)?;
     l2_changes.accounts.squash(new_changes.accounts)?;
     for (address, trie_changes) in new_changes.storage {
         l2_changes.storage = l2_changes.storage.with_trie_changes(address, trie_changes);
@@ -239,7 +239,8 @@ fn test_deploy_bridged_tokens() {
     assert!(n_bridged_tokens > 0);
     let state = umi_state::InMemoryState::default();
     let storage = InMemoryStorageTrieRepository::new();
-    let l2_changes = crate::l2_contracts::init_state(config.l2_contract_genesis, &state, &storage);
+    let l2_changes =
+        crate::l2_contracts::init_state(config.l2_contract_genesis, &state, &storage).unwrap();
     let new_l2_changes = deploy_bridged_tokens(l2_changes.clone(), config.token_list).unwrap();
     let added_addresses = new_l2_changes
         .storage

@@ -33,7 +33,11 @@ macro_rules! int_impl {
         }
         impl<'de> FromKey<'de> for $int {
             fn from_key(slice: &'de [u8]) -> Self {
-                $int::from_be_bytes(slice.try_into().unwrap())
+                $int::from_be_bytes(
+                    slice
+                        .try_into()
+                        .expect("Can convert bytes representation of an integer key back into an integer")
+                )
             }
         }
     };
@@ -43,7 +47,7 @@ int_impl!(u64);
 
 impl<T: serde::Serialize> ToValue for T {
     fn to_value(&self) -> Vec<u8> {
-        serde_json::to_vec(self).unwrap()
+        serde_json::to_vec(self).expect("Must serialize values to bytes for writing to RocksDB")
     }
 }
 

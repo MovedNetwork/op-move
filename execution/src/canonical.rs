@@ -291,7 +291,7 @@ pub(super) fn execute_canonical_transaction<
     });
 
     let (mut user_changes, mut extensions) = session.finish_with_extensions(&code_storage)?;
-    let evm_changes = umi_evm_ext::extract_evm_changes(&extensions);
+    let evm_changes = umi_evm_ext::extract_evm_changes(&extensions)?;
     let table_changes = crate::table_changes::extract_table_changes(
         &mut extensions,
         code_storage.module_storage(),

@@ -156,7 +156,10 @@ impl ToTreeValues for Changes {
                         let key = if let Some(address) = evm_key_address(k) {
                             TreeKey::Evm(address)
                         } else {
-                            TreeKey::StateKey(StateKey::resource(address, k).unwrap())
+                            TreeKey::StateKey(
+                                StateKey::resource(address, k)
+                                    .expect("Creating a resource state key is infallible"),
+                            )
                         };
 
                         (key, value)

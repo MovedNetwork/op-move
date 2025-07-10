@@ -31,7 +31,7 @@ impl HeightToStateRootIndex for RocksDbStateRootIndex {
         Ok(self
             .db
             .get_pinned_cf(&self.cf(), height.to_key())?
-            .map(|v| B256::new(v.as_ref().try_into().unwrap())))
+            .map(|v| B256::from_slice(v.as_ref())))
     }
 
     fn height(&self) -> Result<u64, Self::Err> {

@@ -177,6 +177,10 @@ fn build_aptos_packages() -> anyhow::Result<()> {
     Ok(())
 }
 
+// Safety: this module is not part of the op-move production code.
+// It is only used a one-time setup for the pre-installed Move modules at genesis.
+// It is acceptable for this setup to panic if something is wrong with the local configuration.
+#[allow(clippy::unwrap_used)]
 fn fix_sui_packages() -> anyhow::Result<()> {
     // Addresses are mapped from 0x1, 0x2 to 0x21, 0x22 for conflict resolution
     let move_toml_file = &SUI_FRAMEWORK_DIR

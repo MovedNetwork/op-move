@@ -10,6 +10,9 @@ storage = ["storage-lmdb"]
 storage-lmdb = ["umi-storage-heed"]
 storage-rocksdb = ["umi-storage-rocksdb"]
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow.workspace = true
 aptos-types.workspace = true

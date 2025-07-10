@@ -43,7 +43,7 @@ impl TestContext<'static> {
         let genesis_block = create_test_genesis_block(&app.block_hash, &genesis_config);
         let head = genesis_block.hash;
         let timestamp = genesis_block.block.header.timestamp;
-        app.genesis_update(genesis_block);
+        app.genesis_update(genesis_block).unwrap();
 
         let (queue, state) = umi_app::create(&mut app, 10);
 

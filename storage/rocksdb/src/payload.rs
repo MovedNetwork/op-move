@@ -83,7 +83,7 @@ impl PayloadQueries for RocksDbPayloadQueries {
         let Some(slice) = db.get_pinned_cf(&cf(db), id.to_key())? else {
             return Ok(MaybePayloadResponse::Unknown);
         };
-        let hash = B256::new(slice.as_ref().try_into().unwrap());
+        let hash = B256::from_slice(slice.as_ref());
         let response = self
             .by_hash(db, hash)?
             .map_or(MaybePayloadResponse::Unknown, MaybePayloadResponse::Some);

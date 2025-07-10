@@ -58,7 +58,7 @@ impl BlockRepository for RocksDbBlockRepository<'_> {
             .iterator_cf(&height_cf(db), IteratorMode::End)
             .next()
             .transpose()?
-            .map(|(_, hash)| self.by_hash(db, B256::new(hash.as_ref().try_into().unwrap())))
+            .map(|(_, hash)| self.by_hash(db, B256::from_slice(hash.as_ref())))
             .transpose()?
             .flatten())
     }
@@ -121,7 +121,7 @@ impl BlockQueries for RocksDbBlockQueries {
         include_transactions: bool,
     ) -> Result<Option<BlockResponse>, Self::Err> {
         db.get_pinned_cf(&height_cf(db), height.to_key())?
-            .map(|hash| B256::new(hash.as_ref().try_into().unwrap()))
+            .map(|hash| B256::from_slice(hash.as_ref()))
             .map(|hash| self.by_hash(db, hash, include_transactions))
             .unwrap_or(Ok(None))
     }
@@ -135,12 +135,12 @@ impl BlockQueries for RocksDbBlockQueries {
     }
 }
 
-pub(crate) fn block_cf(db: &RocksDb) -> impl AsColumnFamilyRef + use<'_> {
+pub(crate) fn block_cf(db: &RocksDb) -> impl AsColumnFamilyRef {
     db.cf_handle(BLOCK_COLUMN_FAMILY)
         .expect("Column family should exist")
 }
 
-fn height_cf(db: &RocksDb) -> impl AsColumnFamilyRef + use<'_> {
+fn height_cf(db: &RocksDb) -> impl AsColumnFamilyRef {
     db.cf_handle(HEIGHT_COLUMN_FAMILY)
         .expect("Column family should exist")
 }

@@ -322,9 +322,9 @@ pub fn quick_get_eth_balance(
     account: &AccountAddress,
     state: &(impl MoveResolver + TableResolver),
     storage_trie: &impl StorageTrieRepository,
-) -> U256 {
+) -> Result<U256, umi_shared::error::Error> {
     let umi_vm = UmiVm::new(&Default::default());
-    let vm = umi_vm.create_move_vm().unwrap();
+    let vm = umi_vm.create_move_vm()?;
     let module_bytes_storage = ResolverBasedModuleBytesStorage::new(state);
     let code_storage = module_bytes_storage.as_unsync_code_storage(&umi_vm);
     // Noop block hash lookup is safe here because the EVM is not used for
@@ -341,7 +341,6 @@ pub fn quick_get_eth_balance(
         &mut gas_meter,
         &code_storage,
     )
-    .unwrap()
 }
 
 #[cfg(any(feature = "test-doubles", test))]

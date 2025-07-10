@@ -461,6 +461,7 @@ impl TestContext {
             self.state.resolver(),
             &self.evm_storage,
         )
+        .unwrap()
     }
 
     /// Gets the nonce for an address.
@@ -529,7 +530,7 @@ impl TestContext {
             )
             .unwrap();
 
-        let outcome = extract_evm_result(outcome);
+        let outcome = extract_evm_result(outcome).unwrap();
         let (changes, extensions) = session.finish_with_extensions(&code_storage).unwrap();
         (outcome, changes, extensions)
     }
@@ -587,7 +588,7 @@ impl TestContext {
     ) -> EvmNativeOutcome {
         let (outcome, mut changes, extensions) = self.quick_call(args, module_name, fn_name);
 
-        let evm_changes = extract_evm_changes(&extensions);
+        let evm_changes = extract_evm_changes(&extensions).unwrap();
         changes.squash(evm_changes.accounts).unwrap();
         drop(extensions);
 

@@ -4,6 +4,7 @@ use {
     umi_app::{Application, CommandActor, HybridBlockHashCache},
     umi_blockchain::state::EthTrieStateQueries,
     umi_genesis::config::GenesisConfig,
+    umi_shared::error::Error,
     umi_state::{EthTrieState, State},
     umi_storage_heed::{
         block, evm, evm_storage_trie, heed::EnvOpenOptions, payload, receipt, state, transaction,
@@ -84,7 +85,12 @@ impl<'db> umi_app::Dependencies<'db> for HeedDependencies {
     }
 
     fn on_payload() -> &'db Self::OnPayload {
-        &|state, id, hash| state.payload_queries.add_block_hash(id, hash).unwrap()
+        &|state, id, hash| {
+            state.payload_queries.add_block_hash(id, hash).map_err(|e| {
+                tracing::error!("on_payload callback failed: {e:?}");
+                Error::DatabaseState
+            })
+        }
     }
 
     fn on_tx() -> &'db Self::OnTx {
@@ -96,7 +102,10 @@ impl<'db> umi_app::Dependencies<'db> for HeedDependencies {
             state
                 .state_queries
                 .push_state_root(state.state.state_root())
-                .unwrap()
+                .map_err(|e| {
+                    tracing::error!("on_tx_batch callback failed: {e:?}");
+                    Error::DatabaseState
+                })
         }
     }
 
@@ -195,7 +204,12 @@ impl<'db> umi_app::Dependencies<'db> for HeedReaderDependencies {
     }
 
     fn on_payload() -> &'db Self::OnPayload {
-        &|state, id, hash| state.payload_queries.add_block_hash(id, hash).unwrap()
+        &|state, id, hash| {
+            state.payload_queries.add_block_hash(id, hash).map_err(|e| {
+                tracing::error!("on_payload callback failed: {e:?}");
+                Error::DatabaseState
+            })
+        }
     }
 
     fn on_tx() -> &'db Self::OnTx {
@@ -207,7 +221,10 @@ impl<'db> umi_app::Dependencies<'db> for HeedReaderDependencies {
             state
                 .state_queries
                 .push_state_root(state.state.state_root())
-                .unwrap()
+                .map_err(|e| {
+                    tracing::error!("on_tx_batch callback failed: {e:?}");
+                    Error::DatabaseState
+                })
         }
     }
 

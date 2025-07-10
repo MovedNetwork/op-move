@@ -4,7 +4,7 @@ use {
         native_evm_context::NativeEVMContext,
         type_utils::{account_info_struct_tag, code_hash_struct_tag, get_account_code_hash},
     },
-    crate::state::{self, StorageTrieChanges, StorageTrieRepository, StorageTriesChanges},
+    crate::state::{self, Error, StorageTrieChanges, StorageTrieRepository, StorageTriesChanges},
     move_core_types::{
         effects::{AccountChangeSet, ChangeSet, Op},
         language_storage::StructTag,
@@ -34,7 +34,7 @@ pub fn genesis_state_changes(
     genesis: alloy::genesis::Genesis,
     resolver: &impl MoveResolver,
     storage_trie: &impl StorageTrieRepository,
-) -> Changes {
+) -> Result<Changes, Error> {
     let mut result = ChangeSet::new();
     let empty_changes = AccountChangeSet::new();
     let mut account_changes = AccountChangeSet::new();
@@ -80,22 +80,24 @@ pub fn genesis_state_changes(
             &empty_changes,
             &mut account_changes,
             storage_trie,
-        );
+        )?;
         storage_tries = storage_tries.with_trie_changes(address, storage_changes);
     }
     result
         .add_account_changeset(EVM_NATIVE_ADDRESS, account_changes)
         .expect("EVM native changes must be added");
 
-    Changes::new(result, storage_tries)
+    Ok(Changes::new(result, storage_tries))
 }
 
-pub fn extract_evm_changes(extensions: &NativeContextExtensions) -> Changes {
+pub fn extract_evm_changes(extensions: &NativeContextExtensions) -> Result<Changes, Error> {
     let evm_native_ctx = extensions.get::<NativeEVMContext>();
     extract_evm_changes_from_native(evm_native_ctx)
 }
 
-pub fn extract_evm_changes_from_native(evm_native_ctx: &NativeEVMContext) -> Changes {
+pub fn extract_evm_changes_from_native(
+    evm_native_ctx: &NativeEVMContext,
+) -> Result<Changes, Error> {
     let mut evm_move_account_changes = ChangeSet::new();
     let mut account_changes = AccountChangeSet::new();
     let mut storage_tries = StorageTriesChanges::empty();
@@ -119,7 +121,7 @@ pub fn extract_evm_changes_from_native(evm_native_ctx: &NativeEVMContext) -> Cha
                 &account_changes,
                 &mut single_account_changes,
                 evm_native_ctx.storage_trie,
-            );
+            )?;
             storage_tries = storage_tries.with_trie_changes(*address, storage_changes);
         }
         account_changes
@@ -130,7 +132,7 @@ pub fn extract_evm_changes_from_native(evm_native_ctx: &NativeEVMContext) -> Cha
         .add_account_changeset(EVM_NATIVE_ADDRESS, account_changes)
         .expect("EVM native changes must be added");
 
-    Changes::new(evm_move_account_changes, storage_tries)
+    Ok(Changes::new(evm_move_account_changes, storage_tries))
 }
 
 fn add_account_changes(
@@ -140,7 +142,7 @@ fn add_account_changes(
     prior_changes: &AccountChangeSet,
     result: &mut AccountChangeSet,
     storage_trie: &dyn StorageTrieRepository,
-) -> StorageTrieChanges {
+) -> Result<StorageTrieChanges, Error> {
     debug_assert!(
         account.is_touched(),
         "Untouched accounts are filtered out before calling this function."
@@ -172,11 +174,11 @@ fn add_account_changes(
             .unwrap_or(false)
     };
 
-    let mut storage = storage_trie.for_account(address).unwrap();
+    let mut storage = storage_trie.for_account(address)?;
     for (index, value) in account.changed_storage_slots() {
-        storage.insert(index, &value.present_value).unwrap();
+        storage.insert(index, &value.present_value)?;
     }
-    let storage_changes = storage.commit().unwrap();
+    let storage_changes = storage.commit()?;
 
     // Push AccountInfo resource
     let struct_tag = account_info_struct_tag(address);
@@ -219,5 +221,5 @@ fn add_account_changes(
         }
     }
 
-    storage_changes
+    Ok(storage_changes)
 }

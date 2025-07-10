@@ -1,6 +1,7 @@
 use {
     crate::{
         Application, Dependencies, ExecutionOutcome, PayloadForExecution,
+        actor::UnrecoverableAppFailure,
         input::{WithExecutionOutcome, WithPayloadAttributes},
     },
     alloy::{consensus::Receipt, primitives::Bloom, rlp::Encodable},
@@ -28,18 +29,27 @@ use {
 
 impl<'app, D: Dependencies<'app>> Application<'app, D> {
     #[tracing::instrument(level = "debug", skip(self, attributes))]
-    pub fn start_block_build(&mut self, attributes: PayloadForExecution, id: PayloadId) {
-        if self
+    pub(crate) fn start_block_build(
+        &mut self,
+        attributes: PayloadForExecution,
+        id: PayloadId,
+    ) -> Result<(), UnrecoverableAppFailure> {
+        let payload_exists = self
             .payload_queries
             .by_id(&self.storage_reader, id)
-            .unwrap()
-            .is_some()
-        {
-            return;
+            .map_err(|e| {
+                tracing::error!(
+                    "Failure during `start_block_build`. Payload queries failed: {e:?}"
+                );
+                UnrecoverableAppFailure
+            })?
+            .is_some();
+        if payload_exists {
+            return Ok(());
         }
         let in_progress_payloads = self.payload_queries.get_in_progress();
         if in_progress_payloads.start_id(id).is_err() {
-            return;
+            return Ok(());
         }
 
         // Include transactions from both `payload_attributes` and internal mem-pool
@@ -48,15 +58,27 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
             .iter()
             .cloned()
             .chain(self.mem_pool.drain().map(Into::into))
-            .filter(|tx|
+            .filter_map(|tx|
                 // Do not include transactions we have already processed before
-                !self.receipt_repository.contains(&self.receipt_memory, tx.tx_hash()).unwrap())
-            .collect::<Vec<_>>();
+                match self.receipt_repository.contains(&self.receipt_memory, tx.tx_hash()) {
+                    Ok(false) => Some(Ok(tx)),
+                    Ok(true) => None,
+                    Err(e) => Some(Err(e)),
+                }
+            )
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                tracing::error!("Failure during `start_block_build`. Receipt queries failed: {e:?}");
+                UnrecoverableAppFailure
+            })?;
         let parent = self
             .block_repository
             .latest(&self.storage)
-            .unwrap()
-            .expect("Parent block should exist");
+            .map_err(|e| {
+                tracing::error!("Failure during `start_block_build`. Failed to get latest block from block repository: {e:?}");
+                UnrecoverableAppFailure
+            })?
+            .expect("Block repository is non-empty (must always at least contain genesis)");
         let base_fee = self.gas_fee.base_fee_per_gas(
             parent.block.header.gas_limit,
             parent.block.header.gas_used,
@@ -72,7 +94,7 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
             transactions.clone().into_iter(),
             base_fee,
             &header_for_execution,
-        );
+        )?;
 
         let transactions_root = alloy_trie::root::ordered_trie_root(&transactions);
         // TODO: is this the correct withdrawals root calculation?
@@ -108,7 +130,12 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
                     .into_iter()
                     .map(|receipt| receipt.with_block_hash(block_hash)),
             )
-            .unwrap();
+            .map_err(|e| {
+                tracing::error!(
+                    "Failure during `start_block_build`. Failed to write receipts: {e:?}"
+                );
+                UnrecoverableAppFailure
+            })?;
 
         self.transaction_repository
             .extend(
@@ -127,24 +154,43 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
                         )
                     }),
             )
-            .unwrap();
+            .map_err(|e| {
+                tracing::error!(
+                    "Failure during `start_block_build`. Failed to write transactions: {e:?}"
+                );
+                UnrecoverableAppFailure
+            })?;
 
         self.block_hash_writer.push(block_number, block_hash);
         self.block_repository
             .add(&mut self.storage, block.clone())
-            .unwrap();
+            .map_err(|e| {
+                tracing::error!(
+                    "Failure during `start_block_build`. Failed to write produced block: {e:?}"
+                );
+                UnrecoverableAppFailure
+            })?;
 
-        (self.on_payload)(self, id, block_hash);
+        (self.on_payload)(self, id, block_hash).map_err(|e| {
+            tracing::error!(
+                "Failure during `start_block_build`. `on_payload` callback failed: {e:?}"
+            );
+            UnrecoverableAppFailure
+        })?;
         in_progress_payloads.finish_id(block, transactions.into_iter().map(Into::into));
+        Ok(())
     }
 
     pub fn add_transaction(&mut self, tx: NormalizedEthTransaction) {
         self.mem_pool.insert(tx);
     }
 
-    pub fn genesis_update(&mut self, block: ExtendedBlock) {
+    pub fn genesis_update(
+        &mut self,
+        block: ExtendedBlock,
+    ) -> Result<(), <D::BlockRepository as BlockRepository>::Err> {
         self.block_hash_writer.push(0, block.hash);
-        self.block_repository.add(&mut self.storage, block).unwrap();
+        self.block_repository.add(&mut self.storage, block)
     }
 
     fn execute_transactions(
@@ -152,7 +198,7 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
         transactions: impl Iterator<Item = NormalizedExtendedTxEnvelope>,
         base_fee: U256,
         block_header: &HeaderForExecution,
-    ) -> (ExecutionOutcome, Vec<ExtendedReceipt>) {
+    ) -> Result<(ExecutionOutcome, Vec<ExtendedReceipt>), UnrecoverableAppFailure> {
         let mut total_tip = U256::ZERO;
         let mut receipts = Vec::new();
         let mut transactions = transactions.peekable();
@@ -219,20 +265,24 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
                 .as_ref()
                 .and_then(|x| x.l1_block_info(normalized_tx.l1_gas_fee_input()));
 
-            self.on_tx(outcome.changes.move_vm.clone().accounts);
+            self.on_tx(outcome.changes.move_vm.clone().accounts)
+                .map_err(|e| {
+                    tracing::error!(
+                        "Failure during `start_block_build`. `on_tx` callback failed: {e:?}"
+                    );
+                    UnrecoverableAppFailure
+                })?;
 
-            self.state
-                .apply(outcome.changes.move_vm)
-                .unwrap_or_else(|e| {
-                    panic!("ERROR: state update failed for transaction {normalized_tx:?}\n{e:?}")
-                });
-            self.evm_storage
-                .apply(outcome.changes.evm)
-                .unwrap_or_else(|e| {
-                    panic!(
-                        "ERROR: EVM storage update failed for transaction {normalized_tx:?}\n{e:?}"
-                    )
-                });
+            self.state.apply(outcome.changes.move_vm).map_err(|e| {
+                tracing::error!("State update failed for transaction {normalized_tx:?}\n{e:?}");
+                UnrecoverableAppFailure
+            })?;
+            self.evm_storage.apply(outcome.changes.evm).map_err(|e| {
+                tracing::error!(
+                    "EVM storage update failed for transaction {normalized_tx:?}\n{e:?}"
+                );
+                UnrecoverableAppFailure
+            })?;
 
             cumulative_gas_used = cumulative_gas_used.saturating_add(outcome.gas_used as u128);
 
@@ -283,7 +333,12 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
             tx_index += 1;
         }
 
-        (self.on_tx_batch)(self);
+        (self.on_tx_batch)(self).map_err(|e| {
+            tracing::error!(
+                "Failure during `start_block_build`. `on_tx_batch` callback failed: {e:?}"
+            );
+            UnrecoverableAppFailure
+        })?;
 
         // Compute the receipts root by RLP-encoding each receipt to be a leaf of
         // a merkle trie.
@@ -300,6 +355,6 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
             logs_bloom,
             total_tip,
         };
-        (outcome, receipts)
+        Ok((outcome, receipts))
     }
 }

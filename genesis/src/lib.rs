@@ -34,7 +34,8 @@ pub fn build(
 
     // Deploy OP stack L2 contracts
     let mut changes_l2 =
-        l2_contracts::init_state(config.l2_contract_genesis.clone(), &state, storage_trie);
+        l2_contracts::init_state(config.l2_contract_genesis.clone(), &state, storage_trie)
+            .expect("L2 contracts must deploy");
 
     // Deploy additional bridged tokens (if any)
     if !config.token_list.is_empty() {

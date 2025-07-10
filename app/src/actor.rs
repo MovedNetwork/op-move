@@ -7,17 +7,17 @@ use {
         payload::{InMemoryPayloadQueries, PayloadId},
         state::InMemoryStateQueries,
     },
-    umi_shared::primitives::B256,
+    umi_shared::{error::Error, primitives::B256},
 };
 
 /// A function invoked on a completion of new transaction execution batch.
-pub type OnTxBatch<S> = dyn Fn(&mut S) + Send + Sync;
+pub type OnTxBatch<S> = dyn Fn(&mut S) -> Result<(), Error> + Send + Sync;
 
 /// A function invoked on an execution of a new transaction.
-pub type OnTx<S> = dyn Fn(&mut S, ChangeSet) + Send + Sync;
+pub type OnTx<S> = dyn Fn(&mut S, ChangeSet) -> Result<(), Error> + Send + Sync;
 
 /// A function invoked on an execution of a new payload.
-pub type OnPayload<S> = dyn Fn(&mut S, PayloadId, B256) + Send + Sync;
+pub type OnPayload<S> = dyn Fn(&mut S, PayloadId, B256) -> Result<(), Error> + Send + Sync;
 
 pub struct CommandActor<'actor, 'app, D: Dependencies<'app>> {
     rx: Receiver<Command>,
@@ -61,25 +61,25 @@ impl<'actor, 'app, D: Dependencies<'app>> CommandActor<'actor, 'app, D> {
     }
 
     pub fn on_tx_batch_noop() -> &'actor OnTxBatch<Application<'app, D>> {
-        &|_| {}
+        &|_| Ok(())
     }
 
     pub fn on_tx_noop() -> &'actor OnTx<Application<'app, D>> {
-        &|_, _| {}
+        &|_, _| Ok(())
     }
 
     pub fn on_payload_noop() -> &'actor OnPayload<Application<'app, D>> {
-        &|_, _, _| {}
+        &|_, _, _| Ok(())
     }
 }
 
 impl<'app, D: Dependencies<'app, StateQueries = InMemoryStateQueries>> CommandActor<'app, 'app, D> {
     pub fn on_tx_in_memory() -> &'app OnTx<Application<'app, D>> {
-        &|_state, _changes| ()
+        &|_state, _changes| Ok(())
     }
 
     pub fn on_tx_batch_in_memory() -> &'app OnTxBatch<Application<'app, D>> {
-        &|_state| ()
+        &|_state| Ok(())
     }
 }
 
@@ -87,7 +87,7 @@ impl<'actor, 'app, D: Dependencies<'app, PayloadQueries = InMemoryPayloadQueries
     CommandActor<'actor, 'app, D>
 {
     pub fn on_payload_in_memory() -> &'actor OnPayload<Application<'app, D>> {
-        &|_state, _payload_id, _block_hash| ()
+        &|_state, _payload_id, _block_hash| Ok(())
     }
 }
 

@@ -171,7 +171,12 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
                 UnrecoverableAppFailure
             })?;
 
-        (self.on_payload)(self, id, block_hash);
+        (self.on_payload)(self, id, block_hash).map_err(|e| {
+            tracing::error!(
+                "Failure during `start_block_build`. `on_payload` callback failed: {e:?}"
+            );
+            UnrecoverableAppFailure
+        })?;
         in_progress_payloads.finish_id(block, transactions.into_iter().map(Into::into));
         Ok(())
     }
@@ -260,7 +265,13 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
                 .as_ref()
                 .and_then(|x| x.l1_block_info(normalized_tx.l1_gas_fee_input()));
 
-            self.on_tx(outcome.changes.move_vm.clone().accounts);
+            self.on_tx(outcome.changes.move_vm.clone().accounts)
+                .map_err(|e| {
+                    tracing::error!(
+                        "Failure during `start_block_build`. `on_tx` callback failed: {e:?}"
+                    );
+                    UnrecoverableAppFailure
+                })?;
 
             self.state.apply(outcome.changes.move_vm).map_err(|e| {
                 tracing::error!("State update failed for transaction {normalized_tx:?}\n{e:?}");
@@ -322,7 +333,12 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
             tx_index += 1;
         }
 
-        (self.on_tx_batch)(self);
+        (self.on_tx_batch)(self).map_err(|e| {
+            tracing::error!(
+                "Failure during `start_block_build`. `on_tx_batch` callback failed: {e:?}"
+            );
+            UnrecoverableAppFailure
+        })?;
 
         // Compute the receipts root by RLP-encoding each receipt to be a leaf of
         // a merkle trie.

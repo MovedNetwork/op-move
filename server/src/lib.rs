@@ -1,11 +1,9 @@
 use {
     crate::mirror::MirrorLog,
-    flate2::read::GzDecoder,
     jsonwebtoken::{DecodingKey, Validation},
     move_core_types::account_address::AccountAddress,
     std::{
         future::Future,
-        io::Read,
         net::{Ipv4Addr, SocketAddr, SocketAddrV4},
         path::Path,
         time::SystemTime,
@@ -28,14 +26,10 @@ use {
     },
     warp::{
         http::{header::CONTENT_TYPE, HeaderMap, HeaderValue, StatusCode},
-        hyper::{body::Bytes, Body, Response},
-        path::FullPath,
+        hyper::Response,
         Filter, Rejection, Reply,
     },
-    warp_reverse_proxy::{
-        extract_request_data_filter, proxy_to_and_forward_response, Headers, Method,
-        QueryParameters, Request,
-    },
+    warp_reverse_proxy::{extract_request_data_filter, Method, Request},
 };
 
 mod allow;
@@ -174,7 +168,7 @@ fn serve(
         .and(validate_jwt(jwt))
         .and_then(
             move |(queue, reader), path, query, method, headers, body, _| {
-                mirror(
+                handle_request(
                     queue,
                     (path, query, method, headers, body),
                     port,
@@ -351,7 +345,7 @@ pub fn validate_jwt(
         })
 }
 
-async fn mirror<'reader>(
+async fn handle_request<'reader>(
     queue: CommandQueue,
     request: Request,
     port: &str,
@@ -359,57 +353,21 @@ async fn mirror<'reader>(
     payload_id: &impl NewPayloadId,
     app: ApplicationReader<'reader, impl Dependencies<'reader>>,
 ) -> Result<warp::reply::Response, Rejection> {
-    let (path, query, method, headers, body) = request;
+    let (_, _, method, _, body) = request;
 
     // Handle load balancer health check with a simple response
     if method == Method::GET {
         return Ok(StatusCode::OK.into_response());
     }
 
-    let is_zipped = headers
-        .get("accept-encoding")
-        .and_then(|x| x.to_str().ok())
-        .map(|x| x.contains("gzip"))
-        .unwrap_or(false);
-    let request: Result<serde_json::Value, _> = serde_json::from_slice(&body);
-    let parsed_geth_response = match proxy(path, query, method, headers.clone(), body, port).await {
-        Ok(response) => {
-            let (parts, body) = response.into_parts();
-            let raw_bytes = hyper::body::to_bytes(body)
-                .await
-                .expect("Failed to get geth response");
-            let bytes = if is_zipped {
-                match try_decompress(&raw_bytes) {
-                    Ok(x) => x,
-                    Err(e) => {
-                        tracing::warn!("gz decompression failed: {e:?}");
-                        let body = hyper::Body::from(raw_bytes);
-                        return Ok(Response::from_parts(parts, body));
-                    }
-                }
-            } else {
-                raw_bytes.to_vec()
-            };
-            match serde_json::from_slice::<serde_json::Value>(&bytes) {
-                Ok(parsed_response) => parsed_response,
-                Err(_) => {
-                    tracing::warn!(
-                        "op-geth non-json response={bytes:?} request={request:?} headers={headers:?}"
-                    );
-                    let body = hyper::Body::from(bytes);
-                    return Ok(Response::from_parts(parts, body));
-                }
-            }
-        }
-        Err(e) => return Err(e),
+    let Ok(request) = serde_json::from_slice::<serde_json::Value>(&body) else {
+        return Ok(StatusCode::BAD_REQUEST.into_response());
     };
 
-    let request = request.expect("geth responded, so body must have been JSON");
     let op_move_response =
         umi_api::request::handle(request.clone(), queue.clone(), is_allowed, payload_id, app).await;
     let log = MirrorLog {
         request: &request,
-        geth_response: &parsed_geth_response,
         op_move_response: &op_move_response,
         port,
     };
@@ -421,30 +379,4 @@ async fn mirror<'reader>(
         serde_json::to_vec(&op_move_response).expect("Must be able to serialize response"),
     );
     Ok(Response::new(body))
-}
-
-async fn proxy(
-    path: FullPath,
-    query: QueryParameters,
-    method: Method,
-    headers: Headers,
-    body: Bytes,
-    port: &str,
-) -> Result<Response<Body>, Rejection> {
-    let addr = std::env::var("OP_GETH_ADDR").unwrap_or("0.0.0.0".to_owned());
-    proxy_to_and_forward_response(
-        format!("http://{addr}:{port}"),
-        "".to_string(),
-        path,
-        query,
-        method,
-        headers,
-        body,
-    )
-    .await
-}
-
-fn try_decompress(raw_bytes: &[u8]) -> std::io::Result<Vec<u8>> {
-    let gz = GzDecoder::new(raw_bytes);
-    gz.bytes().collect()
 }

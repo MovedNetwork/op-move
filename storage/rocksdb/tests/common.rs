@@ -6,7 +6,7 @@ pub fn create_db() -> rocksdb::DB {
         env!("CARGO_CRATE_NAME")
     );
 
-    if std::fs::exists(path).unwrap() {
+    if std::fs::exists(path).unwrap_or(false) {
         std::fs::remove_dir_all(path)
             .expect("Removing non-empty database directory should succeed");
     }

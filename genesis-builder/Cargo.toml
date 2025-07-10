@@ -4,6 +4,9 @@ description = "Generate genesis snapshots"
 version.workspace = true
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 alloy.workspace = true
 anyhow.workspace = true

@@ -8,6 +8,9 @@ edition.workspace = true
 default = []
 test-doubles = []
 
+[lints]
+workspace = true
+
 [dependencies]
 alloy.workspace = true
 bcs.workspace = true

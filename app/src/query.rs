@@ -252,6 +252,13 @@ impl<'app, D: Dependencies<'app>> ApplicationReader<'app, D> {
         Ok(suggestion + block_base_fee as u128)
     }
 
+    pub fn max_priority_fee_per_gas(&self) -> Result<u128> {
+        let (_, suggestion) = self.estimate_priority_fee()?;
+        // virtually the same as `eth_gasPrice` but for dynamic fee transactions, and doesn't
+        // add back the base fee
+        Ok(suggestion)
+    }
+
     pub fn transaction_receipt(&self, tx_hash: B256) -> Result<Option<TransactionReceipt>> {
         self.receipt_queries
             .by_transaction_hash(&self.receipt_memory, tx_hash)

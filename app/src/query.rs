@@ -1,7 +1,7 @@
 use {
     crate::{ApplicationReader, Dependencies},
     alloy::{
-        consensus::Header,
+        consensus::{Header, Transaction},
         eips::{
             BlockId,
             BlockNumberOrTag::{self, Earliest, Finalized, Latest, Number, Pending, Safe},
@@ -23,6 +23,8 @@ use {
 };
 
 const MAX_PERCENTILE_COUNT: usize = 100;
+const MIN_SUGGESTED_PRIORITY_FEE: u128 = 1_000_000;
+const MAX_SUGGESTED_PRIORITY_FEE: u128 = 500_000_000_000;
 
 #[derive(Debug)]
 enum BlockNumberOrHash {
@@ -244,6 +246,12 @@ impl<'app, D: Dependencies<'app>> ApplicationReader<'app, D> {
         )
     }
 
+    pub fn gas_price(&self) -> Result<u128> {
+        let (block_base_fee, suggestion) = self.estimate_priority_fee()?;
+        // legacy `eth_gasPrice` call includes base fee for block
+        Ok(suggestion + block_base_fee as u128)
+    }
+
     pub fn transaction_receipt(&self, tx_hash: B256) -> Result<Option<TransactionReceipt>> {
         self.receipt_queries
             .by_transaction_hash(&self.receipt_memory, tx_hash)
@@ -390,5 +398,55 @@ impl<'app, D: Dependencies<'app>> ApplicationReader<'app, D> {
 
         acc_total_reward(total_reward, block_gas_used, &price_and_cum_gas);
         Ok(parent_hash)
+    }
+
+    fn estimate_priority_fee(&self) -> Result<(u64, u128)> {
+        let latest_block = self.block_by_height(BlockNumberOrTag::Latest, true)?;
+        let Header {
+            gas_limit: block_gas_limit,
+            gas_used: block_gas_used,
+            base_fee_per_gas: block_base_fee,
+            ..
+        } = latest_block.0.header.inner;
+
+        let max_tx_gas_used = latest_block
+            .0
+            .transactions
+            .hashes()
+            .map(|hash| {
+                self.transaction_receipt(hash)
+                    .expect("Database should work")
+                    .expect("Tx receipt should exist")
+                    .inner
+                    .gas_used
+            })
+            .max()
+            .unwrap_or_default();
+
+        let mut suggestion = 0;
+        // Using the same heuristic as `op-geth` does, only doing some actual calculations if the
+        // block is nearing congestion. While we could have a precise calculation due to having
+        // direct access to mempool, unlike what OP is assuming, this is still good enough as it
+        // doesn't get too involved.
+        if block_gas_used + max_tx_gas_used > block_gas_limit {
+            let mut tx_tips = latest_block
+                .0
+                .transactions
+                .into_transactions()
+                .map(|tx| {
+                    tx.inner
+                        .inner
+                        .effective_tip_per_gas(block_base_fee.unwrap_or_default())
+                        .unwrap_or_default()
+                })
+                .collect::<Vec<_>>();
+            tx_tips.sort();
+            let median_tip = tx_tips[tx_tips.len() / 2];
+            suggestion = median_tip + (median_tip / 10);
+        }
+        Ok((
+            block_base_fee.unwrap_or_default(),
+            suggestion.clamp(MIN_SUGGESTED_PRIORITY_FEE, MAX_SUGGESTED_PRIORITY_FEE),
+        ))
     }
 }

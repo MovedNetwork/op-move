@@ -23,8 +23,8 @@ use {
 };
 
 const MAX_PERCENTILE_COUNT: usize = 100;
-const MIN_SUGGESTED_PRIORITY_FEE: u128 = 1_000_000;
-const MAX_SUGGESTED_PRIORITY_FEE: u128 = 500_000_000_000;
+pub(crate) const MIN_SUGGESTED_PRIORITY_FEE: u128 = 1_000_000;
+pub(crate) const MAX_SUGGESTED_PRIORITY_FEE: u128 = 500_000_000_000;
 
 #[derive(Debug)]
 enum BlockNumberOrHash {

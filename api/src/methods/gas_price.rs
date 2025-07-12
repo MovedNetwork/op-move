@@ -24,16 +24,38 @@ mod tests {
     async fn test_execute() {
         let (reader, _app) = create_app();
 
+        // not supplying params field is the same as empty params
         let request: serde_json::Value = serde_json::json!({
             "jsonrpc": "2.0",
             "method": "eth_gasPrice",
-            "params": [],
             "id": 1
         });
 
-        let expected_response: serde_json::Value = serde_json::from_str(r#""0x3b9aca00""#).unwrap();
+        let expected_response: serde_json::Value = serde_json::from_str(r#""0xf4240""#).unwrap();
         let response = execute(request, &reader).await.unwrap();
 
         assert_eq!(response, expected_response);
+
+        let hex_str = response.as_str().unwrap().strip_prefix("0x").unwrap();
+        // The value is the minimum suggested fee constant + base fee of 0
+        assert_eq!(u64::from_str_radix(hex_str, 16).unwrap(), 1_000_000);
+    }
+
+    #[tokio::test]
+    async fn test_bad_input() {
+        let (reader, _app) = create_app();
+
+        let request: serde_json::Value = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "eth_gasPrice",
+            "params": ["wrong"],
+            "id": 1
+        });
+
+        let response = execute(request.clone(), &reader).await;
+        assert_eq!(
+            response.unwrap_err(),
+            JsonRpcError::too_many_params_error(request)
+        );
     }
 }

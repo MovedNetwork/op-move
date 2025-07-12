@@ -33,8 +33,8 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Run container
-        run: . docker/host/deploy.sh
+#      - name: Run container
+#        run: . docker/host/deploy.sh
       - name: Sleep for 10 minutes
         run: sleep 10m
 

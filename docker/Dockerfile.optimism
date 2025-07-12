@@ -1,32 +1,44 @@
-FROM ghcr.io/uminetwork/foundry:latest AS foundry
 FROM alpine:3.21.2
 WORKDIR /volume
 
-# Add go to path
-ENV PATH="/usr/local/go/bin:${PATH}"
+RUN apk add --no-cache wget
 
-# Install foundry
-COPY --from=foundry /opt/foundry/out/forge /usr/local/bin/forge
-COPY --from=foundry /opt/foundry/out/cast /usr/local/bin/cast
-COPY --from=foundry /opt/foundry/out/anvil /usr/local/bin/anvil
-COPY --from=foundry /opt/foundry/out/chisel /usr/local/bin/chisel
+# Download foundry and install binaries
+ARG TARGETARCH
+RUN if [ "$TARGETARCH" = "amd64" ]; then \
+  wget https://github.com/foundry-rs/foundry/releases/download/v1.2.3/foundry_v1.2.3_alpine_amd64.tar.gz && \
+  tar -xzf foundry_v1.2.3_alpine_amd64.tar.gz; \
+  elif [ "$TARGETARCH" = "arm64" ]; then \
+  wget https://github.com/foundry-rs/foundry/releases/download/v1.2.3/foundry_v1.2.3_alpine_arm64.tar.gz && \
+  tar -xzf foundry_v1.2.3_alpine_arm64.tar.gz; \
+  else \
+  echo "Unsupported architecture"; exit 1; \
+  fi && \
+  cp ./forge /usr/local/bin/forge && \
+  cp ./cast /usr/local/bin/cast && \
+  rm -f ./*
 
 # Install go
 COPY --from=golang:1.22-alpine /usr/local/go/ /usr/local/go/
 
+# Add go to path
+ENV PATH="/usr/local/go/bin:${PATH}"
+
+
+
 RUN \
-# Install build dependencies
-    apk upgrade --no-cache \
-    && apk add --no-cache git make bash \
-# Clean up
-    && rm -rf /tmp/* \
-# Clone optimism sources
-    && git clone https://github.com/ethereum-optimism/optimism . \
-    && git checkout f2e5a7a5 \
-# Build cannon prestate dump, op-node, op-batcher and op-proposer
-    && make cannon-prestate op-node op-batcher op-proposer \
-    && cd /volume/packages/contracts-bedrock \
-    && forge install
+  # Install build dependencies
+  apk upgrade --no-cache \
+  && apk add --no-cache git make bash \
+  # Clean up
+  && rm -rf /tmp/* \
+  # Clone optimism sources
+  && git clone https://github.com/ethereum-optimism/optimism . \
+  && git checkout f2e5a7a5 \
+  # Build cannon prestate dump, op-node, op-batcher and op-proposer
+  && make cannon-prestate op-node op-batcher op-proposer \
+  && cd /volume/packages/contracts-bedrock \
+  && forge install
 
 # Install Solidity compiler used by forge in Optimism
 COPY --from=ethereum/solc:0.8.15 /usr/bin/solc /root/.svm/0.8.15/solc-0.8.15

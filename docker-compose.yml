@@ -1,29 +1,13 @@
 services:
-  foundry:
-    image: ghcr.io/uminetwork/foundry:latest
-    build:
-      context: ./
-      dockerfile: ./docker/Dockerfile.foundry
-      cache_from:
-        - type=registry,ref=ghcr.io/uminetwork/foundry:latest-cache,mode=max
-      cache_to:
-        - type=registry,ref=ghcr.io/uminetwork/foundry:latest-cache,mode=max
-    deploy:
-      replicas: 0
-
   optimism:
     image: ghcr.io/uminetwork/optimism:latest
     build:
       context: ./
       dockerfile: ./docker/Dockerfile.optimism
-      additional_contexts:
-        ghcr.io/uminetwork/foundry: "service:foundry"
       cache_from:
         - type=registry,ref=ghcr.io/uminetwork/optimism:latest-cache,mode=max
       cache_to:
         - type=registry,ref=ghcr.io/uminetwork/optimism:latest-cache,mode=max
-    depends_on:
-      - foundry
     deploy:
       replicas: 0
     networks:
@@ -36,7 +20,6 @@ services:
       dockerfile: ./docker/Dockerfile.op-node
       additional_contexts:
         ghcr.io/uminetwork/optimism: "service:optimism"
-        ghcr.io/uminetwork/foundry: "service:foundry"
       cache_from:
         - type=registry,ref=ghcr.io/uminetwork/op-node:latest-cache,mode=max
       cache_to:
@@ -47,7 +30,6 @@ services:
       - localnet
     depends_on:
       - optimism
-      - foundry
     volumes:
       - ./docker/volumes/shared:/volume/shared
 
@@ -58,7 +40,6 @@ services:
       dockerfile: ./docker/Dockerfile.op-batcher
       additional_contexts:
         ghcr.io/uminetwork/optimism: "service:optimism"
-        ghcr.io/uminetwork/foundry: "service:foundry"
       cache_from:
         - type=registry,ref=ghcr.io/uminetwork/op-batcher:latest-cache,mode=max
       cache_to:
@@ -67,7 +48,6 @@ services:
       - localnet
     depends_on:
       - optimism
-      - foundry
     volumes:
       - ./docker/volumes/shared:/volume/shared
 
@@ -78,7 +58,6 @@ services:
       dockerfile: ./docker/Dockerfile.op-proposer
       additional_contexts:
         ghcr.io/uminetwork/optimism: "service:optimism"
-        ghcr.io/uminetwork/foundry: "service:foundry"
       cache_from:
         - type=registry,ref=ghcr.io/uminetwork/op-proposer:latest-cache,mode=max
       cache_to:
@@ -87,7 +66,6 @@ services:
       - localnet
     depends_on:
       - optimism
-      - foundry
     volumes:
       - ./docker/volumes/shared:/volume/shared
 
@@ -98,7 +76,6 @@ services:
       dockerfile: ./docker/Dockerfile.op-geth
       additional_contexts:
         ghcr.io/uminetwork/optimism: "service:optimism"
-        ghcr.io/uminetwork/foundry: "service:foundry"
       cache_from:
         - type=registry,ref=ghcr.io/uminetwork/op-geth:latest-cache,mode=max
       cache_to:
@@ -109,7 +86,6 @@ services:
       - localnet
     depends_on:
       - optimism
-      - foundry
     volumes:
       - ./docker/volumes/shared:/volume/shared
 
@@ -163,16 +139,12 @@ services:
     build:
       context: ./
       dockerfile: ./docker/Dockerfile.geth
-      additional_contexts:
-        ghcr.io/uminetwork/foundry: "service:foundry"
       cache_from:
         - type=registry,ref=ghcr.io/uminetwork/geth:latest-cache,mode=max
       cache_to:
         - type=registry,ref=ghcr.io/uminetwork/geth:latest-cache,mode=max
     networks:
       - localnet
-    depends_on:
-      - foundry
     ports:
       - "58138:58138"
 

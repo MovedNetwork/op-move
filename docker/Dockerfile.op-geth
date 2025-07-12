@@ -1,26 +1,25 @@
-FROM ghcr.io/uminetwork/foundry:latest AS foundry
 FROM ghcr.io/uminetwork/optimism:latest AS optimism
 WORKDIR /volume
 
 RUN \
-# Clone op-geth sources
-    git clone https://github.com/ethereum-optimism/op-geth op-geth \
-    && cd op-geth \
-    && git checkout f2e69450 \
-# Build op-geth
-    && make geth
+  # Clone op-geth sources
+  git clone https://github.com/ethereum-optimism/op-geth op-geth \
+  && cd op-geth \
+  && git checkout f2e69450 \
+  # Build op-geth
+  && make geth
 
 # Switch to clean container
 FROM alpine:3.21.2
 WORKDIR /volume
 
 RUN \
-# Install system dependencies for foundry and other scripts
-    apk upgrade --no-cache \
-# jq required at least by optimism deploy script
-    && apk add --no-cache bash jq git \
-# Clean up
-    && rm -rf /tmp/*
+  # Install system dependencies for foundry and other scripts
+  apk upgrade --no-cache \
+  # jq required at least by optimism deploy script
+  && apk add --no-cache bash jq git \
+  # Clean up
+  && rm -rf /tmp/*
 
 # Copy entrypoint
 COPY docker/op-geth.sh entrypoint.sh
@@ -46,7 +45,7 @@ COPY --from=optimism /root/.svm/0.8.25/solc-0.8.25 /root/.svm/0.8.25/solc-0.8.25
 COPY --from=optimism /volume/op-program/bin/prestate.json /volume/op-program/bin/prestate.json
 COPY --from=optimism /volume/op-program/bin/meta.json /volume/op-program/bin/meta.json
 COPY --from=optimism /volume/op-program/bin/prestate-proof.json /volume/op-program/bin/prestate-proof.json
-COPY --from=foundry /opt/foundry/out/cast /usr/local/bin/cast
-COPY --from=foundry /opt/foundry/out/forge /usr/local/bin/forge
+COPY --from=optimism /usr/local/bin/cast /usr/local/bin/cast
+COPY --from=optimism /usr/local/bin/forge /usr/local/bin/forge
 
 ENTRYPOINT [ "/volume/entrypoint.sh" ]

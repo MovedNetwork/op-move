@@ -13,9 +13,6 @@ jobs:
   integration:
     name: Integration
     runs-on: ubuntu-latest
-    permissions:
-      contents: 'read'
-      id-token: 'write'
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -24,8 +21,7 @@ jobs:
           toolchain: stable
       - name: Free up disk space
         run: rm -rf /opt/hostedtoolcache
-
-      - name: Generate keyfile
+      - name: Generate keystore file
         run: . docker/keystore.sh
       - name: Log in to container registry
         uses: docker/login-action@v2
@@ -33,11 +29,21 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-#      - name: Run container
-#        run: . docker/host/deploy.sh
+
+      - name: Run container
+        run: |
+          docker pull ghcr.io/uminetwork/foundry
+          docker pull ghcr.io/uminetwork/geth
+          docker pull ghcr.io/uminetwork/optimism
+          docker pull ghcr.io/uminetwork/op-geth
+          docker pull ghcr.io/uminetwork/op-node
+          docker pull ghcr.io/uminetwork/op-batcher
+          docker pull ghcr.io/uminetwork/op-proposer
+          docker pull ghcr.io/uminetwork/op-move
+          . docker/host/deploy.sh
+
       - name: Sleep for 10 minutes
         run: sleep 10m
-
       - name: Run integration test
         run: cargo test --release test_on_ethereum
       - name: Save logs

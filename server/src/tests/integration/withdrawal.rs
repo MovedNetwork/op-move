@@ -77,11 +77,11 @@ pub async fn withdraw_to_l1(withdraw_tx_hash: B256, l1_wallet: PrivateKeySigner)
         .on_http(Url::parse(&var("L1_RPC_URL")?)?);
 
     // Contract used on the L1 for withdrawals
-    let portal_address = Address::from_str(&get_deployed_address("OptimismPortalProxy")?)?;
+    let portal_address = Address::from_str(OPTIMISM_PORTAL_PROXY)?;
     let portal_contract = op_portal::OptimismPortal::new(portal_address, &l1_provider);
 
     // Contract used on the L1 to keep track of the L2 state
-    let oracle_address = Address::from_str(&get_deployed_address("L2OutputOracleProxy")?)?;
+    let oracle_address = Address::from_str(L2_OUTPUT_ORACLE_PROXY)?;
     let l2_oracle_contract = op_oracle::L2OutputOracle::new(oracle_address, &l1_provider);
 
     // Wait for proposer to push new blocks top L1

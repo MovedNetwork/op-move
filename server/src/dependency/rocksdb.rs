@@ -17,7 +17,10 @@ pub fn dependencies(args: umi_server_args::Database) -> Dependency {
     RocksDbDependencies {
         db: db.clone(),
         in_progress_payloads: Default::default(),
-        block_hash_lookup: HybridBlockHashCache::new(db, block::RocksDbBlockQueries::new()),
+        block_hash_lookup: HybridBlockHashCache::from_storage_or_new(
+            db,
+            block::RocksDbBlockQueries::new(),
+        ),
     }
 }
 

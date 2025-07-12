@@ -24,20 +24,20 @@ jobs:
           toolchain: stable
       - name: Free up disk space
         run: rm -rf /opt/hostedtoolcache
-      - name: Authenticate to Google Cloud
-        id: auth
-        uses: google-github-actions/auth@v1
+
+      - name: Generate keyfile
+        run: . docker/keystore.sh
+      - name: Log in to container registry
+        uses: docker/login-action@v2
         with:
-          service_account: github-ci@your-project.iam.gserviceaccount.com
-          credentials_json: '${{ secrets.GOOGLE_CREDENTIALS }}'
-      - name: Set up cloud SDK
-        uses: google-github-actions/setup-gcloud@v1
-      - name: Download files from cloud storage
-        run: |
-          gcloud storage cp -r gs://integration-test-binaries/* /usr/local/bin/
-          chmod +x /usr/local/bin/geth /usr/local/bin/op-*
-      - name: Clone Optimism
-        run:  git clone --branch v1.7.6 --depth 1 https://github.com/ethereum-optimism/optimism.git server/src/tests/optimism
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run container
+        run: docker compose up -d
+      - name: Sleep for 10 minutes
+        run: sleep 10m
+
       - name: Run integration test
         run: cargo test --release test_on_ethereum
       - name: Save logs

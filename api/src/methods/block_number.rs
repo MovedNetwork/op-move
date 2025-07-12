@@ -3,16 +3,14 @@ use {
     umi_app::{ApplicationReader, Dependencies},
 };
 
-pub async fn execute<'app>(
+pub async fn execute<'reader>(
     request: serde_json::Value,
-    app: &ApplicationReader<'app, impl Dependencies<'app>>,
+    app: &ApplicationReader<'reader, impl Dependencies<'reader>>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     parse_params_0(request)?;
-    // this is a generic server error code
     let response = app.block_number()?;
 
-    // Format the block number as a hex string
-    Ok(serde_json::to_value(format!("0x{:x}", response))
+    Ok(serde_json::to_value(format!("{response:#x}"))
         .expect("Must be able to JSON-serialize response"))
 }
 

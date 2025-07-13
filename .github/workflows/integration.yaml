@@ -30,7 +30,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Run container
+      - name: Pull container images
         run: |
           docker pull ghcr.io/uminetwork/foundry
           docker pull ghcr.io/uminetwork/geth
@@ -40,10 +40,11 @@ jobs:
           docker pull ghcr.io/uminetwork/op-batcher
           docker pull ghcr.io/uminetwork/op-proposer
           docker pull ghcr.io/uminetwork/op-move
-          . docker/host/deploy.sh
+      - name: Run container
+        run: . docker/host/deploy.sh
 
       - name: Sleep for 10 minutes
-        run: sleep 10m
+        run: sleep 20m
       - name: Run integration test
         run: cargo test --release test_on_ethereum
       - name: Save logs

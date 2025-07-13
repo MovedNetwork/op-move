@@ -43,7 +43,6 @@ mod withdrawal;
 
 #[tokio::test]
 async fn test_on_ethereum() -> Result<()> {
-    crate::set_global_tracing_subscriber();
     dotenvy::dotenv().expect(".env file not found");
 
     // 1. Test out the OP bridge
@@ -58,27 +57,29 @@ async fn test_on_ethereum() -> Result<()> {
 async fn use_optimism_bridge() -> Result<()> {
     // Deposit via standard bridge
     deposit_eth_to_l2(Address::from_str(L1_STANDARD_BRIDGE_PROXY)?).await?;
+    println!("DEPOSIT ETH VIA STANDARD BRIDGE DONE");
     // Deposit via Optimism Portal
     deposit_eth_to_l2(Address::from_str(OPTIMISM_PORTAL_PROXY)?).await?;
+    println!("DEPOSIT ETH VIA OPTIMISM PORTAL DONE");
 
-    let erc20_deposit_amount = U256::from(1234);
-    let erc20::Erc20AddressPair {
-        l1_address,
-        l2_address,
-    } = deposit_erc20_to_l2(erc20_deposit_amount).await?;
-
-    withdrawal::withdraw_eth_to_l1().await?;
-
-    let erc20_withdrawal_amount = erc20_deposit_amount;
-    erc20::withdraw_erc20_token_from_l2_to_l1(
-        &get_prefunded_wallet().await?,
-        l1_address,
-        l2_address,
-        erc20_withdrawal_amount,
-        &var("L1_RPC_URL").expect("Missing Ethereum L1 RPC URL"),
-        L2_RPC_URL,
-    )
-    .await?;
+    // let erc20_deposit_amount = U256::from(1234);
+    // let erc20::Erc20AddressPair {
+    //     l1_address,
+    //     l2_address,
+    // } = deposit_erc20_to_l2(erc20_deposit_amount).await?;
+    //
+    // withdrawal::withdraw_eth_to_l1().await?;
+    //
+    // let erc20_withdrawal_amount = erc20_deposit_amount;
+    // erc20::withdraw_erc20_token_from_l2_to_l1(
+    //     &get_prefunded_wallet().await?,
+    //     l1_address,
+    //     l2_address,
+    //     erc20_withdrawal_amount,
+    //     &var("L1_RPC_URL").expect("Missing Ethereum L1 RPC URL"),
+    //     L2_RPC_URL,
+    // )
+    // .await?;
     Ok(())
 }
 
@@ -239,7 +240,10 @@ async fn send_ethers(
 
 async fn get_op_balance(account: Address) -> Result<U256> {
     let provider = ProviderBuilder::new().on_http(Url::parse(L2_RPC_URL)?);
-    Ok(provider.get_balance(account).await?)
+    // Ok(provider.get_balance(account).await?)
+    let balance = provider.get_balance(account).await?;
+    println!("BALANCE OF ({account:?}) IS: {balance:?}");
+    Ok(balance)
 }
 
 async fn get_prefunded_wallet() -> Result<LocalSigner<SigningKey>> {

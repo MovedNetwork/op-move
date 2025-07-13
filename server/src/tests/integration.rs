@@ -57,10 +57,8 @@ async fn test_on_ethereum() -> Result<()> {
 async fn use_optimism_bridge() -> Result<()> {
     // Deposit via standard bridge
     deposit_eth_to_l2(Address::from_str(L1_STANDARD_BRIDGE_PROXY)?).await?;
-    println!("DEPOSIT ETH VIA STANDARD BRIDGE DONE");
     // Deposit via Optimism Portal
     deposit_eth_to_l2(Address::from_str(OPTIMISM_PORTAL_PROXY)?).await?;
-    println!("DEPOSIT ETH VIA OPTIMISM PORTAL DONE");
 
     let erc20_deposit_amount = U256::from(1234);
     let erc20::Erc20AddressPair {
@@ -242,7 +240,6 @@ async fn get_op_balance(account: Address) -> Result<U256> {
     let provider = ProviderBuilder::new().on_http(Url::parse(L2_RPC_URL)?);
     // Ok(provider.get_balance(account).await?)
     let balance = provider.get_balance(account).await?;
-    println!("BALANCE OF ({account:?}) IS: {balance:?}");
     Ok(balance)
 }
 

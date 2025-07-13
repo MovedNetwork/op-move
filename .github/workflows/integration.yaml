@@ -29,19 +29,22 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Pull and run container images
         run: |
           docker network create localnet
           docker compose pull
           docker compose up -d
-
-      - name: Sleep for 10 minutes
-        run: sleep 10m
       - name: Run integration test
-        run: cargo test --release test_on_ethereum -- --nocapture
+        run: cargo test --release test_on_ethereum
+
+      - name: Capture logs
+        run: |
+          docker exec op-move-op-move-1 ls /volume
+          docker exec op-move-op-move-1 ls /volume/op-move
+          docker exec op-move-op-move-1 ls /volume/op-move/server
+          docker cp op-move-op-move-1:/volume/op-move/*.log ./
       - name: Save logs
         uses: actions/upload-artifact@v4
         with:
           name: Logs
-          path: server/*.log
+          path: ./*.log

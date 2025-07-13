@@ -36,17 +36,17 @@ jobs:
           docker compose up -d
 #      - name: Run integration test
 #        run: cargo test --release test_on_ethereum
-      - name: Sleep to run the docker images for 2 mins
-        run: sleep 2m
+      - name: Sleep to run the docker images for a min
+        run: sleep 1m
 
       - name: Capture logs
         uses: jwalton/gh-docker-logs@v2
         with:
           dest: './logs'
-      - name: Compress logs
-        run: tar cvzf ./logs.zip ./logs
+#      - name: Compress logs
+#        run: tar cvzf ./logs.zip ./logs
       - name: Upload logs
         uses: actions/upload-artifact@master
         with:
-          name: logs.zip
-          path: ./logs.zip
+          name: logs
+          path: ./logs

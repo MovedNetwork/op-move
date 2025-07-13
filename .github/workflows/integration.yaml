@@ -30,23 +30,16 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Pull container images
+      - name: Pull and run container images
         run: |
-          docker pull ghcr.io/uminetwork/foundry
-          docker pull ghcr.io/uminetwork/geth
-          docker pull ghcr.io/uminetwork/optimism
-          docker pull ghcr.io/uminetwork/op-geth
-          docker pull ghcr.io/uminetwork/op-node
-          docker pull ghcr.io/uminetwork/op-batcher
-          docker pull ghcr.io/uminetwork/op-proposer
-          docker pull ghcr.io/uminetwork/op-move
-      - name: Run container
-        run: . docker/host/deploy.sh
+          docker network create localnet
+          docker compose pull
+          docker compose up -d
 
       - name: Sleep for 10 minutes
-        run: sleep 20m
+        run: sleep 10m
       - name: Run integration test
-        run: cargo test --release test_on_ethereum
+        run: cargo test --release test_on_ethereum -- --nocapture
       - name: Save logs
         uses: actions/upload-artifact@v4
         with:

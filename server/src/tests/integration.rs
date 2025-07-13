@@ -62,24 +62,24 @@ async fn use_optimism_bridge() -> Result<()> {
     deposit_eth_to_l2(Address::from_str(OPTIMISM_PORTAL_PROXY)?).await?;
     println!("DEPOSIT ETH VIA OPTIMISM PORTAL DONE");
 
-    // let erc20_deposit_amount = U256::from(1234);
-    // let erc20::Erc20AddressPair {
-    //     l1_address,
-    //     l2_address,
-    // } = deposit_erc20_to_l2(erc20_deposit_amount).await?;
-    //
-    // withdrawal::withdraw_eth_to_l1().await?;
-    //
-    // let erc20_withdrawal_amount = erc20_deposit_amount;
-    // erc20::withdraw_erc20_token_from_l2_to_l1(
-    //     &get_prefunded_wallet().await?,
-    //     l1_address,
-    //     l2_address,
-    //     erc20_withdrawal_amount,
-    //     &var("L1_RPC_URL").expect("Missing Ethereum L1 RPC URL"),
-    //     L2_RPC_URL,
-    // )
-    // .await?;
+    let erc20_deposit_amount = U256::from(1234);
+    let erc20::Erc20AddressPair {
+        l1_address,
+        l2_address,
+    } = deposit_erc20_to_l2(erc20_deposit_amount).await?;
+
+    withdrawal::withdraw_eth_to_l1().await?;
+
+    let erc20_withdrawal_amount = erc20_deposit_amount;
+    erc20::withdraw_erc20_token_from_l2_to_l1(
+        &get_prefunded_wallet().await?,
+        l1_address,
+        l2_address,
+        erc20_withdrawal_amount,
+        &var("L1_RPC_URL").expect("Missing Ethereum L1 RPC URL"),
+        L2_RPC_URL,
+    )
+    .await?;
     Ok(())
 }
 

@@ -29,22 +29,17 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Pull and run container images
+      - name: Run container images
         run: |
           docker network create localnet
           docker compose pull
           docker compose up -d
-#      - name: Run integration test
-#        run: cargo test --release test_on_ethereum
-      - name: Sleep to run the docker images for a min
-        run: sleep 1m
-
+      - name: Run integration test
+        run: cargo test --release test_on_ethereum
       - name: Capture logs
         uses: jwalton/gh-docker-logs@v2
         with:
           dest: './logs'
-#      - name: Compress logs
-#        run: tar cvzf ./logs.zip ./logs
       - name: Upload logs
         uses: actions/upload-artifact@master
         with:

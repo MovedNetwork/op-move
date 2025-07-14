@@ -374,12 +374,11 @@ impl<'app, D: Dependencies<'app>> ApplicationReader<'app, D> {
             .hashes()
             .map(|hash| {
                 let rx = self
-                    .transaction_receipt(hash)
-                    .expect("Database should work")
-                    .expect("Tx receipt should exist");
-                (rx.inner.effective_gas_price, rx.inner.gas_used)
+                    .transaction_receipt(hash)?
+                    .ok_or(Error::DatabaseState)?;
+                Ok((rx.inner.effective_gas_price, rx.inner.gas_used))
             })
-            .collect();
+            .collect::<Result<_>>()?;
         price_and_gas.sort_by_key(|&(price, _)| price);
         let price_and_cum_gas = price_and_gas
             .iter()

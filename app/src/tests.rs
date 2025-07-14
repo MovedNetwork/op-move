@@ -892,7 +892,8 @@ fn test_max_priority_fee_low_congestion() {
         .try_into()
         .unwrap(),
         U64::from(1),
-    );
+    )
+    .unwrap();
 
     let max_priority_fee = reader.max_priority_fee_per_gas().unwrap();
 
@@ -924,7 +925,8 @@ fn test_max_priority_fee_high_congestion() {
         .try_into()
         .unwrap(),
         U64::from(1),
-    );
+    )
+    .unwrap();
 
     let max_priority_fee = reader.max_priority_fee_per_gas().unwrap();
 
@@ -957,7 +959,8 @@ fn test_gas_price_high_max_fee() {
         .try_into()
         .unwrap(),
         U64::from(1),
-    );
+    )
+    .unwrap();
 
     let max_priority_fee = reader.max_priority_fee_per_gas().unwrap();
 
@@ -983,7 +986,8 @@ fn test_gas_price_vs_max_priority_fee_difference() {
         .try_into()
         .unwrap(),
         U64::from(1),
-    );
+    )
+    .unwrap();
 
     let gas_price = reader.gas_price().unwrap();
     let max_priority_fee = reader.max_priority_fee_per_gas().unwrap();

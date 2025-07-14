@@ -23,6 +23,7 @@ use {
 };
 
 const MAX_PERCENTILE_COUNT: usize = 100;
+const PRIORITY_FEE_SUGGESTED_INCREASE_PERCENT: u128 = 10;
 pub(crate) const MIN_SUGGESTED_PRIORITY_FEE: u128 = 1_000_000;
 pub(crate) const MAX_SUGGESTED_PRIORITY_FEE: u128 = 500_000_000_000;
 
@@ -421,12 +422,13 @@ impl<'app, D: Dependencies<'app>> ApplicationReader<'app, D> {
             .transactions
             .hashes()
             .map(|hash| {
-                self.transaction_receipt(hash)
-                    .expect("Database should work")
-                    .expect("Tx receipt should exist")
-                    .inner
-                    .gas_used
+                let rx = self
+                    .transaction_receipt(hash)?
+                    .ok_or(Error::DatabaseState)?;
+                Ok(rx.inner.gas_used)
             })
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
             .max()
             .unwrap_or_default();
 
@@ -448,8 +450,13 @@ impl<'app, D: Dependencies<'app>> ApplicationReader<'app, D> {
                 })
                 .collect::<Vec<_>>();
             tx_tips.sort();
-            let median_tip = tx_tips[tx_tips.len() / 2];
-            suggestion = median_tip + (median_tip / 10);
+            // This is the exact amount bump used by `op-geth`
+            suggestion = tx_tips
+                .get(tx_tips.len() / 2)
+                .map(|median_tip| {
+                    median_tip + (median_tip / PRIORITY_FEE_SUGGESTED_INCREASE_PERCENT)
+                })
+                .unwrap_or_default();
         }
         Ok((
             block_base_fee.unwrap_or_default(),

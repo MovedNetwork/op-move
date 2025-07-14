@@ -449,7 +449,8 @@ fn test_fetched_balances_are_updated_after_transfer_of_funds() {
     app.start_block_build(
         PayloadForExecution::default(),
         U64::from(0x03421ee50df45cacu64),
-    );
+    )
+    .unwrap();
 
     let actual_recipient_balance = reader.balance_by_height(to, Latest).unwrap();
     let expected_recipient_balance = amount;
@@ -475,7 +476,8 @@ fn test_fetched_nonces_are_updated_after_executing_transaction() {
     app.start_block_build(
         PayloadForExecution::default(),
         U64::from(0x03421ee50df45cacu64),
-    );
+    )
+    .unwrap();
 
     let actual_recipient_balance = reader.nonce_by_height(to, Latest).unwrap();
     let expected_recipient_balance = 0;
@@ -500,7 +502,8 @@ fn test_one_payload_can_be_fetched_repeatedly() {
 
     let payload_id = U64::from(0x03421ee50df45cacu64);
 
-    app.start_block_build(PayloadForExecution::default(), payload_id);
+    app.start_block_build(PayloadForExecution::default(), payload_id)
+        .unwrap();
 
     let expected_payload = reader.payload(payload_id).unwrap().unwrap();
     let actual_payload = reader.payload(payload_id).unwrap().unwrap();
@@ -528,7 +531,8 @@ fn test_older_payload_can_be_fetched_again_successfully() {
         .try_into()
         .unwrap(),
         payload_id,
-    );
+    )
+    .unwrap();
 
     let expected_payload = reader.payload(payload_id).unwrap().unwrap();
 
@@ -547,7 +551,8 @@ fn test_older_payload_can_be_fetched_again_successfully() {
         .try_into()
         .unwrap(),
         payload_2_id,
-    );
+    )
+    .unwrap();
 
     // make sure the newer payload is fetchable
     let _ = reader.payload(payload_2_id).unwrap();
@@ -573,7 +578,8 @@ fn test_txs_from_one_account_have_proper_nonce_ordering() {
 
     let payload_id = U64::from(0x03421ee50df45cacu64);
 
-    app.start_block_build(PayloadForExecution::default(), payload_id);
+    app.start_block_build(PayloadForExecution::default(), payload_id)
+        .unwrap();
 
     for (i, tx_hash) in tx_hashes.iter().enumerate() {
         // Get receipt for this transaction
@@ -684,7 +690,8 @@ fn test_fee_history_eip1559_fields() {
     let (reader, mut app) =
         create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), U256::from(10), 1);
 
-    app.start_block_build(PayloadForExecution::default(), U64::from(1));
+    app.start_block_build(PayloadForExecution::default(), U64::from(1))
+        .unwrap();
 
     let result = reader.fee_history(1, Latest, None);
     assert!(result.is_ok());
@@ -717,7 +724,8 @@ fn test_fee_history_empty_vs_full_blocks(num_txs: usize, expect_zero_ratio: bool
         gas_limit: U64::from(1_000_000),
         ..Default::default()
     };
-    app.start_block_build(payload.try_into().unwrap(), U64::from(1));
+    app.start_block_build(payload.try_into().unwrap(), U64::from(1))
+        .unwrap();
 
     let result = reader.fee_history(1, Latest, Some(vec![50.0]));
     assert!(result.is_ok());
@@ -756,7 +764,8 @@ fn test_fee_history_percentile_calculations(
         .try_into()
         .unwrap(),
         U64::from(1),
-    );
+    )
+    .unwrap();
 
     let result = reader.fee_history(1, Latest, Some(percentiles));
     assert!(result.is_ok());
@@ -796,7 +805,8 @@ fn test_fee_history_gas_ratio_progression(tx_counts: Vec<usize>, expect_increasi
             .try_into()
             .unwrap(),
             U64::from(block_num as u64 + 1),
-        );
+        )
+        .unwrap();
     }
 
     let result = reader.fee_history(tx_counts.len() as u64, Latest, None);
@@ -838,7 +848,8 @@ fn test_fee_history_boundary_percentiles() {
         .try_into()
         .unwrap(),
         U64::from(1),
-    );
+    )
+    .unwrap();
 
     let percentiles = vec![0.0, 33.33, 66.66, 100.0];
     let result = reader.fee_history(1, Latest, Some(percentiles));

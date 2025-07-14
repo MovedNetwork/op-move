@@ -8,6 +8,8 @@ use {
     alloy::primitives::U256,
     aptos_framework::natives::event::NativeEventContext,
     aptos_table_natives::TableResolver,
+    aptos_types::vm_status::StatusCode,
+    move_binary_format::errors::PartialVMError,
     move_core_types::language_storage::ModuleId,
     move_vm_runtime::{
         AsUnsyncCodeStorage,
@@ -63,12 +65,11 @@ pub(super) fn execute_deposited_transaction<
 
     let module = ModuleId::new(EVM_NATIVE_ADDRESS, EVM_NATIVE_MODULE.into());
     let function_name = EVM_DEPOSIT_FN_NAME;
-    // Unwraps in serialization are safe because the layouts match the types.
     let to_address = match input.tx.to {
         revm::primitives::TxKind::Call(addr) => addr.to_move_address(),
         _ => unimplemented!("Contract creation through deposit tx not yet supported"),
     };
-    let args: Vec<Vec<u8>> = [
+    let args: Result<Vec<Vec<u8>>, Error> = [
         (
             Value::address(input.tx.from.to_move_address()),
             &ADDRESS_LAYOUT,
@@ -82,25 +83,30 @@ pub(super) fn execute_deposited_transaction<
     ]
     .into_iter()
     .map(|(value, layout)| {
-        ValueSerDeContext::new()
-            .serialize(&value, layout)
-            .unwrap()
-            .unwrap()
+        Ok(ValueSerDeContext::new()
+            .serialize(&value, layout)?
+            .ok_or_else(|| {
+                PartialVMError::new(StatusCode::VALUE_SERIALIZATION_ERROR)
+                    .with_message("Failed to serialize EVM deposit args".into())
+            })?)
     })
     .collect();
-    let outcome = session
-        .execute_function_bypass_visibility(
-            &module,
-            function_name,
-            Vec::new(),
-            args,
-            &mut gas_meter,
-            &mut traversal_context,
-            &code_storage,
-        )
-        .map_err(Error::from)
+    let outcome = args
+        .and_then(|args| {
+            session
+                .execute_function_bypass_visibility(
+                    &module,
+                    function_name,
+                    Vec::new(),
+                    args,
+                    &mut gas_meter,
+                    &mut traversal_context,
+                    &code_storage,
+                )
+                .map_err(Error::from)
+        })
         .and_then(|values| {
-            let evm_outcome = extract_evm_result(values);
+            let evm_outcome = extract_evm_result(values)?;
             if !evm_outcome.is_success {
                 return Err(UserError::DepositFailure(evm_outcome.output).into());
             }
@@ -114,7 +120,7 @@ pub(super) fn execute_deposited_transaction<
             if mint_amount != 0 {
                 eth_token::mint_eth(
                     &EVM_NATIVE_ADDRESS,
-                    U256::from(input.tx.mint.unwrap()),
+                    U256::from(mint_amount),
                     &mut session,
                     &mut traversal_context,
                     &mut gas_meter,
@@ -145,7 +151,7 @@ pub(super) fn execute_deposited_transaction<
     let mut logs = events.logs();
     logs.extend(evm_logs);
     let gas_used = total_gas_used(&gas_meter, input.genesis_config);
-    let evm_changes = extract_evm_changes(&extensions);
+    let evm_changes = extract_evm_changes(&extensions)?;
     changes
         .squash(evm_changes.accounts)
         .expect("EVM changes must merge with other session changes");

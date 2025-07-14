@@ -2,9 +2,12 @@
 pub use test_doubles::TestDependencies;
 
 use {
-    crate::mempool::Mempool, move_core_types::effects::ChangeSet,
-    umi_blockchain::payload::PayloadId, umi_execution::resolver_cache::ResolverCache,
-    umi_genesis::config::GenesisConfig, umi_shared::primitives::B256,
+    crate::mempool::Mempool,
+    move_core_types::effects::ChangeSet,
+    umi_blockchain::payload::PayloadId,
+    umi_execution::resolver_cache::ResolverCache,
+    umi_genesis::config::GenesisConfig,
+    umi_shared::{error::Error, primitives::B256},
 };
 
 pub struct ApplicationReader<'app, D: Dependencies<'app>> {
@@ -125,7 +128,7 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
         }
     }
 
-    pub fn on_tx(&mut self, changes: ChangeSet) {
+    pub fn on_tx(&mut self, changes: ChangeSet) -> Result<(), Error> {
         (self.on_tx)(self, changes)
     }
 }
@@ -206,13 +209,15 @@ pub trait Dependencies<'db> {
     type BlockRepository: umi_blockchain::block::BlockRepository<Storage = Self::SharedStorage>;
 
     /// A function invoked on an execution of a new payload.
-    type OnPayload: Fn(&mut Application<'db, Self>, PayloadId, B256) + 'db + ?Sized;
+    type OnPayload: Fn(&mut Application<'db, Self>, PayloadId, B256) -> Result<(), Error>
+        + 'db
+        + ?Sized;
 
     /// A function invoked on an execution of a new transaction.
-    type OnTx: Fn(&mut Application<'db, Self>, ChangeSet) + 'db + ?Sized;
+    type OnTx: Fn(&mut Application<'db, Self>, ChangeSet) -> Result<(), Error> + 'db + ?Sized;
 
     /// A function invoked on a completion of new transaction execution batch.
-    type OnTxBatch: Fn(&mut Application<'db, Self>) + 'db + ?Sized;
+    type OnTxBatch: Fn(&mut Application<'db, Self>) -> Result<(), Error> + 'db + ?Sized;
 
     type PayloadQueries: umi_blockchain::payload::PayloadQueries<Storage = Self::SharedStorageReader>
         + Clone;

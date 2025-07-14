@@ -12,6 +12,9 @@ test-doubles = [
     "umi-evm-ext/test-doubles",
 ]
 
+[lints]
+workspace = true
+
 [dependencies]
 alloy.workspace = true
 alloy-trie.workspace = true

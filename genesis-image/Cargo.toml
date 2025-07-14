@@ -8,6 +8,9 @@ edition.workspace = true
 default = []
 test-doubles = []
 
+[lints]
+workspace = true
+
 [dependencies]
 bcs.workspace = true
 move-core-types.workspace = true

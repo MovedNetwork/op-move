@@ -53,15 +53,15 @@ impl<'app> Dependencies<'app> for Uninitialized {
     fn block_repository() -> Self::BlockRepository {}
 
     fn on_payload() -> &'app Self::OnPayload {
-        &|_, _, _| {}
+        &|_, _, _| Ok(())
     }
 
     fn on_tx() -> &'app Self::OnTx {
-        &|_, _| {}
+        &|_, _| Ok(())
     }
 
     fn on_tx_batch() -> &'app Self::OnTxBatch {
-        &|_| {}
+        &|_| Ok(())
     }
 
     fn payload_queries(&self) -> Self::PayloadQueries {}

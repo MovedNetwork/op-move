@@ -313,10 +313,17 @@ impl DB for InMemoryDb {
 
 impl DbWithRoot for InMemoryDb {
     fn root(&self) -> result::Result<Option<B256>, Self::Error> {
+        // Safety: unwrap here is acceptable because
+        // (1) `InMemoryDb` is used in tests only (not production)
+        // (2) Poisoned `RwLock` is an unexpected state (since the code should not panic anywhere)
+        // therefore calls to `read` should always succeed.
+        #[allow(clippy::unwrap_used)]
         Ok(*self.root.read().unwrap())
     }
 
     fn put_root(&self, root: B256) -> result::Result<(), Self::Error> {
+        // Safety: unwrap here is acceptable (see reason above).
+        #[allow(clippy::unwrap_used)]
         self.root.write().unwrap().replace(root);
         Ok(())
     }
@@ -341,6 +348,8 @@ impl InMemoryStorageTrieRepository {
 
 impl StorageTrieDb for InMemoryStorageTrieRepository {
     fn db(&self, account: Address) -> Arc<StagingEthTrieDb<BoxedTrieDb>> {
+        // Safety: unwrap here is acceptable (see reason in `DbWithRoot` implementation).
+        #[allow(clippy::unwrap_used)]
         self.accounts
             .write()
             .unwrap()

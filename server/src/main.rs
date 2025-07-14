@@ -11,7 +11,7 @@ async fn main() {
         .layer(EnvLayer::new())
         .layer(CliLayer::new())
         .try_build()
-        .unwrap();
+        .expect("Must build config to run app");
 
     umi_server::set_global_tracing_subscriber();
     umi_server::run(args).await;

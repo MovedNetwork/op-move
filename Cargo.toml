@@ -106,6 +106,9 @@ warp-reverse-proxy = "1"
 evmap = "10"
 toml = "0.8"
 
+[workspace.lints.clippy]
+unwrap_used = "deny"
+
 [patch.crates-io]
 merlin = { git = "https://github.com/aptos-labs/merlin" }
 x25519-dalek = { git = "https://github.com/aptos-labs/x25519-dalek", branch = "zeroize_v1" }

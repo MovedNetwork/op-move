@@ -4,6 +4,7 @@ use {
     umi_app::{Application, CommandActor, HybridBlockHashCache},
     umi_blockchain::state::EthTrieStateQueries,
     umi_genesis::config::GenesisConfig,
+    umi_shared::error::Error,
     umi_state::{EthTrieState, State},
     umi_storage_rocksdb::{block, RocksEthTrieDb},
 };
@@ -85,7 +86,12 @@ impl<'db> umi_app::Dependencies<'db> for RocksDbDependencies {
     }
 
     fn on_payload() -> &'db Self::OnPayload {
-        &|state, id, hash| state.payload_queries.add_block_hash(id, hash).unwrap()
+        &|state, id, hash| {
+            state.payload_queries.add_block_hash(id, hash).map_err(|e| {
+                tracing::error!("on_payload callback failed: {e:?}");
+                Error::DatabaseState
+            })
+        }
     }
 
     fn on_tx() -> &'db Self::OnTx {
@@ -97,7 +103,10 @@ impl<'db> umi_app::Dependencies<'db> for RocksDbDependencies {
             state
                 .state_queries
                 .push_state_root(state.state.state_root())
-                .unwrap()
+                .map_err(|e| {
+                    tracing::error!("on_tx_batch callback failed: {e:?}");
+                    Error::DatabaseState
+                })
         }
     }
 
@@ -199,7 +208,12 @@ impl<'db> umi_app::Dependencies<'db> for RocksDbReaderDependencies {
     }
 
     fn on_payload() -> &'db Self::OnPayload {
-        &|state, id, hash| state.payload_queries.add_block_hash(id, hash).unwrap()
+        &|state, id, hash| {
+            state.payload_queries.add_block_hash(id, hash).map_err(|e| {
+                tracing::error!("on_payload callback failed: {e:?}");
+                Error::DatabaseState
+            })
+        }
     }
 
     fn on_tx() -> &'db Self::OnTx {
@@ -211,7 +225,10 @@ impl<'db> umi_app::Dependencies<'db> for RocksDbReaderDependencies {
             state
                 .state_queries
                 .push_state_root(state.state.state_root())
-                .unwrap()
+                .map_err(|e| {
+                    tracing::error!("on_tx_batch callback failed: {e:?}");
+                    Error::DatabaseState
+                })
         }
     }
 

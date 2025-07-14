@@ -2,8 +2,9 @@ use {
     crate::UmiVm,
     alloy::primitives::address,
     aptos_framework::{ReleaseBundle, ReleasePackage},
+    aptos_types::vm_status::StatusCode,
     bytes::Bytes,
-    move_binary_format::errors::VMError,
+    move_binary_format::errors::{Location, PartialVMError, VMError},
     move_core_types::{
         account_address::AccountAddress,
         effects::{ChangeSet, Op},
@@ -144,26 +145,32 @@ fn initialize_package(
     addr: AccountAddress,
     traversal_context: &mut TraversalContext,
     package: &ReleasePackage,
-) {
+) -> Result<(), VMError> {
+    let serialization_failure = || -> VMError {
+        PartialVMError::new(StatusCode::VALUE_SERIALIZATION_ERROR)
+            .with_message("Failed to serialize argument to `initialize` function.".into())
+            .finish(Location::Undefined)
+    };
     let module = &ModuleId::new(FRAMEWORK_ADDRESS, ident_str!("code").into());
     let function_name = ident_str!("initialize");
-    session
-        .execute_function_bypass_visibility(
-            module,
-            function_name,
-            vec![],
-            vec![
-                MoveValue::Signer(FRAMEWORK_ADDRESS)
-                    .simple_serialize()
-                    .unwrap(),
-                MoveValue::Signer(addr).simple_serialize().unwrap(),
-                bcs::to_bytes(package.package_metadata()).unwrap(),
-            ],
-            &mut UnmeteredGasMeter,
-            traversal_context,
-            module_storage,
-        )
-        .unwrap();
+    session.execute_function_bypass_visibility(
+        module,
+        function_name,
+        vec![],
+        vec![
+            MoveValue::Signer(FRAMEWORK_ADDRESS)
+                .simple_serialize()
+                .ok_or_else(serialization_failure)?,
+            MoveValue::Signer(addr)
+                .simple_serialize()
+                .ok_or_else(serialization_failure)?,
+            bcs::to_bytes(package.package_metadata()).map_err(|_| serialization_failure())?,
+        ],
+        &mut UnmeteredGasMeter,
+        traversal_context,
+        module_storage,
+    )?;
+    Ok(())
 }
 
 fn deploy_aptos_framework(state: &mut impl State, umi_vm: &UmiVm) -> Result<ChangeSet, VMError> {
@@ -188,7 +195,9 @@ fn deploy_aptos_framework(state: &mut impl State, umi_vm: &UmiVm) -> Result<Chan
                     StagingModuleStorage::create(&sender, &module_storage, vec![code.into()])?;
                 let bundle = staged_module_storage.release_verified_module_bundle();
                 let l2_single_module_writes = convert_bundle_into_module_ops(bundle)?;
-                l2_writes.squash(l2_single_module_writes).unwrap();
+                l2_writes
+                    .squash(l2_single_module_writes)
+                    .expect("Framework modules do not have conflicting changes");
             }
             l2_writes
         } else {
@@ -221,7 +230,7 @@ fn deploy_aptos_framework(state: &mut impl State, umi_vm: &UmiVm) -> Result<Chan
         // can link against previous ones, but also pass it outside for genesis image generation
         state
             .apply(Changes::without_tables(package_writes.clone()))
-            .unwrap();
+            .expect("State must work at genesis");
         framework_writes
             .squash(package_writes)
             .expect("Packages in framework should not conflict with each other");
@@ -240,7 +249,7 @@ fn deploy_aptos_framework(state: &mut impl State, umi_vm: &UmiVm) -> Result<Chan
         let addr = *pack
             .sorted_code_and_modules()
             .first()
-            .unwrap()
+            .expect("There is at least one module per package")
             .1
             .self_id()
             .address();
@@ -250,7 +259,7 @@ fn deploy_aptos_framework(state: &mut impl State, umi_vm: &UmiVm) -> Result<Chan
             addr,
             &mut traversal_context,
             pack,
-        );
+        )?;
     }
     let session_changes = session.finish(&code_storage)?;
     framework_writes
@@ -282,7 +291,7 @@ fn deploy_sui_framework(state: &mut impl State, umi_vm: &UmiVm) -> Result<Change
     let stdlib_writes = convert_bundle_into_module_ops(bundle)?;
     state
         .apply(Changes::without_tables(stdlib_writes.clone()))
-        .unwrap();
+        .expect("State must work at genesis");
     total_writes
         .squash(stdlib_writes)
         .expect("Sui stdlib can be squashed with empty change set");
@@ -307,7 +316,7 @@ fn deploy_sui_framework(state: &mut impl State, umi_vm: &UmiVm) -> Result<Change
     let framework_writes = convert_bundle_into_module_ops(bundle)?;
     state
         .apply(Changes::without_tables(framework_writes.clone()))
-        .unwrap();
+        .expect("State must work at genesis");
     total_writes
         .squash(framework_writes)
         .expect("Sui framework can be squashed with stdlib");
@@ -320,7 +329,9 @@ fn convert_bundle_into_module_ops(
 ) -> Result<ChangeSet, VMError> {
     let mut writes = ChangeSet::new();
     for (module_id, bytes) in bundle.into_iter() {
-        writes.add_module_op(module_id, Op::New(bytes)).unwrap();
+        writes
+            .add_module_op(module_id, Op::New(bytes))
+            .expect("No duplicate modules in `VerifiedModuleBundle`");
     }
     Ok(writes)
 }

@@ -4,6 +4,9 @@ description = "Umi node integration with LMDB persistent storage engine via Heed
 version.workspace = true
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 eth_trie.workspace = true
 heed.workspace = true

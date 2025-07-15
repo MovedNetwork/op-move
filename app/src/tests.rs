@@ -1,6 +1,9 @@
 use {
     super::*,
-    crate::{Payload, PayloadForExecution, TestDependencies},
+    crate::{
+        Payload, PayloadForExecution, TestDependencies,
+        query::{MAX_SUGGESTED_PRIORITY_FEE, MIN_SUGGESTED_PRIORITY_FEE},
+    },
     alloy::{
         consensus::{SignableTransaction, TxEip1559, TxEnvelope},
         eips::BlockNumberOrTag::{self, *},
@@ -191,6 +194,7 @@ fn mint_eth(
 fn create_app_with_fake_queries(
     addr: AccountAddress,
     initial_balance: U256,
+    base_fee: u64,
     height: u64,
 ) -> (
     ApplicationReader<'static, TestDependencies>,
@@ -201,7 +205,8 @@ fn create_app_with_fake_queries(
     let head_hash = B256::new(hex!(
         "e56ec7ba741931e8c55b7f654a6e56ed61cf8b8279bf5e3ef6ac86a11eb33a9d"
     ));
-    let genesis_block = Block::default().with_hash(head_hash).with_value(U256::ZERO);
+    let mut genesis_block = Block::default().with_hash(head_hash).with_value(U256::ZERO);
+    genesis_block.block.header.base_fee_per_gas = Some(base_fee);
 
     let (memory_reader, mut memory) = shared_memory::new();
     let mut block_hash_cache =
@@ -441,7 +446,7 @@ fn test_fetched_balances_are_updated_after_transfer_of_funds() {
     let initial_balance = U256::from(5);
     let amount = U256::from(4);
     let (reader, mut app) =
-        create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), initial_balance, 0);
+        create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), initial_balance, 0, 0);
 
     let tx = create_transaction(0);
 
@@ -468,7 +473,7 @@ fn test_fetched_nonces_are_updated_after_executing_transaction() {
     let to = Address::new(hex!("44223344556677889900ffeeaabbccddee111111"));
     let initial_balance = U256::from(5);
     let (reader, mut app) =
-        create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), initial_balance, 0);
+        create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), initial_balance, 0, 0);
 
     let tx = create_transaction(0);
 
@@ -494,7 +499,7 @@ fn test_fetched_nonces_are_updated_after_executing_transaction() {
 fn test_one_payload_can_be_fetched_repeatedly() {
     let initial_balance = U256::from(5);
     let (reader, mut app) =
-        create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), initial_balance, 0);
+        create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), initial_balance, 0, 0);
 
     let tx = create_transaction(0);
 
@@ -515,7 +520,7 @@ fn test_one_payload_can_be_fetched_repeatedly() {
 fn test_older_payload_can_be_fetched_again_successfully() {
     let initial_balance = U256::from(15);
     let (reader, mut app) =
-        create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), initial_balance, 0);
+        create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), initial_balance, 0, 0);
 
     let tx = create_transaction(0);
 
@@ -566,7 +571,7 @@ fn test_older_payload_can_be_fetched_again_successfully() {
 fn test_txs_from_one_account_have_proper_nonce_ordering() {
     let initial_balance = U256::from(1000);
     let (reader, mut app) =
-        create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), initial_balance, 0);
+        create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), initial_balance, 0, 0);
 
     let mut tx_hashes: Vec<B256> = Vec::with_capacity(10);
 
@@ -637,7 +642,7 @@ fn test_fee_history_validation(
     percentiles: Option<Vec<f64>>,
 ) -> Result<FeeHistory, Error> {
     let (reader, _app) =
-        create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), U256::from(10), 1);
+        create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), U256::from(10), 0, 1);
 
     reader.fee_history(block_count, Latest, percentiles)
 }
@@ -654,7 +659,7 @@ fn test_fee_history_block_ranges(
     expected_oldest: u64,
 ) {
     let (reader, _app) =
-        create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), U256::from(10), 5);
+        create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), U256::from(10), 0, 5);
 
     let result = reader.fee_history(block_count, block_tag, None);
     assert!(result.is_ok());
@@ -669,7 +674,7 @@ fn test_fee_history_block_ranges(
 #[test_case(Some(vec![10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0]), 9; "many percentiles")]
 fn test_fee_history_reward_lengths(percentiles: Option<Vec<f64>>, expected_reward_length: usize) {
     let (reader, _app) =
-        create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), U256::from(10), 1);
+        create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), U256::from(10), 0, 1);
 
     let result = reader.fee_history(1, Latest, percentiles);
     assert!(result.is_ok());
@@ -688,7 +693,7 @@ fn test_fee_history_reward_lengths(percentiles: Option<Vec<f64>>, expected_rewar
 #[test]
 fn test_fee_history_eip1559_fields() {
     let (reader, mut app) =
-        create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), U256::from(10), 1);
+        create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), U256::from(10), 0, 1);
 
     app.start_block_build(PayloadForExecution::default(), U64::from(1))
         .unwrap();
@@ -713,7 +718,7 @@ fn test_fee_history_eip1559_fields() {
 #[test_case(5, false; "blocks with transactions have non-zero gas ratio")]
 fn test_fee_history_empty_vs_full_blocks(num_txs: usize, expect_zero_ratio: bool) {
     let (reader, mut app) =
-        create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), U256::from(1000), 0);
+        create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), U256::from(1000), 0, 0);
 
     for i in 0..num_txs {
         let tx = create_transaction(i as u64);
@@ -749,7 +754,7 @@ fn test_fee_history_percentile_calculations(
     expected_rewards: Vec<u128>,
 ) {
     let (reader, mut app) =
-        create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), U256::from(10000000), 0);
+        create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), U256::from(10000000), 0, 0);
 
     for (i, (&gas_price, &gas_limit)) in gas_prices.iter().zip(gas_limits.iter()).enumerate() {
         let tx = create_transaction_with_max_fee_and_gas_limit(i as u64, gas_price, gas_limit);
@@ -784,7 +789,7 @@ fn test_fee_history_percentile_calculations(
 #[test_case(vec![2, 2, 2], false; "constant transactions")]
 fn test_fee_history_gas_ratio_progression(tx_counts: Vec<usize>, expect_increasing: bool) {
     let (reader, mut app) =
-        create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), U256::from(10000000), 0);
+        create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), U256::from(10000000), 0, 0);
 
     let mut nonce = 0;
     // Reasonable amount to allow a tx succeed
@@ -830,7 +835,7 @@ fn test_fee_history_gas_ratio_progression(tx_counts: Vec<usize>, expect_increasi
 #[test]
 fn test_fee_history_boundary_percentiles() {
     let (reader, mut app) =
-        create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), U256::from(10000000), 0);
+        create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), U256::from(10000000), 0, 0);
 
     // Create exactly 4 transactions with equal gas usage but different prices for boundary testing
     let gas_prices = [1_000_000_000, 2_000_000_000, 3_000_000_000, 4_000_000_000];
@@ -866,4 +871,133 @@ fn test_fee_history_boundary_percentiles() {
         assert_eq!(block_rewards[2], 1_500_000_000); // 66th percentile
         assert_eq!(block_rewards[3], 2_000_000_000); // 100th percentile
     }
+}
+
+#[test]
+fn test_max_priority_fee_low_congestion() {
+    let (reader, mut app) =
+        create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), U256::from(10000000), 1, 0);
+
+    // Most likely to actually consume less than this preset tx gas limit
+    for i in 0..10 {
+        let tx = create_transaction_with_max_fee_and_gas_limit(i, 2_000_000_000, 40_000);
+        app.add_transaction(tx);
+    }
+
+    app.start_block_build(
+        Payload {
+            gas_limit: U64::from(1_000_000), // still well within the block limits
+            ..Default::default()
+        }
+        .try_into()
+        .unwrap(),
+        U64::from(1),
+    )
+    .unwrap();
+
+    let max_priority_fee = reader.max_priority_fee_per_gas().unwrap();
+
+    // In low congestion, should return minimum priority fee
+    assert_eq!(max_priority_fee, MIN_SUGGESTED_PRIORITY_FEE);
+}
+
+#[test]
+fn test_max_priority_fee_high_congestion() {
+    let (reader, mut app) =
+        create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), U256::from(10000000), 1, 0);
+
+    // Low preset gas limit actually makes txs run out of gas, but they still get receipts and
+    // block inclusion, and allows us to control actual gas consumed.
+    for i in 0..5 {
+        let tx = create_transaction_with_max_fee_and_gas_limit(
+            i,
+            2_000_000_000 + (i * 100_000_000) as u128,
+            20_000,
+        );
+        app.add_transaction(tx);
+    }
+
+    app.start_block_build(
+        Payload {
+            gas_limit: U64::from(100_000),
+            ..Default::default()
+        }
+        .try_into()
+        .unwrap(),
+        U64::from(1),
+    )
+    .unwrap();
+
+    let max_priority_fee = reader.max_priority_fee_per_gas().unwrap();
+
+    assert!(max_priority_fee > MIN_SUGGESTED_PRIORITY_FEE);
+
+    // With 5 transactions, median is the 3rd. Expected tip for 3rd transaction:
+    // (2_000_000_000 + 2 * 100_000_000) / 2 = 1_100_000_000 (Division due to max
+    // priority fee set to half max fee at init). That value gets bumped by 10% additionally.
+    let expected_priority_fee = 1_210_000_000;
+    assert_eq!(max_priority_fee, expected_priority_fee);
+}
+
+#[test]
+fn test_gas_price_high_max_fee() {
+    let (reader, mut app) =
+        create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), U256::from(10000000), 1, 0);
+
+    // Same setup as before, but with very high constant max fees instead of gradually increasing
+    // moderate ones
+    for i in 0..5 {
+        let tx = create_transaction_with_max_fee_and_gas_limit(i, 1_000_000_000_000, 21_000);
+        app.add_transaction(tx);
+    }
+
+    app.start_block_build(
+        Payload {
+            gas_limit: U64::from(100_000),
+            ..Default::default()
+        }
+        .try_into()
+        .unwrap(),
+        U64::from(1),
+    )
+    .unwrap();
+
+    let max_priority_fee = reader.max_priority_fee_per_gas().unwrap();
+
+    // Should be clamped to maximum as 1e12 > 5e11
+    assert_eq!(max_priority_fee, MAX_SUGGESTED_PRIORITY_FEE);
+}
+
+#[test]
+fn test_gas_price_vs_max_priority_fee_difference() {
+    let (reader, mut app) =
+        create_app_with_fake_queries(EVM_ADDRESS.to_move_address(), U256::from(10000000), 1, 0);
+
+    for i in 0..10 {
+        let tx = create_transaction_with_max_fee_and_gas_limit(i, 2_000_000_000, 40_000);
+        app.add_transaction(tx);
+    }
+
+    app.start_block_build(
+        Payload {
+            gas_limit: U64::from(1_000_000),
+            ..Default::default()
+        }
+        .try_into()
+        .unwrap(),
+        U64::from(1),
+    )
+    .unwrap();
+
+    let gas_price = reader.gas_price().unwrap();
+    let max_priority_fee = reader.max_priority_fee_per_gas().unwrap();
+
+    // `eth_gasPrice` and `eth_maxPriorityFeePerGas` differ exactly by base fee
+    let difference = gas_price - max_priority_fee;
+    assert!(difference > 0);
+
+    let block = reader.block_by_height(Latest, true).unwrap();
+    let actual_base_fee = block.0.header.inner.base_fee_per_gas.unwrap_or_default();
+
+    assert_eq!(difference, actual_base_fee as u128);
 }

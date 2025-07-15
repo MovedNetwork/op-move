@@ -8,7 +8,7 @@ pub async fn execute<'reader>(
 ) -> Result<serde_json::Value, JsonRpcError> {
     parse_params_0(request)?;
 
-    let response = app.gas_price()?;
+    let response = app.max_priority_fee_per_gas()?;
 
     Ok(serde_json::to_value(format!("{response:#x}"))
         .expect("Must be able to JSON-serialize response"))
@@ -24,10 +24,10 @@ mod tests {
     async fn test_execute() {
         let (reader, _app) = create_app();
 
-        // not supplying params field is the same as empty params
         let request: serde_json::Value = serde_json::json!({
             "jsonrpc": "2.0",
-            "method": "eth_gasPrice",
+            "method": "eth_maxPriorityFeePerGas",
+            "params": [],
             "id": 1
         });
 
@@ -37,7 +37,7 @@ mod tests {
         assert_eq!(response, expected_response);
 
         let hex_str = response.as_str().unwrap().strip_prefix("0x").unwrap();
-        // The value is the minimum suggested fee constant + base fee of 0
+        // The value is the minimum suggested fee constant without base fee
         assert_eq!(u64::from_str_radix(hex_str, 16).unwrap(), 1_000_000);
     }
 
@@ -47,7 +47,7 @@ mod tests {
 
         let request: serde_json::Value = serde_json::json!({
             "jsonrpc": "2.0",
-            "method": "eth_gasPrice",
+            "method": "eth_maxPriorityFeePerGas",
             "params": ["wrong"],
             "id": 1
         });

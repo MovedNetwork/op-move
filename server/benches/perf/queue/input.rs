@@ -23,6 +23,7 @@ pub const GENESIS: ExtendedBlock = {
         )),
         value: U256::ZERO,
         payload_id: PayloadId::ZERO,
+        size: U256::ZERO,
         block: Block {
             header: Header {
                 parent_hash: B256::ZERO,

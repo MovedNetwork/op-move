@@ -67,9 +67,9 @@ impl BlockResponse {
             header: alloy::rpc::types::Header {
                 hash: value.hash,
                 inner: value.block.header,
-                // TODO: review fields below
+                // Deprecated for PoS clients: <https://github.com/ethereum/execution-apis/pull/570>
                 total_difficulty: None,
-                size: None,
+                size: Some(value.size),
             },
             uncles: Vec::new(),
             withdrawals: Some(Withdrawals(Vec::new())),

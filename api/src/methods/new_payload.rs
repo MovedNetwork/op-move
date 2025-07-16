@@ -255,7 +255,9 @@ mod tests {
         let head_hash = B256::new(hex!(
             "781f09c5b7629a7ca30668e440ea40557f01461ad6f105b371f61ff5824b2449"
         ));
-        let genesis_block = Block::default().with_hash(head_hash).with_value(U256::ZERO);
+        let genesis_block = Block::default()
+            .into_extended_with_hash(head_hash)
+            .with_value(U256::ZERO);
 
         let (memory_reader, mut memory) = shared_memory::new();
         let mut block_hash_cache =

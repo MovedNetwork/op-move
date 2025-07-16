@@ -285,7 +285,8 @@ mod tests {
                 let hash = B256::from([(height % 256) as u8; 32]);
                 let header = Header::default();
                 let block = Block::new(header, Vec::new());
-                let extended_block = ExtendedBlock::new(hash, U256::ZERO, U64::ZERO, block);
+                let extended_block =
+                    ExtendedBlock::new(hash, U256::ZERO, U64::ZERO, U256::ZERO, block);
                 let response =
                     BlockResponse::from_block_with_transactions(extended_block, Vec::new());
                 Ok(Some(response))

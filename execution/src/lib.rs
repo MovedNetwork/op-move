@@ -36,7 +36,7 @@ use {
         events::{
             EVM_LOGS_EVENT_LAYOUT, EVM_LOGS_EVENT_TAG, EthTransferLog, evm_logs_event_to_log,
         },
-        state::{BlockHashLookup, BlockHashWriter, StorageTrieRepository},
+        state::{BlockHashLookup, StorageTrieRepository},
     },
     umi_genesis::config::GenesisConfig,
     umi_shared::primitives::{B256, ToEthAddress},
@@ -112,9 +112,9 @@ where
 }
 
 #[derive(Debug)]
-pub enum TransactionExecutionInput<'input, S, ST, F, B, H, W> {
+pub enum TransactionExecutionInput<'input, S, ST, F, B, H> {
     Deposit(DepositExecutionInput<'input, S, ST, H>),
-    Canonical(CanonicalExecutionInput<'input, S, ST, F, B, H, W>),
+    Canonical(CanonicalExecutionInput<'input, S, ST, F, B, H>),
 }
 
 #[derive(Debug)]
@@ -128,8 +128,8 @@ pub struct DepositExecutionInput<'input, S, ST, H> {
     pub block_hash_lookup: &'input H,
 }
 
-impl<'input, S, ST, F, B, H, W> From<DepositExecutionInput<'input, S, ST, H>>
-    for TransactionExecutionInput<'input, S, ST, F, B, H, W>
+impl<'input, S, ST, F, B, H> From<DepositExecutionInput<'input, S, ST, H>>
+    for TransactionExecutionInput<'input, S, ST, F, B, H>
 {
     fn from(value: DepositExecutionInput<'input, S, ST, H>) -> Self {
         Self::Deposit(value)
@@ -137,7 +137,7 @@ impl<'input, S, ST, F, B, H, W> From<DepositExecutionInput<'input, S, ST, H>>
 }
 
 #[derive(Debug)]
-pub struct CanonicalExecutionInput<'input, S, ST, F, B, H, W> {
+pub struct CanonicalExecutionInput<'input, S, ST, F, B, H> {
     pub tx: &'input NormalizedEthTransaction,
     pub tx_hash: &'input B256,
     pub state: &'input S,
@@ -149,13 +149,12 @@ pub struct CanonicalExecutionInput<'input, S, ST, F, B, H, W> {
     pub base_token: &'input B,
     pub block_header: HeaderForExecution,
     pub block_hash_lookup: &'input H,
-    pub block_hash_writer: &'input W,
 }
 
-impl<'input, S, ST, F, B, H, W> From<CanonicalExecutionInput<'input, S, ST, F, B, H, W>>
-    for TransactionExecutionInput<'input, S, ST, F, B, H, W>
+impl<'input, S, ST, F, B, H> From<CanonicalExecutionInput<'input, S, ST, F, B, H>>
+    for TransactionExecutionInput<'input, S, ST, F, B, H>
 {
-    fn from(value: CanonicalExecutionInput<'input, S, ST, F, B, H, W>) -> Self {
+    fn from(value: CanonicalExecutionInput<'input, S, ST, F, B, H>) -> Self {
         Self::Canonical(value)
     }
 }
@@ -166,9 +165,8 @@ pub fn execute_transaction<
     F: L2GasFee,
     B: BaseTokenAccounts,
     H: BlockHashLookup,
-    W: BlockHashWriter,
 >(
-    input: TransactionExecutionInput<S, ST, F, B, H, W>,
+    input: TransactionExecutionInput<S, ST, F, B, H>,
     resolver_cache: &mut ResolverCache,
 ) -> umi_shared::error::Result<TransactionExecutionOutcome> {
     match input {

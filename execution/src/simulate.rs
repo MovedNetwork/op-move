@@ -25,7 +25,7 @@ use {
     std::time::{SystemTime, UNIX_EPOCH},
     umi_evm_ext::{
         HeaderForExecution,
-        state::{BlockHashLookup, BlockHashWriter, StorageTrieRepository},
+        state::{BlockHashLookup, StorageTrieRepository},
     },
     umi_genesis::{CreateMoveVm, UmiVm, config::GenesisConfig},
     umi_shared::{
@@ -44,7 +44,6 @@ pub fn simulate_transaction(
     base_token: &impl BaseTokenAccounts,
     block_height: u64,
     block_hash_lookup: &impl BlockHashLookup,
-    block_hash_writer: &impl BlockHashWriter,
 ) -> umi_shared::error::Result<TransactionExecutionOutcome> {
     let mut tx = NormalizedEthTransaction::from(request.clone());
     if request.from.is_some() && request.nonce.is_none() {
@@ -74,7 +73,6 @@ pub fn simulate_transaction(
         base_token,
         block_header,
         block_hash_lookup,
-        block_hash_writer,
     };
 
     execute_transaction(input.into(), &mut ResolverCache::default())

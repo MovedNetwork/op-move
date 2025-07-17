@@ -18,7 +18,7 @@ use {
     umi_execution::simulate::{call_transaction, simulate_transaction},
     umi_shared::{
         error::{Error, InvariantViolation, Result, UserError},
-        primitives::{Address, B256, ToMoveAddress, U256},
+        primitives::{Address, B256, Bytes, ToMoveAddress, U256},
     },
 };
 
@@ -44,6 +44,17 @@ impl<'app, D: Dependencies<'app>> ApplicationReader<'app, D> {
             address.to_move_address(),
             self.resolve_height(height)?,
         )
+    }
+
+    pub fn evm_bytecode_by_height(
+        &self,
+        address: Address,
+        height: BlockNumberOrTag,
+    ) -> Result<Bytes> {
+        Ok(self
+            .state_queries
+            .evm_bytecode_at(address.to_move_address(), self.resolve_height(height)?)?
+            .unwrap_or_default())
     }
 
     pub fn nonce_by_height(&self, address: Address, height: BlockNumberOrTag) -> Result<u64> {

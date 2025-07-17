@@ -60,6 +60,7 @@ async fn inner_handle_request<'reader>(
         SendRawTransaction => send_raw_transaction::execute(request, queue).await,
         ChainId => chain_id::execute(request, app).await,
         GetBalance => get_balance::execute(request, app).await,
+        GetCode => get_code::execute(request, app).await,
         GetNonce => get_nonce::execute(request, app).await,
         GetTransactionByHash => get_transaction_by_hash::execute(request, app).await,
         GetBlockByHash => get_block_by_hash::execute(request, app).await,

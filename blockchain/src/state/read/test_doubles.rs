@@ -8,7 +8,10 @@ use {
     move_vm_types::resolver::MoveResolver,
     std::{convert::Infallible, sync::Arc},
     umi_evm_ext::state::{self, StorageTrieRepository},
-    umi_shared::primitives::{B256, U256},
+    umi_shared::{
+        hex,
+        primitives::{B256, Bytes, U256},
+    },
     umi_state::EthTrieResolver,
 };
 
@@ -48,6 +51,14 @@ impl StateQueries for MockStateQueries {
         _height: BlockHeight,
     ) -> Result<ProofResponse, state::Error> {
         Ok(ProofResponse::default())
+    }
+
+    fn evm_bytecode_at(
+        &self,
+        _account: AccountAddress,
+        _height: BlockHeight,
+    ) -> Result<Option<Bytes>, state::Error> {
+        Ok(Some(Bytes::from_static(&hex!("0123"))))
     }
 
     fn resolver_at(

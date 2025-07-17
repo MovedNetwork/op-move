@@ -1,5 +1,10 @@
 use {
-    crate::payload::PayloadId,
+    crate::{payload::PayloadId, transaction::ExtendedTransaction},
+    alloy::{
+        rlp::Encodable,
+        rpc::types::{BlockTransactions, Withdrawals},
+    },
+    op_alloy::rpc_types::Transaction,
     std::fmt::Debug,
     umi_shared::primitives::{B256, U256},
 };
@@ -21,17 +26,39 @@ pub struct ExtendedBlock {
     /// fee to some users off-chain, leading to a more opaque and complex transaction fee market.
     pub value: U256,
     pub payload_id: PayloadId,
+    /// Size of the RLP encoded block in bytes.
+    pub size: U256,
     pub block: Block,
 }
 
 impl ExtendedBlock {
-    pub fn new(hash: B256, value: U256, payload_id: PayloadId, block: Block) -> Self {
+    pub fn new(hash: B256, value: U256, payload_id: PayloadId, size: U256, block: Block) -> Self {
         Self {
             hash,
             value,
             payload_id,
+            size,
             block,
         }
+    }
+
+    pub fn byte_length(&self, transactions: Vec<ExtendedTransaction>) -> U256 {
+        let block = alloy::rpc::types::Block {
+            transactions: BlockTransactions::Full(
+                transactions.into_iter().map(Transaction::from).collect(),
+            ),
+            header: alloy::rpc::types::Header {
+                hash: self.hash,
+                inner: self.block.header.clone(),
+                // Deprecated for PoS clients: <https://github.com/ethereum/execution-apis/pull/570>
+                total_difficulty: None,
+                // This is useful for some ETH RPC APIs. We store a dummy value so that RLP encoding for size calculation doesn't skip this field which we modify later.
+                size: Some(U256::ONE),
+            },
+            uncles: Vec::new(),
+            withdrawals: Some(Withdrawals(Vec::new())),
+        };
+        U256::from(block.clone().into_consensus().length())
     }
 
     pub fn with_value(mut self, value: U256) -> Self {
@@ -41,6 +68,11 @@ impl ExtendedBlock {
 
     pub fn with_payload_id(mut self, payload_id: PayloadId) -> Self {
         self.payload_id = payload_id;
+        self
+    }
+
+    pub fn with_size(mut self, size: U256) -> Self {
+        self.size = size;
         self
     }
 
@@ -64,8 +96,8 @@ impl Block {
         }
     }
 
-    pub fn with_hash(self, hash: B256) -> ExtendedBlock {
-        ExtendedBlock::new(hash, U256::ZERO, PayloadId::from(0u64), self)
+    pub fn into_extended_with_hash(self, hash: B256) -> ExtendedBlock {
+        ExtendedBlock::new(hash, U256::ZERO, PayloadId::from(0u64), U256::ZERO, self)
     }
 }
 

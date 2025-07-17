@@ -71,6 +71,7 @@ mod tests {
             "extraData": "0x",
             "mixHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
             "nonce": "0x0000000000000000",
+            "size": "0x1f0",
             "uncles": [],
             "transactions": [],
             "withdrawals": []

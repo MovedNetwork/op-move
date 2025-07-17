@@ -117,11 +117,29 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
         let block_hash = self.block_hash.block_hash(&header);
 
         let block = Block::new(header, transactions.iter().map(|v| v.trie_hash()).collect())
-            .with_hash(block_hash)
+            .into_extended_with_hash(block_hash)
             .with_value(total_tip)
             .with_payload_id(id);
 
         let block_number = block.block.header.number;
+
+        let extended_transactions = transactions
+            .iter()
+            .cloned()
+            .enumerate()
+            .map(|(transaction_index, inner)| {
+                ExtendedTransaction::new(
+                    inner.effective_gas_price(base_fee),
+                    inner,
+                    block_number,
+                    block_hash,
+                    transaction_index as u64,
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let size = block.byte_length(extended_transactions.clone());
+        let block = block.with_size(size);
 
         self.receipt_repository
             .extend(
@@ -138,22 +156,7 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
             })?;
 
         self.transaction_repository
-            .extend(
-                &mut self.storage,
-                transactions
-                    .iter()
-                    .cloned()
-                    .enumerate()
-                    .map(|(transaction_index, inner)| {
-                        ExtendedTransaction::new(
-                            inner.effective_gas_price(base_fee),
-                            inner,
-                            block_number,
-                            block_hash,
-                            transaction_index as u64,
-                        )
-                    }),
-            )
+            .extend(&mut self.storage, extended_transactions)
             .map_err(|e| {
                 tracing::error!(
                     "Failure during `start_block_build`. Failed to write transactions: {e:?}"

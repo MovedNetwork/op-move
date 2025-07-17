@@ -302,7 +302,9 @@ fn create_genesis_block(
     let hash = block_hash.block_hash(&genesis_header);
     let genesis_block = Block::new(genesis_header, Vec::new());
 
-    genesis_block.with_hash(hash).with_value(U256::ZERO)
+    genesis_block
+        .into_extended_with_hash(hash)
+        .with_value(U256::ZERO)
 }
 
 pub fn validate_jwt(

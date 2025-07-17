@@ -74,8 +74,11 @@ pub mod tests {
             ..Default::default()
         };
         let genesis_block = Block::new(genesis_header, Vec::new())
-            .with_hash(head_hash)
+            .into_extended_with_hash(head_hash)
             .with_value(U256::ZERO);
+
+        let size = genesis_block.byte_length(Vec::new());
+        let genesis_block = genesis_block.with_size(size);
 
         let (memory_reader, mut memory) = shared_memory::new();
         let mut block_hash_cache =

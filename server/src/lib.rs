@@ -8,7 +8,8 @@ use {
         path::Path,
         time::SystemTime,
     },
-    tracing_subscriber::fmt::format::FmtSpan,
+    tracing::level_filters::LevelFilter,
+    tracing_subscriber::{fmt::format::FmtSpan, EnvFilter},
     umi_api::method_name::MethodName,
     umi_app::{Application, ApplicationReader, CommandQueue, Dependencies},
     umi_blockchain::{
@@ -93,10 +94,17 @@ const JWT_VALID_DURATION_IN_SECS: u64 = 60;
 
 pub fn set_global_tracing_subscriber() {
     // TODO: config options for logging (debug level, output to file, etc)
+
+    // Default to debug level logging, except for hyper and alloy because they are too verbose.
+    let filter = EnvFilter::default()
+        .add_directive(LevelFilter::DEBUG.into())
+        .add_directive("hyper=warn".parse().expect("Is valid directive"))
+        .add_directive("alloy=info".parse().expect("Is valid directive"));
+
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
-        .with_max_level(tracing::Level::DEBUG)
+        .with_env_filter(filter)
         .with_ansi(false)
-        .with_span_events(FmtSpan::CLOSE)
+        .with_span_events(FmtSpan::FULL)
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("Failed to set tracing subscriber");
 }

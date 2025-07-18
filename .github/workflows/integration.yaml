@@ -14,10 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
-        with:
-          default: true
-          toolchain: stable
+      - uses: dtolnay/rust-toolchain@stable
       - name: Free up disk space
         run: rm -rf /opt/hostedtoolcache
       - name: Generate keystore file

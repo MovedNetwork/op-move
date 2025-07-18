@@ -336,7 +336,6 @@ impl TestContext {
                         base_token: &(),
                         block_header: Default::default(),
                         block_hash_lookup: &(),
-                        block_hash_writer: &(),
                     }
                     .into(),
                     NormalizedExtendedTxEnvelope::DepositedTx(tx) => DepositExecutionInput {
@@ -366,7 +365,6 @@ impl TestContext {
                         base_token: umi_base_token,
                         block_header: Default::default(),
                         block_hash_lookup: &(),
-                        block_hash_writer: &(),
                     }
                     .into(),
                     NormalizedExtendedTxEnvelope::DepositedTx(tx) => DepositExecutionInput {

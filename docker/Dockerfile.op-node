@@ -6,12 +6,10 @@ FROM alpine:3.21.2
 WORKDIR /volume
 
 RUN \
-  # Install system dependencies for foundry and other scripts
-  apk upgrade --no-cache \
   # jq required at least by optimism deploy script
-  && apk add --no-cache clang lld curl build-base linux-headers git bash jq \
+  apk add --no-cache clang lld curl build-base linux-headers git bash jq \
   # Clean up
-  && rm -rf /tmp/*
+  && rm -rf /tmp/* /var/cache/apk/*
 
 # Copy entrypoint
 COPY docker/op-node.sh entrypoint.sh
@@ -27,7 +25,7 @@ COPY docker/wait-for-it.sh /usr/local/bin/wait-for-it
 RUN chmod +x entrypoint.sh config.sh /usr/local/bin/wait-for-it
 
 # Copy built binary from build image and other dependencies
-COPY --from=optimism /volume/op-node/bin/op-node /usr/local/bin/op-node
+COPY --from=optimism /usr/local/bin/op-node /usr/local/bin/op-node
 COPY --from=optimism /volume/packages/contracts-bedrock /volume/packages/contracts-bedrock
 COPY --from=optimism /volume/.git /volume/.git
 COPY --from=optimism /root/.svm/0.8.15/solc-0.8.15 /root/.svm/0.8.15/solc-0.8.15

@@ -1,21 +1,19 @@
 # Add build image
-FROM ghcr.io/uminetwork/optimism:latest AS build
+FROM ghcr.io/uminetwork/optimism:latest AS optimism
 
 # Switch to clean image
 FROM alpine:3.21.2
 WORKDIR /volume
 
 RUN \
-# Install system dependencies
-    apk upgrade --no-cache \
-# bash required by wait-for-it
-# jq required by entrypoint to parse L2_ORACLE_PROXY
-    && apk add --no-cache bash jq \
-# Clean up
-    && rm -rf /tmp/*
+  # bash required by wait-for-it
+  # jq required by entrypoint to parse L2_ORACLE_PROXY
+  apk add --no-cache bash jq \
+  # Clean up
+  && rm -rf /tmp/* /var/cache/apk/*
 
 # Copy built binary from build image
-COPY --from=build /volume/op-proposer/bin/op-proposer /usr/local/bin/op-proposer
+COPY --from=optimism /usr/local/bin/op-proposer /usr/local/bin/op-proposer
 
 # Copy entrypoint
 COPY docker/op-proposer.sh entrypoint.sh

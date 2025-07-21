@@ -1,20 +1,18 @@
 # Add build image
-FROM ghcr.io/uminetwork/optimism:latest AS build
+FROM ghcr.io/uminetwork/optimism:latest AS optimism
 
 # Switch to clean image
 FROM alpine:3.21.2
 WORKDIR /volume
 
 RUN \
-# Install system dependencies
-    apk upgrade --no-cache \
-# bash required by wait-for-it
-    && apk add --no-cache bash \
-# Clean up
-    && rm -rf /tmp/*
+  # bash required by wait-for-it
+  apk add --no-cache bash \
+  # Clean up
+  && rm -rf /tmp/* /var/cache/apk/*
 
 # Copy built binary from build image
-COPY --from=build /volume/op-batcher/bin/op-batcher /usr/local/bin/op-batcher
+COPY --from=optimism /usr/local/bin/op-batcher /usr/local/bin/op-batcher
 
 # Copy entrypoint
 COPY docker/op-batcher.sh entrypoint.sh

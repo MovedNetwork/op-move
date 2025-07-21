@@ -4,8 +4,7 @@ WORKDIR /volume
 
 RUN \
   # Install build dependencies
-  apk upgrade --no-cache \
-  && apk add --no-cache git make \
+  apk add --no-cache git make \
   # Clean up
   && rm -rf /tmp/* \
   # Clone geth sources
@@ -36,7 +35,7 @@ RUN \
   apk upgrade --no-cache \
   && apk add --no-cache bash curl jq \
   # Clean up
-  && rm -rf /tmp/*
+  && rm -rf /tmp/* /var/cache/apk/*
 
 # Copy built binary from build image
 COPY --from=build /volume/build/bin/geth /usr/local/bin/geth

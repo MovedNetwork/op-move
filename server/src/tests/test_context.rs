@@ -27,7 +27,7 @@ pub struct TestContext<'test> {
     pub queue: CommandQueue,
     pub reader: ApplicationReader<'test, dependency::ReaderDependency>,
     head: B256,
-    timestamp: u64,
+    pub timestamp: u64,
 }
 
 impl TestContext<'static> {

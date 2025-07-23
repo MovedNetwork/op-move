@@ -3,12 +3,14 @@ use {
         consensus::{SignableTransaction, TxEip1559, TxEnvelope},
         network::TxSignerSync,
         primitives::{Address, TxKind},
+        rpc::types::TransactionRequest,
         signers::local::PrivateKeySigner,
     },
     umi_execution::transaction::{ScriptOrDeployment, TransactionData},
 };
 
 mod account_storage;
+mod block_env;
 mod blockhash;
 
 fn deploy_evm_contract(chain_id: u64, bytecode: &[u8]) -> TxEnvelope {
@@ -22,11 +24,11 @@ fn deploy_evm_contract(chain_id: u64, bytecode: &[u8]) -> TxEnvelope {
     )
 }
 
-fn call_contract(chain_id: u64, to: Address, selector: [u8; 4]) -> TxEnvelope {
+fn call_contract(chain_id: u64, to: Address, evm_input: Vec<u8>) -> TxEnvelope {
     let signer = PrivateKeySigner::random();
     let input = TransactionData::EvmContract {
         address: to,
-        data: selector.to_vec(),
+        data: evm_input,
     };
     sign_transaction(
         chain_id,
@@ -34,6 +36,18 @@ fn call_contract(chain_id: u64, to: Address, selector: [u8; 4]) -> TxEnvelope {
         || input.to_bytes().unwrap(),
         &signer,
     )
+}
+
+fn view_contract(to: Address, evm_input: Vec<u8>) -> TransactionRequest {
+    let from = Address::random();
+    let input = TransactionData::EvmContract {
+        address: to,
+        data: evm_input,
+    };
+    TransactionRequest::default()
+        .to(to)
+        .from(from)
+        .input(input.to_bytes().unwrap().into())
 }
 
 fn sign_transaction<F: FnOnce() -> Vec<u8>>(

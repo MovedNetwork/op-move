@@ -140,6 +140,7 @@ fn erc20_view_call(ctx: &TestContext, token_address: Address, method: Erc20Metho
         request,
         ctx.state.resolver(),
         &ctx.evm_storage,
+        Default::default(),
         &ctx.genesis_config,
         &(),
         &(),

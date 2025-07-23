@@ -84,6 +84,7 @@ pub fn call_transaction(
     request: TransactionRequest,
     state: &(impl MoveResolver + TableResolver),
     storage_trie: &impl StorageTrieRepository,
+    block_header: HeaderForExecution,
     genesis_config: &GenesisConfig,
     base_token: &impl BaseTokenAccounts,
     block_hash_lookup: &impl BlockHashLookup,
@@ -98,7 +99,14 @@ pub fn call_transaction(
     let vm = umi_vm.create_move_vm()?;
     let module_storage_bytes = ResolverBasedModuleBytesStorage::new(state);
     let code_storage = module_storage_bytes.as_unsync_code_storage(&umi_vm);
-    let session_id = SessionId::default();
+    let session_id = SessionId::new_from_canonical(
+        &tx,
+        tx_data.maybe_entry_fn(),
+        &tx.tx_hash,
+        genesis_config,
+        block_header,
+        tx_data.script_hash(),
+    );
     let mut session =
         create_vm_session(&vm, state, session_id, storage_trie, &(), block_hash_lookup);
     let traversal_storage = TraversalStorage::new();

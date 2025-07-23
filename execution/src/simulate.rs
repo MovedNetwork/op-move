@@ -58,6 +58,7 @@ pub fn simulate_transaction(
             .expect("Should get current time")
             .as_secs(),
         prev_randao: B256::random(),
+        chain_id: genesis_config.chain_id,
     };
 
     let l2_input = L2GasFeeInput::new(u64::MAX, U256::ZERO);

@@ -257,6 +257,7 @@ impl<'app, D: Dependencies<'app>> ApplicationReader<'app, D> {
                 number: height,
                 timestamp: block.0.header.timestamp,
                 prev_randao: block.0.header.mix_hash,
+                chain_id: self.genesis_config.chain_id,
             })
             .unwrap_or_default();
         call_transaction(

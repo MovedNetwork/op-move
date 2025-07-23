@@ -157,7 +157,7 @@ async fn test_block_env_evm_contract() -> anyhow::Result<()> {
         );
         let receipt = ctx.execute_transaction(tx).await.unwrap();
         let logged_chain_id = get_logged_uint(&receipt);
-        assert_eq!(logged_chain_id, U256::from(1)); // TODO: should match genesis chain id
+        assert_eq!(logged_chain_id, U256::from(chain_id));
 
         // 6.b check the chain id as a view call
         let request = view_contract(contract_address, getChainIdCall::SELECTOR.to_vec());

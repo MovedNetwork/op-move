@@ -89,6 +89,7 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
             number: parent.block.header.number + 1,
             timestamp: attributes.timestamp.as_limbs()[0],
             prev_randao: attributes.prev_randao,
+            chain_id: self.genesis_config.chain_id,
         };
         let (execution_outcome, receipts) = self.execute_transactions(
             transactions.clone().into_iter(),

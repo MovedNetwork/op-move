@@ -6,7 +6,10 @@ use {
     },
     eth_trie::{DB, EthTrie, Trie},
     move_binary_format::errors::PartialVMError,
-    move_core_types::{account_address::AccountAddress, vm_status::StatusCode},
+    move_core_types::{
+        account_address::AccountAddress, identifier::Identifier, language_storage::ModuleId,
+        vm_status::StatusCode,
+    },
     move_table_extension::TableResolver,
     move_vm_types::{
         resolver::{ModuleResolver, MoveResolver, ResourceResolver},
@@ -141,6 +144,22 @@ pub trait StateQueries {
         let bytes: Vec<u8> = value.cast()?;
 
         Ok(Some(bytes.into()))
+    }
+
+    fn move_bytecode_at(
+        &self,
+        account: AccountAddress,
+        name: &str,
+        height: BlockHeight,
+    ) -> Result<Option<Bytes>, state::Error> {
+        let Ok(ident) = Identifier::new(name) else {
+            return Ok(None);
+        };
+        let module_id = ModuleId::new(account, ident);
+        let resolver = self.resolver_at(height)?;
+        let bytes = resolver.get_module(&module_id)?;
+
+        Ok(bytes.map(Bytes))
     }
 
     fn resolver_at(

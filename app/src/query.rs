@@ -15,6 +15,7 @@ use {
         state::{ProofResponse, StateQueries},
         transaction::{TransactionQueries, TransactionResponse},
     },
+    umi_evm_ext::HeaderForExecution,
     umi_execution::simulate::{call_transaction, simulate_transaction},
     umi_shared::{
         error::{Error, InvariantViolation, Result, UserError},
@@ -248,10 +249,22 @@ impl<'app, D: Dependencies<'app>> ApplicationReader<'app, D> {
         block_number: BlockNumberOrTag,
     ) -> Result<Vec<u8>> {
         let height = self.resolve_height(block_number)?;
+        let block_header = self
+            .block_queries
+            .by_height(&self.storage, height, false)
+            .map_err(|_| Error::DatabaseState)?
+            .map(|block| HeaderForExecution {
+                number: height,
+                timestamp: block.0.header.timestamp,
+                prev_randao: block.0.header.mix_hash,
+                chain_id: self.genesis_config.chain_id,
+            })
+            .unwrap_or_default();
         call_transaction(
             transaction,
             &self.state_queries.resolver_at(height)?,
             &self.evm_storage,
+            block_header,
             &self.genesis_config,
             &self.base_token,
             &self.block_hash_lookup,

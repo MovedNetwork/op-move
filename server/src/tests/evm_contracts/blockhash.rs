@@ -42,7 +42,11 @@ async fn test_blockhash_evm_contract() -> anyhow::Result<()> {
 
         // 2. Call `getBlockHash` function in block with heights <= 3
         for block_height in [2, 3] {
-            let tx = call_contract(chain_id, contract_address, getBlockHashCall::SELECTOR);
+            let tx = call_contract(
+                chain_id,
+                contract_address,
+                getBlockHashCall::SELECTOR.to_vec(),
+            );
             let receipt = ctx.execute_transaction(tx).await.unwrap();
             assert_eq!(receipt.inner.block_number.unwrap(), block_height);
 
@@ -56,7 +60,11 @@ async fn test_blockhash_evm_contract() -> anyhow::Result<()> {
 
         // 3. Call `getBlockHash` function in block with 4 <= height <= 259
         for block_height in 4..=259 {
-            let tx = call_contract(chain_id, contract_address, getBlockHashCall::SELECTOR);
+            let tx = call_contract(
+                chain_id,
+                contract_address,
+                getBlockHashCall::SELECTOR.to_vec(),
+            );
             let receipt = ctx.execute_transaction(tx).await.unwrap();
             assert_eq!(receipt.inner.block_number.unwrap(), block_height);
 
@@ -67,7 +75,11 @@ async fn test_blockhash_evm_contract() -> anyhow::Result<()> {
 
         // 4. Call `getBlockHash` function in block with heights > 259
         for block_height in [260, 261] {
-            let tx = call_contract(chain_id, contract_address, getBlockHashCall::SELECTOR);
+            let tx = call_contract(
+                chain_id,
+                contract_address,
+                getBlockHashCall::SELECTOR.to_vec(),
+            );
             let receipt = ctx.execute_transaction(tx).await.unwrap();
             assert_eq!(receipt.inner.block_number.unwrap(), block_height);
 

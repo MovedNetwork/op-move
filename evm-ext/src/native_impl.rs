@@ -188,7 +188,12 @@ pub fn evm_view_with_native(
     let transact_to = TxKind::Call(to);
     let block_env = evm_native_ctx.block_env();
     let db = CacheDB::new(&evm_native_ctx.db);
-    let mut evm = build_evm(db, block_env, caller, transact_to, value, data, gas_limit);
+    let mut evm = build_evm(
+        db,
+        block_env,
+        construct_tx_env(caller, transact_to, value, data, gas_limit),
+        evm_native_ctx.block_header.chain_id,
+    );
     evm.replay().map_err(evm_error)
 }
 
@@ -205,7 +210,12 @@ pub fn evm_transact_with_native(
         .add_tx_origin(caller.to_move_address(), value);
     let block_env = evm_native_ctx.block_env();
     let db = &mut evm_native_ctx.db;
-    let mut evm = build_evm(db, block_env, caller, transact_to, value, data, gas_limit);
+    let mut evm = build_evm(
+        db,
+        block_env,
+        construct_tx_env(caller, transact_to, value, data, gas_limit),
+        evm_native_ctx.block_header.chain_id,
+    );
 
     let mut handler = WrappedMainnetHandler {
         inner: InnerMainnetHandler::default(),
@@ -259,37 +269,12 @@ fn evm_error(e: EVMError<DbError>) -> SafeNativeError {
 fn build_evm<DB: Database>(
     db: DB,
     block_env: BlockEnv,
-    caller: Address,
-    transact_to: TxKind,
-    value: U256,
-    data: Vec<u8>,
-    gas_limit: u64,
+    tx_env: TxEnv,
+    chain_id: u64,
 ) -> revm::MainnetEvm<MainnetContext<DB>> {
     Context::mainnet()
         .with_db(db)
-        .with_tx(TxEnv {
-            caller,
-            gas_limit,
-            // Gas price can be zero here because fee is charged in the MoveVM
-            gas_price: 0,
-            tx_type: 0,
-            kind: transact_to,
-            value,
-            data: data.into(),
-            // Nonce and chain id can be ignored because replay attacks
-            // are prevented at the MoveVM level. I.e. replay will
-            // never occur because the MoveVM will not accept a duplicate
-            // transaction
-            nonce: 0,
-            chain_id: None,
-            // TODO: could maybe construct something based on the values that
-            // have already been accessed in `context.traversal_context()`.
-            access_list: AccessList::default(),
-            gas_priority_fee: None,
-            blob_hashes: Vec::new(),
-            max_fee_per_blob_gas: 0,
-            authorization_list: Vec::new(),
-        })
+        .with_tx(tx_env)
         .with_block(block_env)
         .modify_cfg_chained(|env| {
             // We can safely disable the transaction-level check because
@@ -297,8 +282,42 @@ fn build_evm<DB: Database>(
             env.disable_balance_check = true;
             // Nonce can be ignored because replay attacks are prevented by MoveVM.
             env.disable_nonce_check = true;
+            // Set the chain id to match our chain.
+            env.chain_id = chain_id;
         })
         .build_mainnet()
+}
+
+fn construct_tx_env(
+    caller: Address,
+    transact_to: TxKind,
+    value: U256,
+    data: Vec<u8>,
+    gas_limit: u64,
+) -> TxEnv {
+    TxEnv {
+        caller,
+        gas_limit,
+        // Gas price can be zero here because fee is charged in the MoveVM
+        gas_price: 0,
+        tx_type: 0,
+        kind: transact_to,
+        value,
+        data: data.into(),
+        // Nonce and chain id can be ignored because replay attacks
+        // are prevented at the MoveVM level. I.e. replay will
+        // never occur because the MoveVM will not accept a duplicate
+        // transaction
+        nonce: 0,
+        chain_id: None,
+        // TODO: could maybe construct something based on the values that
+        // have already been accessed in `context.traversal_context()`.
+        access_list: AccessList::default(),
+        gas_priority_fee: None,
+        blob_hashes: Vec::new(),
+        max_fee_per_blob_gas: 0,
+        authorization_list: Vec::new(),
+    }
 }
 
 struct EvmCallArgs {

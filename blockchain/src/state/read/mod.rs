@@ -1,6 +1,7 @@
 mod eth_trie;
 mod in_memory;
 mod model;
+mod response;
 #[cfg(any(feature = "test-doubles", test))]
 mod test_doubles;
 #[cfg(test)]

@@ -33,7 +33,7 @@ jobs:
       - name: Run container images
         run: |
           docker network create localnet
-          # Meant for workflow dispatch with local changes to the image
+          # Meant for workflow dispatch on non-main branches 
           if [[ "${{ github.ref }}" != "refs/heads/main" ]]; then
             echo "Building images locally for feature branch..."
             docker compose build

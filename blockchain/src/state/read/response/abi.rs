@@ -1,8 +1,5 @@
 use {
-    move_core_types::{
-        ability::AbilitySet, account_address::AccountAddress, identifier::Identifier,
-        language_storage::ModuleId,
-    },
+    move_core_types::{ability::AbilitySet, account_address::AccountAddress},
     std::fmt,
 };
 
@@ -26,16 +23,6 @@ pub struct MoveModule {
 pub struct MoveModuleId {
     pub address: AccountAddress,
     pub name: Box<str>,
-}
-
-impl From<ModuleId> for MoveModuleId {
-    fn from(id: ModuleId) -> Self {
-        let (address, name) = <(AccountAddress, Identifier)>::from(id);
-        Self {
-            address: address.into(),
-            name: name.as_str().into(),
-        }
-    }
 }
 
 impl fmt::Display for MoveModuleId {

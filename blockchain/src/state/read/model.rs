@@ -1,11 +1,12 @@
 use {
+    crate::state::{MoveModule, MoveModuleResponse},
     alloy::{
         consensus::constants::KECCAK_EMPTY,
         primitives::keccak256,
         rpc::types::{EIP1186AccountProofResponse, EIP1186StorageProof},
     },
     eth_trie::{DB, EthTrie, Trie},
-    move_binary_format::errors::PartialVMError,
+    move_binary_format::{CompiledModule, errors::PartialVMError},
     move_core_types::{
         account_address::AccountAddress, identifier::Identifier, language_storage::ModuleId,
         vm_status::StatusCode,
@@ -146,20 +147,31 @@ pub trait StateQueries {
         Ok(Some(bytes.into()))
     }
 
-    fn move_bytecode_at(
+    fn move_module_at(
         &self,
         account: AccountAddress,
         name: &str,
         height: BlockHeight,
-    ) -> Result<Option<Bytes>, state::Error> {
+    ) -> Result<Option<MoveModuleResponse>, state::Error> {
         let Ok(ident) = Identifier::new(name) else {
             return Ok(None);
         };
         let module_id = ModuleId::new(account, ident);
         let resolver = self.resolver_at(height)?;
-        let bytes = resolver.get_module(&module_id)?;
+        let Some(bytes) = resolver.get_module(&module_id)?.map(Bytes) else {
+            return Ok(None);
+        };
 
-        Ok(bytes.map(Bytes))
+        // A transaction module payload can contain invalid bytecode.
+        // Ignore the error in that case and omit ABI in the response.
+        let abi = CompiledModule::deserialize(bytes.as_ref())
+            .ok()
+            .map(MoveModule::from);
+
+        Ok(Some(MoveModuleResponse {
+            bytecode: bytes,
+            abi,
+        }))
     }
 
     fn resolver_at(

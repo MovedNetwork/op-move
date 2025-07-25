@@ -1,8 +1,11 @@
 use {
-    crate::state::read::response::abi::{
-        MoveAbility, MoveFunction, MoveFunctionGenericTypeParam, MoveFunctionVisibility,
-        MoveModule, MoveStruct, MoveStructField, MoveStructGenericTypeParam, MoveStructTag,
-        MoveType,
+    crate::state::{
+        MoveModuleId,
+        read::response::abi::{
+            MoveAbility, MoveFunction, MoveFunctionGenericTypeParam, MoveFunctionVisibility,
+            MoveModule, MoveStruct, MoveStructField, MoveStructGenericTypeParam, MoveStructTag,
+            MoveType,
+        },
     },
     move_binary_format::{
         CompiledModule,
@@ -18,7 +21,7 @@ use {
         ability::{Ability, AbilitySet},
         account_address::AccountAddress,
         identifier::{IdentStr, Identifier},
-        metadata::Metadata,
+        language_storage::ModuleId,
     },
     std::borrow::Borrow,
 };
@@ -27,7 +30,7 @@ impl From<CompiledModule> for MoveModule {
     fn from(value: CompiledModule) -> Self {
         let (address, name) = <(AccountAddress, Identifier)>::from(value.self_id());
         Self {
-            address: address.into(),
+            address,
             name: name.into_string().into(),
             friends: value
                 .immediate_friends()
@@ -51,6 +54,16 @@ impl From<CompiledModule> for MoveModule {
                 .iter()
                 .map(|def| value.new_move_struct(def))
                 .collect(),
+        }
+    }
+}
+
+impl From<ModuleId> for MoveModuleId {
+    fn from(id: ModuleId) -> Self {
+        let (address, name) = <(AccountAddress, Identifier)>::from(id);
+        Self {
+            address,
+            name: name.as_str().into(),
         }
     }
 }
@@ -110,10 +123,6 @@ pub trait Bytecode {
 
     fn address_identifier_at(&self, idx: AddressIdentifierIndex) -> &AccountAddress;
 
-    fn find_entry_function(&self, name: &IdentStr) -> Option<MoveFunction>;
-
-    fn find_function(&self, name: &IdentStr) -> Option<MoveFunction>;
-
     fn function_is_view(&self, name: &IdentStr) -> bool;
 
     fn struct_is_event(&self, name: &IdentStr) -> bool;
@@ -133,7 +142,7 @@ pub trait Bytecode {
         let s_handle = self.struct_handle_at(*index);
         let m_handle = self.module_handle_at(s_handle.module);
         MoveStructTag {
-            address: (*self.address_identifier_at(m_handle.address)).into(),
+            address: *self.address_identifier_at(m_handle.address),
             module: self.identifier_at(m_handle.name).as_str().into(),
             name: self.identifier_at(s_handle.name).as_str().into(),
             generic_type_params: type_params.iter().map(|t| self.new_move_type(t)).collect(),
@@ -199,7 +208,7 @@ pub trait Bytecode {
             }
         };
         let name = self.identifier_at(handle.name);
-        let is_event = self.struct_is_event(&name);
+        let is_event = self.struct_is_event(name);
         let abilities = handle
             .abilities
             .into_iter()
@@ -224,7 +233,7 @@ pub trait Bytecode {
     fn new_move_function(&self, def: &FunctionDefinition) -> MoveFunction {
         let fhandle = self.function_handle_at(def.function);
         let name = self.identifier_at(fhandle.name);
-        let is_view = self.function_is_view(&name);
+        let is_view = self.function_is_view(name);
         MoveFunction {
             name: name.as_str().into(),
             visibility: def.visibility.into(),
@@ -277,27 +286,6 @@ impl Bytecode for CompiledModule {
         ModuleAccess::address_identifier_at(self, idx)
     }
 
-    fn find_entry_function(&self, name: &IdentStr) -> Option<MoveFunction> {
-        self.function_defs
-            .iter()
-            .filter(|def| def.is_entry)
-            .find(|def| {
-                let fhandle = ModuleAccess::function_handle_at(self, def.function);
-                ModuleAccess::identifier_at(self, fhandle.name) == name
-            })
-            .map(|def| self.new_move_function(def))
-    }
-
-    fn find_function(&self, name: &IdentStr) -> Option<MoveFunction> {
-        self.function_defs
-            .iter()
-            .find(|def| {
-                let fhandle = ModuleAccess::function_handle_at(self, def.function);
-                ModuleAccess::identifier_at(self, fhandle.name) == name
-            })
-            .map(|def| self.new_move_function(def))
-    }
-
     fn function_is_view(&self, _name: &IdentStr) -> bool {
         // TODO: Determine if function is view, possibly by using module metadata
         false
@@ -306,23 +294,5 @@ impl Bytecode for CompiledModule {
     fn struct_is_event(&self, _name: &IdentStr) -> bool {
         // TODO: Determine if struct is event, possibly by using module metadata
         false
-    }
-}
-
-/// Trait to unify accesses to [CompiledModule] and [CompiledScript] for extracting metadata.
-pub trait CompiledCodeMetadata {
-    /// Returns the binary version.
-    fn version(&self) -> u32;
-    /// Returns the [Metadata] stored in this module or script.
-    fn metadata(&self) -> &[Metadata];
-}
-
-impl CompiledCodeMetadata for CompiledModule {
-    fn version(&self) -> u32 {
-        self.version
-    }
-
-    fn metadata(&self) -> &[Metadata] {
-        &self.metadata
     }
 }

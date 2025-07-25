@@ -1,9 +1,18 @@
-FROM alpine:3.21.2
-WORKDIR /volume
+# First build all the dependencies
+FROM golang:1.22-alpine AS builder
 
-RUN apk add --no-cache wget
+# Install build dependencies
+RUN apk add --no-cache git make bash wget
 
-# Download foundry and install binaries
+# Set working directory
+WORKDIR /build
+
+# Clone and build optimism at specific commit
+RUN git clone https://github.com/ethereum-optimism/optimism . && \
+  git checkout f2e5a7a5 && \
+  make cannon-prestate op-node op-batcher op-proposer
+
+# Download and extract foundry binaries
 ARG TARGETARCH
 RUN if [ "$TARGETARCH" = "amd64" ]; then \
   wget https://github.com/foundry-rs/foundry/releases/download/v1.2.3/foundry_v1.2.3_alpine_amd64.tar.gz && \
@@ -13,34 +22,42 @@ RUN if [ "$TARGETARCH" = "amd64" ]; then \
   tar -xzf foundry_v1.2.3_alpine_arm64.tar.gz; \
   else \
   echo "Unsupported architecture"; exit 1; \
-  fi && \
-  cp ./forge /usr/local/bin/forge && \
-  cp ./cast /usr/local/bin/cast && \
-  rm -f ./*
+  fi
 
-# Install go
-COPY --from=golang:1.22-alpine /usr/local/go/ /usr/local/go/
+# Install forge dependencies for contracts
+RUN cd packages/contracts-bedrock && \
+  ../../forge install
 
-# Add go to path
-ENV PATH="/usr/local/go/bin:${PATH}"
+# Final minimal image
+FROM alpine:3.21.2
 
+# Copy only the built binaries we need
+COPY --from=builder /build/op-node/bin/op-node /usr/local/bin/
+COPY --from=builder /build/op-batcher/bin/op-batcher /usr/local/bin/
+COPY --from=builder /build/op-proposer/bin/op-proposer /usr/local/bin/
+COPY --from=builder /build/forge /usr/local/bin/
+COPY --from=builder /build/cast /usr/local/bin/
 
+# Required for op-node startup
+COPY --from=builder /build/op-program/bin/prestate.json /volume/op-program/bin/prestate.json
+COPY --from=builder /build/op-program/bin/meta.json /volume/op-program/bin/meta.json
+COPY --from=builder /build/op-program/bin/prestate-proof.json /volume/op-program/bin/prestate-proof.json
 
-RUN \
-  # Install build dependencies
-  apk upgrade --no-cache \
-  && apk add --no-cache git make bash \
-  # Clean up
-  && rm -rf /tmp/* \
-  # Clone optimism sources
-  && git clone https://github.com/ethereum-optimism/optimism . \
-  && git checkout f2e5a7a5 \
-  # Build cannon prestate dump, op-node, op-batcher and op-proposer
-  && make cannon-prestate op-node op-batcher op-proposer \
-  && cd /volume/packages/contracts-bedrock \
-  && forge install
+# To keep the right commit checked out
+COPY --from=builder /build/.git /volume/.git
 
-# Install Solidity compiler used by forge in Optimism
+# Copy contracts and dependencies - needed for OP Stack deployment
+COPY --from=builder /build/packages/contracts-bedrock /volume/packages/contracts-bedrock
+
+# Set up forge to find the contracts
+ENV FOUNDRY_ROOT=/volume/packages/contracts-bedrock
+
+# Copy only the specific Solidity compiler versions needed
 COPY --from=ethereum/solc:0.8.15 /usr/bin/solc /root/.svm/0.8.15/solc-0.8.15
 COPY --from=ethereum/solc:0.8.19 /usr/bin/solc /root/.svm/0.8.19/solc-0.8.19
 COPY --from=ethereum/solc:0.8.25 /usr/bin/solc /root/.svm/0.8.25/solc-0.8.25
+
+WORKDIR /volume
+
+# Clean up
+RUN rm -rf /var/cache/apk/* /tmp/*

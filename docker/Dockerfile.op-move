@@ -1,19 +1,12 @@
-FROM alpine:3.21.2 AS build
+FROM rust:1.88-alpine AS build
 
 WORKDIR /volume
 
 # Copy file with workspace rust toolchain
 COPY rust-toolchain rust-toolchain
 
-RUN \
 # Install build dependencies
-    apk upgrade --no-cache \
-    && apk add --no-cache clang clang-dev lld curl build-base linux-headers git openssl-dev \
-# Install rust toolchain manager
-    && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > rustup.sh \
-    && chmod +x ./rustup.sh \
-# Install default rust toolchain
-    && ./rustup.sh -y --default-toolchain "$(cat rust-toolchain)"
+RUN apk add --no-cache clang clang-dev lld curl build-base linux-headers git openssl-dev 
 
 # Add `cargo` to `PATH`
 ENV PATH="/root/.cargo/bin:${PATH}"
@@ -26,26 +19,25 @@ ENV LIBCLANG_PATH="/usr/lib/llvm19/lib/libclang.so.19.1.4"
 
 # Build release binary
 RUN --mount=type=cache,target=/root/.cargo/registry \
-    --mount=type=cache,target=/root/.cargo/git \
-    --mount=type=cache,target=/volume/target \
-# RocksDB breaks the build with libclang.so not found https://github.com/apache/skywalking/issues/10439
-# Aptos-core breaks the build with `disable_lifo_slot` not found https://github.com/aptos-labs/aptos-core/issues/5655 \
-    RUSTFLAGS="-C target-feature=-crt-static --cfg tokio_unstable" \
-    cargo build --bin op-move --release --features storage \
-    && mv target/release/op-move /volume/op-move
+  --mount=type=cache,target=/root/.cargo/git \
+  --mount=type=cache,target=/volume/target \
+  # RocksDB breaks the build with libclang.so not found https://github.com/apache/skywalking/issues/10439
+  # Aptos-core breaks the build with `disable_lifo_slot` not found https://github.com/aptos-labs/aptos-core/issues/5655 \
+  RUSTFLAGS="-C target-feature=-crt-static --cfg tokio_unstable" \
+  cargo build --bin op-move --release --features storage \
+  && mv target/release/op-move /volume/op-move
 
 # Switch to clean image
 FROM alpine:3.21.2
 WORKDIR /volume
 
 RUN \
-# Install run dependencies
-    apk upgrade --no-cache \
-    && apk add --no-cache clang lld curl build-base linux-headers git openssl-dev \
-# Clean up
-    && rm -rf /tmp/* \
-# Create directory that is used in relative paths to Move framework snapshot files
-    && mkdir genesis
+  # Install run dependencies
+  apk add --no-cache clang lld curl build-base linux-headers git openssl-dev \
+  # Clean up
+  && rm -rf /tmp/* /var/cache/apk/* \
+  # Create directory that is used in relative paths to Move framework snapshot files
+  && mkdir genesis
 
 # Copy Move framework snapshot files into expected paths
 COPY genesis/aptos.mrb genesis/aptos.mrb

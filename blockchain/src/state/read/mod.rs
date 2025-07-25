@@ -16,4 +16,5 @@ pub use {
         Balance, BlockHeight, HeightToStateRootIndex, Nonce, ProofResponse, StateQueries,
         StorageProof, Version, proof_from_trie_and_resolver,
     },
+    response::*,
 };

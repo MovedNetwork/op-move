@@ -33,7 +33,7 @@ impl From<ModuleId> for MoveModuleId {
         let (address, name) = <(AccountAddress, Identifier)>::from(id);
         Self {
             address: address.into(),
-            name: name.into(),
+            name: name.as_str().into(),
         }
     }
 }
@@ -97,6 +97,8 @@ pub enum MoveAbility {
 pub struct MoveStructGenericTypeParam {
     /// Move abilities tied to the generic type param and associated with the type that uses it
     pub constraints: Vec<MoveAbility>,
+    /// Phantom declaration flag
+    pub is_phantom: bool,
 }
 
 /// Move struct field
@@ -141,11 +143,6 @@ pub enum MoveType {
     GenericTypeParam { index: u16 },
     /// A reference
     Reference { mutable: bool, to: Box<MoveType> },
-    /// A move type that couldn't be parsed
-    ///
-    /// This prevents the parser from just throwing an error because one field
-    /// was unparsable, and gives the value in it.
-    Unparsable(String),
 }
 
 /// A Move struct tag for referencing an on-chain struct type

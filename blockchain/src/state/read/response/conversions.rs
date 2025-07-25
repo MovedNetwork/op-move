@@ -1,7 +1,8 @@
 use {
     crate::state::read::response::abi::{
-        MoveAbility, MoveFunction, MoveFunctionGenericTypeParam, MoveModule, MoveStruct,
-        MoveStructField, MoveStructGenericTypeParam, MoveStructTag, MoveType,
+        MoveAbility, MoveFunction, MoveFunctionGenericTypeParam, MoveFunctionVisibility,
+        MoveModule, MoveStruct, MoveStructField, MoveStructGenericTypeParam, MoveStructTag,
+        MoveType,
     },
     move_binary_format::{
         CompiledModule,
@@ -10,10 +11,11 @@ use {
             AddressIdentifierIndex, FieldDefinition, FunctionDefinition, FunctionHandle,
             FunctionHandleIndex, IdentifierIndex, ModuleHandle, ModuleHandleIndex, Signature,
             SignatureIndex, SignatureToken, StructDefinition, StructFieldInformation, StructHandle,
-            StructHandleIndex, Visibility,
+            StructHandleIndex, StructTypeParameter, Visibility,
         },
     },
     move_core_types::{
+        ability::{Ability, AbilitySet},
         account_address::AccountAddress,
         identifier::{IdentStr, Identifier},
         metadata::Metadata,
@@ -49,6 +51,48 @@ impl From<CompiledModule> for MoveModule {
                 .iter()
                 .map(|def| value.new_move_struct(def))
                 .collect(),
+        }
+    }
+}
+
+impl From<StructTypeParameter> for MoveStructGenericTypeParam {
+    fn from(value: StructTypeParameter) -> Self {
+        Self {
+            constraints: value
+                .constraints
+                .into_iter()
+                .map(MoveAbility::from)
+                .collect(),
+            is_phantom: value.is_phantom,
+        }
+    }
+}
+
+impl From<Ability> for MoveAbility {
+    fn from(value: Ability) -> Self {
+        match value {
+            Ability::Copy => Self::Copy,
+            Ability::Drop => Self::Drop,
+            Ability::Store => Self::Store,
+            Ability::Key => Self::Key,
+        }
+    }
+}
+
+impl From<AbilitySet> for MoveFunctionGenericTypeParam {
+    fn from(value: AbilitySet) -> Self {
+        Self {
+            constraints: value.into_iter().map(MoveAbility::from).collect(),
+        }
+    }
+}
+
+impl From<Visibility> for MoveFunctionVisibility {
+    fn from(value: Visibility) -> Self {
+        match &value {
+            Visibility::Private => Self::Private,
+            Visibility::Public => Self::Public,
+            Visibility::Friend => Self::Friend,
         }
     }
 }
@@ -163,7 +207,8 @@ pub trait Bytecode {
             .collect();
         let generic_type_params = handle
             .type_parameters
-            .iter()
+            .clone()
+            .into_iter()
             .map(MoveStructGenericTypeParam::from)
             .collect();
         MoveStruct {
@@ -187,7 +232,8 @@ pub trait Bytecode {
             is_view,
             generic_type_params: fhandle
                 .type_parameters
-                .iter()
+                .clone()
+                .into_iter()
                 .map(MoveFunctionGenericTypeParam::from)
                 .collect(),
             params: self

@@ -241,7 +241,6 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
                     base_token: &self.base_token,
                     block_header: block_header.clone(),
                     block_hash_lookup: &self.block_hash_lookup,
-                    block_hash_writer: &self.block_hash_writer,
                 }
                 .into(),
                 NormalizedExtendedTxEnvelope::DepositedTx(tx) => DepositExecutionInput {

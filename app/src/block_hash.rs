@@ -24,13 +24,6 @@ pub struct BlockHashRingBuffer {
 }
 
 impl BlockHashRingBuffer {
-    pub const fn new() -> Self {
-        Self {
-            entries: VecDeque::new(),
-            latest_block: 0,
-        }
-    }
-
     pub fn push(&mut self, block_number: u64, block_hash: B256) {
         // Ensure blocks are added in sequence (detect potential reorgs)
         if block_number > 0 && self.latest_block > 0 && block_number != self.latest_block + 1 {
@@ -114,7 +107,7 @@ impl BlockHashWriter for BlockHashRingBuffer {
 
 #[derive(Debug, Clone)]
 pub struct HybridBlockHashCache<S, B> {
-    ring_buffer: Arc<RwLock<BlockHashRingBuffer>>,
+    ring_buffer: Arc<RwLock<Option<BlockHashRingBuffer>>>,
     storage: S,
     block_query: B,
 }
@@ -125,17 +118,36 @@ where
 {
     pub fn new(storage: S, block_query: B) -> Self {
         Self {
-            ring_buffer: Arc::new(RwLock::new(BlockHashRingBuffer::new())),
+            ring_buffer: Arc::new(RwLock::new(None)),
             storage,
             block_query,
         }
     }
 
-    pub fn try_from_storage(storage: S, block_query: B) -> Result<Self, B::Err> {
+    fn read_cache(&self, number: u64) -> Result<Option<B256>, Uninitialized> {
+        let maybe_buffer = self.ring_buffer.read().expect("Lock not poisoned");
+        let buffer = maybe_buffer.as_ref().ok_or(Uninitialized)?;
+        Ok(buffer.hash_by_number(number))
+    }
+
+    fn initialize_then<Out, F>(&self, f: F) -> Out
+    where
+        F: FnOnce(&mut BlockHashRingBuffer) -> Out,
+    {
+        let mut maybe_buffer = self.ring_buffer.write().expect("Lock not poisoned");
+        let buffer = maybe_buffer.get_or_insert_with(|| {
+            BlockHashRingBuffer::try_from_storage(&self.storage, &self.block_query)
+                .unwrap_or_default()
+        });
+        f(buffer)
+    }
+
+    #[cfg(test)]
+    fn try_from_storage(storage: S, block_query: B) -> Result<Self, B::Err> {
         let ring_buffer = BlockHashRingBuffer::try_from_storage(&storage, &block_query)?;
 
         Ok(Self {
-            ring_buffer: Arc::new(RwLock::new(ring_buffer)),
+            ring_buffer: Arc::new(RwLock::new(Some(ring_buffer))),
             storage,
             block_query,
         })
@@ -147,14 +159,19 @@ where
     B: BlockQueries<Storage = S>,
 {
     fn hash_by_number(&self, block_number: u64) -> Option<B256> {
-        if let Some(hash) = self
-            .ring_buffer
-            .read()
-            .expect("Lock not poisoned")
-            .hash_by_number(block_number)
-        {
-            return Some(hash);
-        }
+        match self.read_cache(block_number) {
+            Ok(Some(hash)) => {
+                return Some(hash);
+            }
+            Ok(None) => (),
+            Err(Uninitialized) => {
+                if let Some(hash) =
+                    self.initialize_then(|buffer| buffer.hash_by_number(block_number))
+                {
+                    return Some(hash);
+                }
+            }
+        };
 
         if let Ok(Some(block)) = self
             .block_query
@@ -172,12 +189,13 @@ where
     B: BlockQueries<Storage = S>,
 {
     fn push(&mut self, height: u64, hash: B256) {
-        self.ring_buffer
-            .write()
-            .expect("Lock not poisoned")
-            .push(height, hash);
+        self.initialize_then(|buffer| {
+            buffer.push(height, hash);
+        });
     }
 }
+
+struct Uninitialized;
 
 #[cfg(test)]
 mod tests {

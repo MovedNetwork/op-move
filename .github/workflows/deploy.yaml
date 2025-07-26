@@ -22,16 +22,43 @@ jobs:
     steps:
       - name: Free up disk space
         run: rm -rf /opt/hostedtoolcache
+
       - name: Clone repository
         uses: actions/checkout@v4
+
       - name: Log in to the registry
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
       - name: Set up Docker Buildx # Driver that supports cache export
         uses: docker/setup-buildx-action@v3
-      - name: Pull images
-        run: docker compose pull
+
+      # Previous published packages kept for possible rollback
+      - name: Backup current images as previous
+        run: |
+          ALL_SERVICES=("optimism" "op-move" "geth" "op-node" "op-batcher" "op-proposer")
+          for service in "${ALL_SERVICES[@]}"; do
+          echo "Retagging ghcr.io/uminetwork/${service}:latest as :previous"
+            docker compose pull ${service} || echo "No existing ${service}:latest found"
+            if docker image inspect ghcr.io/uminetwork/${service}:latest >/dev/null 2>&1; then
+              docker tag ghcr.io/uminetwork/${service}:latest ghcr.io/uminetwork/${service}:previous
+              docker push ghcr.io/uminetwork/${service}:previous
+            fi
+          done
         continue-on-error: true
-      - name: Build images
-        run: docker compose build
-      - name: Push images
-        run: docker compose push
+
+      # Stage 1: Build and push base images first
+      - name: Build base images
+        run: docker compose build optimism op-move geth
+
+      - name: Push base images
+        run: docker compose push optimism op-move geth
+
+      # Stage 2: Pull fresh base images, then build dependents
+      - name: Pull fresh base images
+        run: docker compose pull optimism
+
+      - name: Build dependent images
+        run: docker compose build op-node op-batcher op-proposer
+
+      - name: Push dependent images
+        run: docker compose push op-node op-batcher op-proposer

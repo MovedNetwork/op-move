@@ -5,7 +5,6 @@ on:
     branches:
       - main
   pull_request:
-    
 
 concurrency:
   group: ${{ github.workflow }}
@@ -50,22 +49,17 @@ jobs:
 
       # Stage 1: Build and push base images first
       - name: Build base images
-        run: |
-          docker compose build optimism op-move geth
+        run: docker compose build optimism op-move geth
 
       - name: Push base images
-        run: |
-          docker compose push optimism op-move geth
+        run: docker compose push optimism op-move geth
 
       # Stage 2: Pull fresh base images, then build dependents
       - name: Pull fresh base images
-        run: |
-          docker compose pull optimism
+        run: docker compose pull optimism
 
       - name: Build dependent images
-        run: |
-          docker compose build op-node op-batcher op-proposer
+        run: docker compose build op-node op-batcher op-proposer
 
       - name: Push dependent images
-        run: |
-          docker compose push op-node op-batcher op-proposer
+        run: docker compose push op-node op-batcher op-proposer

@@ -1,5 +1,8 @@
 use {
-    crate::{payload::PayloadId, transaction::ExtendedTransaction},
+    crate::{
+        payload::{PayloadId, Withdrawal},
+        transaction::ExtendedTransaction,
+    },
     alloy::{
         rlp::Encodable,
         rpc::types::{BlockTransactions, Withdrawals},
@@ -81,11 +84,13 @@ impl ExtendedBlock {
     }
 }
 
-/// TODO: Add withdrawals
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Default, serde::Serialize, serde::Deserialize)]
 pub struct Block {
     pub header: Header,
     pub transactions: Vec<B256>,
+    /// Always expected to be empty, so technically a constant:
+    /// <https://specs.optimism.io/protocol/isthmus/exec-engine.html?highlight=withdrawals#block-body-withdrawals-list>
+    pub withdrawals: Vec<Withdrawal>,
 }
 
 impl Block {
@@ -93,6 +98,7 @@ impl Block {
         Self {
             header,
             transactions,
+            withdrawals: Vec::new(),
         }
     }
 

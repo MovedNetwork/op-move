@@ -23,7 +23,9 @@ use {
     },
     umi_shared::{
         hex,
-        primitives::{ToSaturatedU64, B2048, B256, B64, U256},
+        primitives::{
+            ToSaturatedU64, B2048, B256, B64, EMPTY_LIST_ROOT, EMPTY_OMMERS_ROOT_HASH, U256,
+        },
     },
     warp::{
         http::{header::CONTENT_TYPE, HeaderMap, HeaderValue, StatusCode},
@@ -272,13 +274,6 @@ fn create_genesis_block(
     block_hash: &impl BlockHash,
     genesis_config: &GenesisConfig,
 ) -> ExtendedBlock {
-    const EMPTY_ROOT: B256 = B256::new(hex!(
-        "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
-    ));
-    const EMPTY_OMMERS_ROOT_HASH: B256 = B256::new(hex!(
-        "1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
-    ));
-
     let genesis_header = Header {
         base_fee_per_gas: genesis_config
             .l2_contract_genesis
@@ -296,13 +291,13 @@ fn create_genesis_block(
         number: genesis_config.l2_contract_genesis.number.unwrap_or(0),
         parent_beacon_block_root: Some(B256::ZERO),
         parent_hash: B256::ZERO,
-        receipts_root: EMPTY_ROOT,
+        receipts_root: EMPTY_LIST_ROOT,
         state_root: B256::new(hex!(
             "30b67e4b5ef34eacb9e083c07fd5578982c2cb4e0ee1dc0a14d72b99a28ed80e"
         )),
         timestamp: genesis_config.l2_contract_genesis.timestamp,
-        transactions_root: EMPTY_ROOT,
-        withdrawals_root: Some(EMPTY_ROOT),
+        transactions_root: EMPTY_LIST_ROOT,
+        withdrawals_root: Some(EMPTY_LIST_ROOT),
         beneficiary: genesis_config.l2_contract_genesis.coinbase,
         ommers_hash: EMPTY_OMMERS_ROOT_HASH,
         requests_hash: None,

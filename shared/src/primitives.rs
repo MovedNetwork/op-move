@@ -4,10 +4,21 @@ pub use {
 };
 
 use {
-    alloy::consensus::{Receipt, ReceiptWithBloom},
+    alloy::{
+        consensus::{Receipt, ReceiptWithBloom},
+        hex,
+    },
     move_core_types::{account_address::AccountAddress, u256::U256 as MoveU256},
     op_alloy::consensus::{OpDepositReceipt, OpDepositReceiptWithBloom, OpReceiptEnvelope},
 };
+
+pub const EMPTY_LIST_ROOT: B256 = B256::new(hex!(
+    "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
+));
+
+pub const EMPTY_OMMERS_ROOT_HASH: B256 = B256::new(hex!(
+    "1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
+));
 
 pub trait ToEthAddress {
     fn to_eth_address(&self) -> Address;

@@ -59,6 +59,7 @@ pub const GENESIS: ExtendedBlock = {
                 requests_hash: None,
             },
             transactions: Vec::new(),
+            withdrawals: Vec::new(),
         },
     }
 };

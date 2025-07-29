@@ -4,7 +4,11 @@ use {
         actor::UnrecoverableAppFailure,
         input::{WithExecutionOutcome, WithPayloadAttributes},
     },
-    alloy::{consensus::Receipt, primitives::Bloom, rlp::Encodable},
+    alloy::{
+        consensus::{Receipt, constants::EMPTY_WITHDRAWALS},
+        primitives::{B256, Bloom},
+        rlp::Encodable,
+    },
     umi_blockchain::{
         block::{BaseGasFee, Block, BlockHash, BlockRepository, ExtendedBlock, Header},
         payload::{PayloadId, PayloadQueries},
@@ -22,7 +26,7 @@ use {
     },
     umi_shared::{
         error::Error::{DatabaseState, InvalidTransaction, InvariantViolation, User},
-        primitives::{EMPTY_LIST_ROOT, ToEthAddress, U64, U256},
+        primitives::{ToEthAddress, U64, U256},
     },
     umi_state::State,
 };
@@ -52,12 +56,28 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
             return Ok(());
         }
 
-        // Include transactions from both `payload_attributes` and internal mem-pool
-        let transactions = attributes
-            .transactions
-            .iter()
-            .cloned()
-            .chain(self.mem_pool.drain().map(Into::into))
+        let attributes_txs_len = attributes.transactions.len();
+        let no_tx_pool = attributes.no_tx_pool.unwrap_or(false);
+
+        let transactions = if no_tx_pool {
+            // Though it should be a rare event without follower nodes, `op-node` can demand
+            // to rebuild a block deterministically from payload attributes only. We log it
+            // as a rare event for diagnostic purposes.
+            tracing::warn!(
+                "Building from payload attributes only, with no mempool txs: {attributes:?}"
+            );
+            attributes.transactions.to_vec()
+        } else {
+            attributes
+                .transactions
+                .iter()
+                .cloned()
+                .chain(self.mem_pool.iter().cloned().map(Into::into))
+                .collect::<Vec<_>>()
+        };
+
+        let new_transactions = transactions
+            .into_iter()
             .filter_map(|tx|
                 // Do not include transactions we have already processed before
                 match self.receipt_repository.contains(&self.receipt_memory, tx.tx_hash()) {
@@ -71,6 +91,7 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
                 tracing::error!("Failure during `start_block_build`. Receipt queries failed: {e:?}");
                 UnrecoverableAppFailure
             })?;
+
         let parent = self
             .block_repository
             .latest(&self.storage)
@@ -92,12 +113,12 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
             chain_id: self.genesis_config.chain_id,
         };
         let (execution_outcome, receipts) = self.execute_transactions(
-            transactions.clone().into_iter(),
+            new_transactions.clone().into_iter(),
             base_fee,
             &header_for_execution,
         )?;
 
-        let transactions_root = alloy_trie::root::ordered_trie_root(&transactions);
+        let transactions_root = alloy_trie::root::ordered_trie_root(&new_transactions);
 
         // The withdrawals in the EIP-4895 sense are not used by Optimism at all
         // (<https://specs.optimism.io/protocol/isthmus/exec-engine.html?highlight=withdrawals#p2p>),
@@ -116,7 +137,7 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
             number: header_for_execution.number,
             transactions_root,
             // TODO: (#201) set to OP's L2ToL1MessagePasser storage root after upgrading beyond Isthmus
-            withdrawals_root: Some(EMPTY_LIST_ROOT),
+            withdrawals_root: Some(EMPTY_WITHDRAWALS),
             base_fee_per_gas: Some(base_fee.saturating_to()),
             blob_gas_used: Some(0),
             excess_blob_gas: Some(0),
@@ -127,14 +148,17 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
 
         let block_hash = self.block_hash.block_hash(&header);
 
-        let block = Block::new(header, transactions.iter().map(|v| v.trie_hash()).collect())
-            .into_extended_with_hash(block_hash)
-            .with_value(total_tip)
-            .with_payload_id(id);
+        let block = Block::new(
+            header,
+            new_transactions.iter().map(|v| v.trie_hash()).collect(),
+        )
+        .into_extended_with_hash(block_hash)
+        .with_value(total_tip)
+        .with_payload_id(id);
 
         let block_number = block.block.header.number;
 
-        let extended_transactions = transactions
+        let extended_transactions = new_transactions
             .iter()
             .cloned()
             .enumerate()
@@ -191,7 +215,34 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
             );
             UnrecoverableAppFailure
         })?;
-        in_progress_payloads.finish_id(block, transactions.into_iter().map(Into::into));
+
+        // Mempool should only be cleaned after all other building stages succeeded
+        if !no_tx_pool {
+            let mempool_tx_count = new_transactions.len().saturating_sub(attributes_txs_len);
+
+            if mempool_tx_count > 0 {
+                // Payload transactions always come first in the block
+                let mempool_hashes: Vec<B256> = new_transactions
+                    .iter()
+                    .skip(attributes_txs_len)
+                    .map(|tx| tx.tx_hash())
+                    .collect();
+
+                for hash in mempool_hashes {
+                    if let Some(tx) = new_transactions.iter().find(|tx| tx.tx_hash() == hash) {
+                        self.mem_pool.remove_by_hash(hash, tx.signer());
+                    }
+                }
+
+                tracing::debug!(
+                    "Removed {} mempool transactions after successful block building",
+                    mempool_tx_count
+                );
+            }
+        }
+
+        in_progress_payloads.finish_id(block, new_transactions.into_iter().map(Into::into));
+
         Ok(())
     }
 

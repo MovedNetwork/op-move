@@ -94,7 +94,9 @@ where
     }
 
     match method {
-        ForkChoiceUpdatedV3 => forkchoice_updated::execute_v3(request, queue, payload_id).await,
+        ForkChoiceUpdatedV3 => {
+            forkchoice_updated::execute_v3(request, queue, app, payload_id).await
+        }
         GetPayloadV3 => get_payload::execute_v3(request, app).await,
         NewPayloadV3 => new_payload::execute_v3(request, app).await,
         SendRawTransaction => {

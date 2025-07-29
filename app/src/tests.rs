@@ -308,6 +308,7 @@ fn test_build_block_hash() {
         parent_beacon_block_root: Default::default(),
         transactions: Vec::new(),
         gas_limit: U64::from(0x1c9c380),
+        no_tx_pool: None,
     };
 
     let execution_outcome = ExecutionOutcome {

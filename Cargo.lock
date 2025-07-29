@@ -12291,6 +12291,7 @@ name = "umi-api"
 version = "0.1.0"
 dependencies = [
  "alloy",
+ "alloy-trie",
  "bcs 0.1.3",
  "move-core-types 0.0.4 (git+https://github.com/aptos-labs/aptos-core?tag=aptos-node-v1.27.2)",
  "op-alloy",

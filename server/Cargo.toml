@@ -14,6 +14,7 @@ storage-rocksdb = ["umi-storage-rocksdb"]
 workspace = true
 
 [dependencies]
+alloy.workspace = true
 anyhow.workspace = true
 aptos-types.workspace = true
 bcs.workspace = true
@@ -48,7 +49,6 @@ warp.workspace = true
 warp-reverse-proxy.workspace = true
 
 [dev-dependencies]
-alloy.workspace = true
 criterion.workspace = true
 dotenvy.workspace = true
 eth_trie.workspace = true

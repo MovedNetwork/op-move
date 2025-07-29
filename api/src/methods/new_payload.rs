@@ -4,6 +4,10 @@ use {
         jsonrpc::JsonRpcError,
         schema::{ExecutionPayloadV3, GetPayloadResponseV3, PayloadStatusV1, Status},
     },
+    alloy::{
+        consensus::{EMPTY_OMMER_ROOT_HASH, Header, constants::EMPTY_WITHDRAWALS},
+        primitives::{B64, Bloom, U64, U256},
+    },
     umi_app::{ApplicationReader, Dependencies},
     umi_shared::primitives::B256,
 };
@@ -32,27 +36,126 @@ async fn inner_execute_v3<'reader>(
 ) -> Result<PayloadStatusV1, JsonRpcError> {
     // Spec: https://github.com/ethereum/execution-apis/blob/main/src/engine/cancun.md#specification
 
-    // TODO: in theory we should start syncing to learn about this block hash.
+    if let Err(status) = validate_payload_block_hash(&execution_payload, parent_beacon_block_root) {
+        return Ok(status);
+    }
+
+    // TODO: we're always assuming here that this RPC call can only bring us already known payloads
+    // as we're operating in single-node mode. However, even in that case unknown payloads could
+    // come in if an L1 reorg or op-move restart happen. In that case, a sync should be triggered.
     let response = app
         .payload_by_block_hash(execution_payload.block_hash)
         .map(GetPayloadResponseV3::from)?;
 
-    validate_payload(
-        execution_payload,
-        expected_blob_versioned_hashes,
-        parent_beacon_block_root,
-        response,
-    )
+    if let Err(status) = validate_payload_format(&execution_payload, expected_blob_versioned_hashes)
+        .and_then(|_| {
+            validate_known_payload(&execution_payload, parent_beacon_block_root, response)
+        })
+    {
+        return Ok(status);
+    };
+    Ok(PayloadStatusV1 {
+        status: Status::Valid,
+        latest_valid_hash: Some(execution_payload.block_hash),
+        validation_error: None,
+    })
 }
 
-fn validate_payload(
-    execution_payload: ExecutionPayloadV3,
+fn validate_payload_format(
+    execution_payload: &ExecutionPayloadV3,
     expected_blob_versioned_hashes: Vec<B256>,
+) -> Result<(), PayloadStatusV1> {
+    // Anything EIP-4844 related is disabled in Optimism (<https://specs.optimism.io/protocol/exec-engine.html#ecotone-disable-blob-transactions>)
+    // and Umi, as we have chosen to reject this tx kind at the API border. Thus for v3 engine API
+    // all the values should be 0.
+    if execution_payload.excess_blob_gas != U64::ZERO
+        || execution_payload.blob_gas_used != U64::ZERO
+    {
+        return Err(PayloadStatusV1 {
+            status: Status::Invalid,
+            latest_valid_hash: None,
+            validation_error: Some("Unexpected non-zero blob gas fields".into()),
+        });
+    }
+    if !expected_blob_versioned_hashes.is_empty() {
+        return Err(PayloadStatusV1 {
+            status: Status::Invalid,
+            latest_valid_hash: None,
+            validation_error: Some("Unexpected non-empty blob hashes".into()),
+        });
+    }
+
+    if execution_payload.transactions.iter().any(|s| s.len() == 0) {
+        return Err(PayloadStatusV1 {
+            status: Status::Invalid,
+            latest_valid_hash: None,
+            validation_error: Some("All transactions should be non-zero length".into()),
+        });
+    }
+
+    // TODO: (#201) should contain eip1559params post OP stack Holocene upgrade
+    if execution_payload.block_number != U64::ZERO && !execution_payload.extra_data.is_empty() {
+        return Err(PayloadStatusV1 {
+            status: Status::Invalid,
+            latest_valid_hash: None,
+            validation_error: Some("Pre-holocene payload extraData should be empty".into()),
+        });
+    }
+
+    Ok(())
+}
+
+fn validate_payload_block_hash(
+    execution_payload: &ExecutionPayloadV3,
+    parent_beacon_block_root: B256,
+) -> Result<(), PayloadStatusV1> {
+    let transactions_root = alloy_trie::root::ordered_trie_root(&execution_payload.transactions);
+
+    let payload_header = Header {
+        parent_hash: execution_payload.parent_hash,
+        ommers_hash: EMPTY_OMMER_ROOT_HASH,
+        beneficiary: execution_payload.fee_recipient,
+        state_root: execution_payload.state_root,
+        transactions_root,
+        receipts_root: execution_payload.receipts_root,
+        logs_bloom: Bloom::new(execution_payload.logs_bloom.into()),
+        difficulty: U256::ZERO,
+        number: execution_payload.block_number.saturating_to(),
+        gas_limit: execution_payload.gas_limit.saturating_to(),
+        gas_used: execution_payload.gas_used.saturating_to(),
+        timestamp: execution_payload.timestamp.saturating_to(),
+        extra_data: execution_payload.extra_data.clone(),
+        mix_hash: execution_payload.prev_randao,
+        nonce: B64::ZERO,
+        base_fee_per_gas: Some(execution_payload.base_fee_per_gas.saturating_to()),
+        withdrawals_root: Some(EMPTY_WITHDRAWALS),
+        blob_gas_used: Some(execution_payload.blob_gas_used.saturating_to()),
+        excess_blob_gas: Some(execution_payload.excess_blob_gas.saturating_to()),
+        parent_beacon_block_root: Some(parent_beacon_block_root),
+        requests_hash: None,
+    };
+    let computed_hash = alloy::primitives::keccak256(alloy::rlp::encode(&payload_header));
+
+    if computed_hash != execution_payload.block_hash {
+        return Err(PayloadStatusV1 {
+            status: Status::Invalid,
+            latest_valid_hash: None,
+            validation_error: Some(format!(
+                "Received payload hash {} and computed hash {} don't match",
+                execution_payload.block_hash, computed_hash
+            )),
+        });
+    }
+    Ok(())
+}
+
+fn validate_known_payload(
+    execution_payload: &ExecutionPayloadV3,
     parent_beacon_block_root: B256,
     known_payload: GetPayloadResponseV3,
-) -> Result<PayloadStatusV1, JsonRpcError> {
+) -> Result<(), PayloadStatusV1> {
     if execution_payload.block_number != known_payload.execution_payload.block_number {
-        return Ok(PayloadStatusV1 {
+        return Err(PayloadStatusV1 {
             status: Status::Invalid,
             latest_valid_hash: None,
             validation_error: Some("Incorrect block height".into()),
@@ -60,7 +163,7 @@ fn validate_payload(
     }
 
     if execution_payload.extra_data != known_payload.execution_payload.extra_data {
-        return Ok(PayloadStatusV1 {
+        return Err(PayloadStatusV1 {
             status: Status::Invalid,
             latest_valid_hash: None,
             validation_error: Some("Incorrect extra data".into()),
@@ -68,7 +171,7 @@ fn validate_payload(
     }
 
     if execution_payload.fee_recipient != known_payload.execution_payload.fee_recipient {
-        return Ok(PayloadStatusV1 {
+        return Err(PayloadStatusV1 {
             status: Status::Invalid,
             latest_valid_hash: None,
             validation_error: Some("Incorrect fee recipient".into()),
@@ -76,7 +179,7 @@ fn validate_payload(
     }
 
     if execution_payload.gas_limit != known_payload.execution_payload.gas_limit {
-        return Ok(PayloadStatusV1 {
+        return Err(PayloadStatusV1 {
             status: Status::Invalid,
             latest_valid_hash: None,
             validation_error: Some("Incorrect gas limit".into()),
@@ -84,7 +187,7 @@ fn validate_payload(
     }
 
     if execution_payload.parent_hash != known_payload.execution_payload.parent_hash {
-        return Ok(PayloadStatusV1 {
+        return Err(PayloadStatusV1 {
             status: Status::Invalid,
             latest_valid_hash: None,
             validation_error: Some("Incorrect parent hash".into()),
@@ -92,7 +195,7 @@ fn validate_payload(
     }
 
     if execution_payload.prev_randao != known_payload.execution_payload.prev_randao {
-        return Ok(PayloadStatusV1 {
+        return Err(PayloadStatusV1 {
             status: Status::Invalid,
             latest_valid_hash: None,
             validation_error: Some("Incorrect prev randao".into()),
@@ -100,7 +203,7 @@ fn validate_payload(
     }
 
     if execution_payload.timestamp != known_payload.execution_payload.timestamp {
-        return Ok(PayloadStatusV1 {
+        return Err(PayloadStatusV1 {
             status: Status::Invalid,
             latest_valid_hash: None,
             validation_error: Some("Incorrect timestamp".into()),
@@ -108,38 +211,22 @@ fn validate_payload(
     }
 
     if execution_payload.withdrawals != known_payload.execution_payload.withdrawals {
-        return Ok(PayloadStatusV1 {
+        return Err(PayloadStatusV1 {
             status: Status::Invalid,
             latest_valid_hash: None,
-            validation_error: Some("Incorrect withdraws".into()),
-        });
-    }
-
-    // TODO: validate execution relates fields once op-geth no longer used
-    // base_fee_per_gas, gas_used, logs_bool, receipts_root, state_root, transactions
-
-    // TODO: Support blobs (low priority).
-    if !expected_blob_versioned_hashes.is_empty() {
-        return Ok(PayloadStatusV1 {
-            status: Status::Invalid,
-            latest_valid_hash: None,
-            validation_error: Some("Unexpected blob hashes".into()),
+            validation_error: Some("Withdrawals mismatch".into()),
         });
     }
 
     if parent_beacon_block_root != known_payload.parent_beacon_block_root {
-        return Ok(PayloadStatusV1 {
+        return Err(PayloadStatusV1 {
             status: Status::Invalid,
             latest_valid_hash: None,
             validation_error: Some("Incorrect parent beacon block root".into()),
         });
     }
 
-    Ok(PayloadStatusV1 {
-        status: Status::Valid,
-        latest_valid_hash: Some(execution_payload.block_hash),
-        validation_error: None,
-    })
+    Ok(())
 }
 
 #[cfg(test)]
@@ -437,6 +524,7 @@ mod tests {
             forkchoice_updated::execute_v3(
                 fc_updated_request,
                 queue.clone(),
+                &reader,
                 &0x0306d51fc5aa1533u64,
             )
                 .await

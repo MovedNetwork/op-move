@@ -1,4 +1,5 @@
 use {
+    alloy::primitives::{Address, B256},
     move_core_types::account_address::AccountAddress,
     std::collections::{BTreeMap, HashMap},
     umi_execution::transaction::NormalizedEthTransaction,
@@ -27,13 +28,43 @@ impl Mempool {
         account_txs.insert(value.nonce, value)
     }
 
-    /// Drains all transactions from the [`Mempool`], returning them in a sensible order
+    /// Iterate through all transactions from the [`Mempool`] in a sensible order
     /// for block inclusion (ordered by account, then by nonce).
-    pub fn drain(&mut self) -> impl Iterator<Item = NormalizedEthTransaction> {
-        let txs = std::mem::take(&mut self.txs);
+    pub fn iter(&self) -> impl Iterator<Item = &NormalizedEthTransaction> {
+        self.txs
+            .values()
+            .flat_map(|account_txs| account_txs.values())
+    }
 
-        txs.into_iter()
-            .flat_map(|(_, account_txs)| account_txs.into_values())
+    pub fn remove_by_hash(
+        &mut self,
+        tx_hash: B256,
+        signer: Address,
+    ) -> Option<NormalizedEthTransaction> {
+        let signer = signer.to_move_address();
+        let account_txs = self.txs.get_mut(&signer)?;
+
+        let nonce = account_txs
+            .iter()
+            .find(|(_, tx)| tx.tx_hash == tx_hash)
+            .map(|(nonce, _)| *nonce)?;
+
+        let removed_tx = account_txs.remove(&nonce);
+
+        if account_txs.is_empty() {
+            self.txs.remove(&signer);
+        }
+
+        removed_tx
+    }
+
+    /// Remove from the [`Mempool`] the transactions that have been included into a built block
+    /// and executed successfully.
+    pub fn remove_included(&mut self, transactions: &[impl AsRef<NormalizedEthTransaction>]) {
+        for tx in transactions {
+            let tx = tx.as_ref();
+            self.remove_by_hash(tx.tx_hash, tx.signer);
+        }
     }
 }
 

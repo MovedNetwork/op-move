@@ -221,7 +221,7 @@ impl NormalizedExtendedTxEnvelope {
         self.tx_hash()
     }
 
-    pub fn from(&self) -> Address {
+    pub fn signer(&self) -> Address {
         match self {
             Self::Canonical(tx) => tx.signer,
             Self::DepositedTx(tx) => tx.from,

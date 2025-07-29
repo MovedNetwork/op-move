@@ -69,6 +69,7 @@ mod tests {
                 forkchoice_updated::execute_v3(
                     forkchoice_updated::tests::example_request(),
                     queue.clone(),
+                    &reader,
                     &0x03421ee50df45cacu64,
                 )
                 .await

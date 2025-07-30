@@ -22,7 +22,7 @@ use {
     },
     umi_shared::{
         error::Error::{DatabaseState, InvalidTransaction, InvariantViolation, User},
-        primitives::{ToEthAddress, U64, U256},
+        primitives::{EMPTY_LIST_ROOT, ToEthAddress, U64, U256},
     },
     umi_state::State,
 };
@@ -98,15 +98,25 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
         )?;
 
         let transactions_root = alloy_trie::root::ordered_trie_root(&transactions);
-        // TODO: is this the correct withdrawals root calculation?
-        let withdrawals_root = alloy_trie::root::ordered_trie_root(&attributes.withdrawals);
+
+        // The withdrawals in the EIP-4895 sense are not used by Optimism at all
+        // (<https://specs.optimism.io/protocol/isthmus/exec-engine.html?highlight=withdrawals#p2p>),
+        // so instead of calculating the root we can set it to an empty list hash at all times.
+        // This warning is just a precaution for the unlikely case of it being present.
+        if !attributes.withdrawals.is_empty() {
+            tracing::warn!(
+                "Payload attributes {:?} had unexpected non-empty withdrawals. Will still set withdrawals root to empty list hash",
+                &attributes.withdrawals
+            );
+        }
         let total_tip = execution_outcome.total_tip;
 
         let header = Header {
             parent_hash: parent.hash,
             number: header_for_execution.number,
             transactions_root,
-            withdrawals_root: Some(withdrawals_root),
+            // TODO: (#201) set to OP's L2ToL1MessagePasser storage root after upgrading beyond Isthmus
+            withdrawals_root: Some(EMPTY_LIST_ROOT),
             base_fee_per_gas: Some(base_fee.saturating_to()),
             blob_gas_used: Some(0),
             excess_blob_gas: Some(0),

@@ -91,7 +91,8 @@ impl ExecutionPayload {
             extra_data: block.block.header.extra_data,
             base_fee_per_gas: U256::from(block.block.header.base_fee_per_gas.unwrap_or_default()),
             transactions,
-            withdrawals: Vec::new(), // TODO: withdrawals
+            // L1 withdrawals are set to be empty at block construction time
+            withdrawals: block.block.withdrawals,
             blob_gas_used: U64::from(block.block.header.blob_gas_used.unwrap_or_default()),
             excess_blob_gas: U64::from(block.block.header.excess_blob_gas.unwrap_or_default()),
         }

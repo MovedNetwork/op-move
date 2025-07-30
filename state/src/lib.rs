@@ -3,6 +3,7 @@ pub mod nodes;
 mod diff;
 mod in_memory;
 mod resolver;
+mod skip_list;
 mod state;
 
 pub use {

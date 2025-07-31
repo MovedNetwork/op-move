@@ -8,10 +8,19 @@ use {
     umi_blockchain::payload::NewPayloadId,
 };
 
+/// Tag if the serialization needs fixing.
+/// The `Evm` tag is used for compatibility with EMV tooling (e.g. Forge).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SerializationKind {
+    Bcs,
+    Evm,
+}
+
 /// Dependency injection that can change how requests are handled.
 pub struct RequestModifiers<'a, A, P> {
     is_allowed: A,
     payload_id: &'a P,
+    serialization_tag: SerializationKind,
 }
 
 impl<'a, A, P> RequestModifiers<'a, A, P>
@@ -19,10 +28,11 @@ where
     A: Fn(&MethodName) -> bool,
     P: NewPayloadId,
 {
-    pub fn new(is_allowed: A, payload_id: &'a P) -> Self {
+    pub fn new(is_allowed: A, payload_id: &'a P, serialization_tag: SerializationKind) -> Self {
         Self {
             is_allowed,
             payload_id,
+            serialization_tag,
         }
     }
 }
@@ -72,6 +82,7 @@ where
     let RequestModifiers {
         is_allowed,
         payload_id,
+        serialization_tag,
     } = modifiers;
     let method: MethodName = json_utils::get_field(&request, "method")
         .as_str()
@@ -86,7 +97,9 @@ where
         ForkChoiceUpdatedV3 => forkchoice_updated::execute_v3(request, queue, payload_id).await,
         GetPayloadV3 => get_payload::execute_v3(request, app).await,
         NewPayloadV3 => new_payload::execute_v3(request, app).await,
-        SendRawTransaction => send_raw_transaction::execute(request, queue).await,
+        SendRawTransaction => {
+            send_raw_transaction::execute(request, queue, serialization_tag).await
+        }
         ChainId => chain_id::execute(request, app).await,
         GetBalance => get_balance::execute(request, app).await,
         GetCode => get_code::execute(request, app).await,
@@ -96,8 +109,8 @@ where
         GetBlockByNumber => get_block_by_number::execute(request, app).await,
         BlockNumber => block_number::execute(request, app).await,
         FeeHistory => fee_history::execute(request, app).await,
-        EstimateGas => estimate_gas::execute(request, app).await,
-        Call => call::execute(request, app).await,
+        EstimateGas => estimate_gas::execute(request, app, serialization_tag).await,
+        Call => call::execute(request, app, serialization_tag).await,
         TransactionReceipt => get_transaction_receipt::execute(request, app).await,
         GetProof => get_proof::execute(request, app).await,
         GasPrice => gas_price::execute(request, app).await,

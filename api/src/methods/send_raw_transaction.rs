@@ -1,5 +1,5 @@
 use {
-    crate::{json_utils, jsonrpc::JsonRpcError},
+    crate::{json_utils, jsonrpc::JsonRpcError, request::SerializationKind},
     alloy::rlp::Decodable,
     umi_app::{Command, CommandQueue},
     umi_execution::transaction::{NormalizedEthTransaction, UmiTxEnvelope},
@@ -9,19 +9,23 @@ use {
 pub async fn execute(
     request: serde_json::Value,
     queue: CommandQueue,
+    serialization_tag: SerializationKind,
 ) -> Result<serde_json::Value, JsonRpcError> {
-    let tx = parse_params(request)?;
+    let tx = parse_params(request, serialization_tag)?;
     let response = inner_execute(tx, queue).await?;
     Ok(serde_json::to_value(response).expect("Must be able to JSON-serialize response"))
 }
 
-fn parse_params(request: serde_json::Value) -> Result<NormalizedEthTransaction, JsonRpcError> {
+fn parse_params(
+    request: serde_json::Value,
+    serialization_tag: SerializationKind,
+) -> Result<NormalizedEthTransaction, JsonRpcError> {
     let params = json_utils::get_params_list(&request);
     match params {
         [] => Err(JsonRpcError::not_enough_params_error(request)),
         [x] => {
             let bytes: Bytes = json_utils::deserialize(x)?;
-            Ok(parse_transaction_bytes(&bytes)?)
+            Ok(parse_transaction_bytes(&bytes, serialization_tag)?)
         }
         _ => Err(JsonRpcError::too_many_params_error(request)),
     }
@@ -29,12 +33,24 @@ fn parse_params(request: serde_json::Value) -> Result<NormalizedEthTransaction, 
 
 fn parse_transaction_bytes(
     bytes: &Bytes,
+    serialization_tag: SerializationKind,
 ) -> Result<NormalizedEthTransaction, umi_shared::error::Error> {
     let mut slice: &[u8] = bytes.as_ref();
     let l1_gas_fee_input = slice.into();
     let umi_tx = UmiTxEnvelope::decode(&mut slice)?;
-    let normalized_tx =
+    let mut normalized_tx =
         NormalizedEthTransaction::try_from(umi_tx)?.with_gas_input(l1_gas_fee_input);
+
+    if let SerializationKind::Evm = serialization_tag {
+        let evm_bytes = crate::evm_compat::bcs_serialize_evm_input(
+            Some(&normalized_tx.data[..]),
+            Some(normalized_tx.to),
+        );
+        if let Some(bytes) = evm_bytes {
+            normalized_tx = normalized_tx.replace_input(bytes.into());
+        }
+    }
+
     Ok(normalized_tx)
 }
 
@@ -98,7 +114,9 @@ pub mod tests {
             let expected_response =
                 JsonRpcError::transaction_error("Could not decode RLP bytes: unexpected tx type");
 
-            let response = execute(request, queue).await.unwrap_err();
+            let response = execute(request, queue, SerializationKind::Bcs)
+                .await
+                .unwrap_err();
 
             assert_eq!(response, expected_response);
         })
@@ -118,7 +136,9 @@ pub mod tests {
             )
             .unwrap();
 
-            let response = execute(request, queue).await.unwrap();
+            let response = execute(request, queue, SerializationKind::Bcs)
+                .await
+                .unwrap();
 
             assert_eq!(response, expected_response);
         })

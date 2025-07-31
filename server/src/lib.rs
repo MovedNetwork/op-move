@@ -10,7 +10,10 @@ use {
     },
     tracing::level_filters::LevelFilter,
     tracing_subscriber::{fmt::format::FmtSpan, EnvFilter},
-    umi_api::{method_name::MethodName, request::RequestModifiers},
+    umi_api::{
+        method_name::MethodName,
+        request::{RequestModifiers, SerializationKind},
+    },
     umi_app::{Application, ApplicationReader, CommandQueue, Dependencies},
     umi_blockchain::{
         block::{Block, BlockHash, BlockQueries, ExtendedBlock, Header},
@@ -358,7 +361,7 @@ async fn handle_request<'reader>(
     payload_id: &impl NewPayloadId,
     app: ApplicationReader<'reader, impl Dependencies<'reader>>,
 ) -> Result<warp::reply::Response, Rejection> {
-    let (_, _, method, _, body) = request;
+    let (path, _, method, _, body) = request;
 
     // Handle load balancer health check with a simple response
     if method == Method::GET {
@@ -369,7 +372,12 @@ async fn handle_request<'reader>(
         return Ok(StatusCode::BAD_REQUEST.into_response());
     };
 
-    let modifiers = RequestModifiers::new(is_allowed, payload_id);
+    let serialization_tag = if path.as_str().contains("evm") {
+        SerializationKind::Evm
+    } else {
+        SerializationKind::Bcs
+    };
+    let modifiers = RequestModifiers::new(is_allowed, payload_id, serialization_tag);
     let op_move_response =
         umi_api::request::handle(request.clone(), queue.clone(), modifiers, app).await;
     let log = MirrorLog {

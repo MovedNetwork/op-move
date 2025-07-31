@@ -9,7 +9,7 @@ use {
     serde::de::DeserializeOwned,
     std::future::Future,
     umi_api::{
-        request::RequestModifiers,
+        request::{RequestModifiers, SerializationKind},
         schema::{ForkchoiceUpdatedResponseV1, GetBlockResponse, GetPayloadResponseV3},
     },
     umi_app::{ApplicationReader, CommandQueue, Dependencies},
@@ -194,7 +194,7 @@ pub async fn handle_request<'reader, T: DeserializeOwned>(
     queue: &CommandQueue,
     app: ApplicationReader<'reader, impl Dependencies<'reader>>,
 ) -> anyhow::Result<T> {
-    let modifiers = RequestModifiers::new(|_| true, &StatePayloadId);
+    let modifiers = RequestModifiers::new(|_| true, &StatePayloadId, SerializationKind::Bcs);
     let response = umi_api::request::handle(request.clone(), queue.clone(), modifiers, app).await;
 
     if let Some(error) = response.error {

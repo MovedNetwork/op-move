@@ -8,18 +8,40 @@ use {
     umi_blockchain::payload::NewPayloadId,
 };
 
-#[tracing::instrument(level = "debug", skip(queue, is_allowed, payload_id, app))]
-pub async fn handle<'reader>(
+/// Dependency injection that can change how requests are handled.
+pub struct RequestModifiers<'a, A, P> {
+    is_allowed: A,
+    payload_id: &'a P,
+}
+
+impl<'a, A, P> RequestModifiers<'a, A, P>
+where
+    A: Fn(&MethodName) -> bool,
+    P: NewPayloadId,
+{
+    pub fn new(is_allowed: A, payload_id: &'a P) -> Self {
+        Self {
+            is_allowed,
+            payload_id,
+        }
+    }
+}
+
+#[tracing::instrument(level = "debug", skip(queue, modifiers, app))]
+pub async fn handle<'reader, A, P>(
     request: serde_json::Value,
     queue: CommandQueue,
-    is_allowed: impl Fn(&MethodName) -> bool,
-    payload_id: &impl NewPayloadId,
+    modifiers: RequestModifiers<'_, A, P>,
     app: ApplicationReader<'reader, impl Dependencies<'reader>>,
-) -> JsonRpcResponse {
+) -> JsonRpcResponse
+where
+    A: Fn(&MethodName) -> bool,
+    P: NewPayloadId,
+{
     let id = json_utils::get_field(&request, "id");
     let jsonrpc = json_utils::get_field(&request, "jsonrpc");
 
-    match inner_handle_request(request, queue, is_allowed, payload_id, &app).await {
+    match inner_handle_request(request, queue, modifiers, &app).await {
         Ok(r) => JsonRpcResponse {
             id,
             jsonrpc,
@@ -35,15 +57,22 @@ pub async fn handle<'reader>(
     }
 }
 
-async fn inner_handle_request<'reader>(
+async fn inner_handle_request<'reader, A, P>(
     request: serde_json::Value,
     queue: CommandQueue,
-    is_allowed: impl Fn(&MethodName) -> bool,
-    payload_id: &impl NewPayloadId,
+    modifiers: RequestModifiers<'_, A, P>,
     app: &ApplicationReader<'reader, impl Dependencies<'reader>>,
-) -> Result<serde_json::Value, JsonRpcError> {
+) -> Result<serde_json::Value, JsonRpcError>
+where
+    A: Fn(&MethodName) -> bool,
+    P: NewPayloadId,
+{
     use {crate::methods::*, MethodName::*};
 
+    let RequestModifiers {
+        is_allowed,
+        payload_id,
+    } = modifiers;
     let method: MethodName = json_utils::get_field(&request, "method")
         .as_str()
         .ok_or(JsonRpcError::missing_method(request.clone()))?

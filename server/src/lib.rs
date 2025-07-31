@@ -10,7 +10,7 @@ use {
     },
     tracing::level_filters::LevelFilter,
     tracing_subscriber::{fmt::format::FmtSpan, EnvFilter},
-    umi_api::method_name::MethodName,
+    umi_api::{method_name::MethodName, request::RequestModifiers},
     umi_app::{Application, ApplicationReader, CommandQueue, Dependencies},
     umi_blockchain::{
         block::{Block, BlockHash, BlockQueries, ExtendedBlock, Header},
@@ -369,8 +369,9 @@ async fn handle_request<'reader>(
         return Ok(StatusCode::BAD_REQUEST.into_response());
     };
 
+    let modifiers = RequestModifiers::new(is_allowed, payload_id);
     let op_move_response =
-        umi_api::request::handle(request.clone(), queue.clone(), is_allowed, payload_id, app).await;
+        umi_api::request::handle(request.clone(), queue.clone(), modifiers, app).await;
     let log = MirrorLog {
         request: &request,
         op_move_response: &op_move_response,

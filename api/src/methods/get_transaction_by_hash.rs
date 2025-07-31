@@ -22,6 +22,7 @@ mod tests {
         super::*,
         crate::{
             methods::{forkchoice_updated, get_payload, send_raw_transaction, tests::create_app},
+            request::SerializationKind,
             schema::{ForkchoiceUpdatedResponseV1, GetPayloadResponseV3},
         },
         serde_json::json,
@@ -58,6 +59,7 @@ mod tests {
             let tx_hash = send_raw_transaction::execute(
                 send_raw_transaction::tests::example_request(),
                 queue.clone(),
+                SerializationKind::Bcs,
             )
             .await
             .unwrap();

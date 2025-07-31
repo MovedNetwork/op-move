@@ -301,6 +301,7 @@ pub struct NormalizedEthTransaction {
     pub nonce: u64,
     pub value: U256,
     pub data: Bytes,
+    original_input: Option<Bytes>,
     pub chain_id: Option<u64>,
     gas_limit: U256,
     pub max_priority_fee_per_gas: U256,
@@ -323,6 +324,11 @@ impl NormalizedEthTransaction {
     }
     pub fn with_gas_input(mut self, gas_input: L1GasFeeInput) -> Self {
         self.l1_gas_fee_input = gas_input;
+        self
+    }
+    pub fn replace_input(mut self, data: Bytes) -> Self {
+        self.original_input = Some(self.data);
+        self.data = data;
         self
     }
 }
@@ -350,6 +356,7 @@ impl TryFrom<Signed<TxEip1559>> for NormalizedEthTransaction {
             access_list: tx.access_list,
             l1_gas_fee_input: L1GasFeeInput::default(),
             signature,
+            original_input: None,
         })
     }
 }
@@ -377,6 +384,7 @@ impl TryFrom<Signed<TxEip2930>> for NormalizedEthTransaction {
             access_list: tx.access_list,
             l1_gas_fee_input: L1GasFeeInput::default(),
             signature,
+            original_input: None,
         })
     }
 }
@@ -404,6 +412,7 @@ impl TryFrom<Signed<TxLegacy>> for NormalizedEthTransaction {
             access_list: AccessList(Vec::new()),
             l1_gas_fee_input: L1GasFeeInput::default(),
             signature,
+            original_input: None,
         })
     }
 }
@@ -419,7 +428,7 @@ impl From<NormalizedEthTransaction> for OpTxEnvelope {
                     gas_limit: normalized.gas_limit.saturating_to(),
                     to: normalized.to,
                     value: normalized.value,
-                    input: normalized.data,
+                    input: normalized.original_input.unwrap_or(normalized.data),
                 };
 
                 let signed_tx =
@@ -438,7 +447,7 @@ impl From<NormalizedEthTransaction> for OpTxEnvelope {
                     to: normalized.to,
                     value: normalized.value,
                     access_list: normalized.access_list,
-                    input: normalized.data,
+                    input: normalized.original_input.unwrap_or(normalized.data),
                 };
 
                 let signed_tx =
@@ -458,7 +467,7 @@ impl From<NormalizedEthTransaction> for OpTxEnvelope {
                     to: normalized.to,
                     value: normalized.value,
                     access_list: normalized.access_list,
-                    input: normalized.data,
+                    input: normalized.original_input.unwrap_or(normalized.data),
                 };
 
                 let signed_tx =
@@ -596,6 +605,7 @@ impl From<TransactionRequest> for NormalizedEthTransaction {
             tx_hash: B256::random(),
             l1_gas_fee_input: L1GasFeeInput::default(),
             signature: PrimitiveSignature::new(U256::ZERO, U256::ZERO, false),
+            original_input: None,
         }
     }
 }

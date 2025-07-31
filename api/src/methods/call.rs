@@ -1,13 +1,29 @@
 use {
-    crate::{json_utils::parse_params_2, jsonrpc::JsonRpcError},
+    crate::{json_utils::parse_params_2, jsonrpc::JsonRpcError, request::SerializationKind},
+    alloy::{
+        eips::BlockNumberOrTag,
+        rpc::types::{TransactionInput, TransactionRequest},
+    },
     umi_app::{ApplicationReader, Dependencies},
 };
 
 pub async fn execute<'reader>(
     request: serde_json::Value,
     app: &ApplicationReader<'reader, impl Dependencies<'reader>>,
+    serialization_tag: SerializationKind,
 ) -> Result<serde_json::Value, JsonRpcError> {
-    let (transaction, block_number) = parse_params_2(request)?;
+    let (mut transaction, block_number) =
+        parse_params_2::<TransactionRequest, BlockNumberOrTag>(request)?;
+
+    if let SerializationKind::Evm = serialization_tag {
+        let evm_bytes = crate::evm_compat::bcs_serialize_evm_input(
+            transaction.input.input().map(|b| &b.0[..]),
+            transaction.to,
+        );
+        if let Some(bytes) = evm_bytes {
+            transaction = transaction.input(TransactionInput::new(bytes.into()));
+        }
+    }
 
     let response = app.call(transaction, block_number)?;
 
@@ -111,7 +127,7 @@ mod tests {
             state_channel.reserve_many(10).await.unwrap();
 
             let expected_response = serde_json::json!([1, 1, 0]);
-            let actual_response = execute(request, &reader).await.unwrap();
+            let actual_response = execute(request, &reader, SerializationKind::Bcs).await.unwrap();
 
             assert_eq!(actual_response, expected_response);
         }).await;
@@ -159,7 +175,7 @@ mod tests {
             state_channel.reserve_many(10).await.unwrap();
 
             // Counter script call should succeed
-            execute(request, &reader).await.unwrap();
+            execute(request, &reader, SerializationKind::Bcs).await.unwrap();
         }).await;
     }
 }

@@ -10,13 +10,14 @@ type Nonce = u64;
 
 // TODO: add address -> account nonce hashmap into the mempool for faster lookups.
 // That would require figuring out how Aptos increments those so that
-// our copy doesn't get out of sync. Another good piece of functionality
-// is invalidation of txs with expired nonces
+// our copy doesn't get out of sync.
 #[derive(Debug, Clone, Default)]
 pub struct Mempool {
-    // A hashmap for quicker access to each account, backed by an ordered map
-    // so that transaction nonces sequencing is preserved.
+    /// A hashmap for quicker access to each account, backed by an ordered map
+    /// so that transaction nonces sequencing is preserved.
     txs: HashMap<AccountAddress, BTreeMap<Nonce, NormalizedEthTransaction>>,
+    /// The total number of transactions currently stored in the mempool.
+    total_txs: usize,
 }
 
 impl Mempool {
@@ -25,7 +26,13 @@ impl Mempool {
     pub fn insert(&mut self, value: NormalizedEthTransaction) -> Option<NormalizedEthTransaction> {
         let address = value.signer.to_move_address();
         let account_txs = self.txs.entry(address).or_default();
-        account_txs.insert(value.nonce, value)
+        let replaced = account_txs.insert(value.nonce, value);
+
+        if replaced.is_none() {
+            self.total_txs += 1;
+        }
+
+        replaced
     }
 
     /// Iterate through all transactions from the [`Mempool`] in a sensible order
@@ -49,7 +56,13 @@ impl Mempool {
             .find(|(_, tx)| tx.tx_hash == tx_hash)
             .map(|(nonce, _)| *nonce)?;
 
+        // TODO: As removal is done upon successful block build, also remove the older nonces from the
+        // account here?
         let removed_tx = account_txs.remove(&nonce);
+
+        if removed_tx.is_some() {
+            self.total_txs -= 1;
+        }
 
         if account_txs.is_empty() {
             self.txs.remove(&signer);
@@ -65,6 +78,14 @@ impl Mempool {
             let tx = tx.as_ref();
             self.remove_by_hash(tx.tx_hash, tx.signer);
         }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.total_txs == 0
+    }
+
+    pub fn len(&self) -> usize {
+        self.total_txs
     }
 }
 

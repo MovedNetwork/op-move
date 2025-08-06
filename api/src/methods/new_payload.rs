@@ -375,10 +375,7 @@ mod tests {
             base_token: (),
             l1_fee: U256::ZERO,
             l2_fee: U256::ZERO,
-            block_hash: B256::from(hex!(
-                "c013e1ff1b8bca9f0d074618cc9e661983bc91d7677168b156765781aee775d3"
-            )),
-
+            block_hash: UmiBlockHash,
             block_hash_writer: block_hash_cache.clone(),
             block_hash_lookup: block_hash_cache.clone(),
             block_queries: InMemoryBlockQueries,
@@ -485,41 +482,6 @@ mod tests {
             "#,
             )
                 .unwrap();
-            let new_payload_request: serde_json::Value = serde_json::from_str(
-                r#"
-                    {
-                        "jsonrpc": "2.0",
-                        "id": 9,
-                        "method": "engine_newPayloadV3",
-                        "params": [
-                        {
-                            "parentHash": "0x781f09c5b7629a7ca30668e440ea40557f01461ad6f105b371f61ff5824b2449",
-                            "feeRecipient": "0x4200000000000000000000000000000000000011",
-                            "stateRoot": "0x316850949fd480573fec2a2cb07c9c22d7f18a390d9ad4b6847a4326b1a4a5eb",
-                            "receiptsRoot": "0x619a992b2d1905328560c3bd9c7fc79b57f012afbff3de92d7a82cfdf8aa186c",
-                            "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-                            "prevRandao": "0x5e52abb859f1fff3a4bf38e076b67815214e8cff662055549b91ba33f5cb7fba",
-                            "blockNumber": "0x1",
-                            "gasLimit": "0x1c9c380",
-                            "gasUsed": "0x2728a",
-                            "timestamp": "0x666c9d8d",
-                            "extraData": "0x",
-                            "baseFeePerGas": "0x3b5dc100",
-                            "blockHash": "0xc013e1ff1b8bca9f0d074618cc9e661983bc91d7677168b156765781aee775d3",
-                            "transactions": [
-                            "0x7ef8f8a0d449f5de7f558fa593dce80637d3a3f52cfaaee2913167371dd6ffd9014e431d94deaddeaddeaddeaddeaddeaddeaddeaddead00019442000000000000000000000000000000000000158080830f424080b8a4440a5e20000f424000000000000000000000000100000000666c9d8b0000000000000028000000000000000000000000000000000000000000000000000000000049165f0000000000000000000000000000000000000000000000000000000000000001d05450763214e6060d285b39ef5fe51ef9526395e5cef6ecb27ba06f9598f27d000000000000000000000000e25583099ba105d9ec0a67f5ae86d90e50036425"
-                            ],
-                            "withdrawals": [],
-                            "blobGasUsed": "0x0",
-                            "excessBlobGas": "0x0"
-                        },
-                        [],
-                        "0x1a274bb1e783ec35804dee78ec3d7cecd03371f311b2f946500613e994f024a5"
-                        ]
-                    }
-            "#,
-            )
-                .unwrap();
 
             forkchoice_updated::execute_v3(
                 fc_updated_request,
@@ -532,20 +494,37 @@ mod tests {
 
             queue.wait_for_pending_commands().await;
 
-            get_payload::execute_v3(get_payload_request, &reader)
+            let get_payload_response: GetPayloadResponseV3 = serde_json::from_value(get_payload::execute_v3(get_payload_request, &reader)
                 .await
-                .unwrap();
+                .unwrap()).unwrap();
 
+            let valid_hash = get_payload_response.execution_payload.block_hash;
+
+            let new_payload_request: serde_json::Value = serde_json::from_str(
+                &format!(r#"
+                   {{
+                        "jsonrpc": "2.0",
+                        "id": 9,
+                        "method": "engine_newPayloadV3",
+                        "params": [
+                        {},
+                        [],
+                        "0x1a274bb1e783ec35804dee78ec3d7cecd03371f311b2f946500613e994f024a5"
+                        ]
+                    }}
+            "#, serde_json::to_string(&get_payload_response.execution_payload).unwrap()),
+            )
+                .unwrap();
             let response = execute_v3(new_payload_request, &reader).await.unwrap();
 
             let expected_response: serde_json::Value = serde_json::from_str(
-                r#"
-                {
+                &format!(r#"
+                {{
                     "status": "VALID",
-                    "latestValidHash": "0xc013e1ff1b8bca9f0d074618cc9e661983bc91d7677168b156765781aee775d3",
+                    "latestValidHash": "{valid_hash}",
                     "validationError": null
-                }
-                "#,
+                }}
+                "#),
             )
                 .unwrap();
 

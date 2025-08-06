@@ -6,6 +6,7 @@ use {
         primitives::{hex, Address, B256},
         rpc::types::TransactionRequest,
     },
+    move_core_types::{identifier::Identifier, language_storage::StructTag},
     serde::de::DeserializeOwned,
     std::future::Future,
     umi_api::{
@@ -158,6 +159,54 @@ impl TestContext<'static> {
             ]
         });
         let result = self.handle_request(&request).await?;
+        Ok(result)
+    }
+
+    pub async fn mv_list_modules(
+        &self,
+        address: Address,
+        after: Option<Identifier>,
+        limit: Option<u32>,
+        block: BlockNumberOrTag,
+    ) -> anyhow::Result<Vec<Identifier>> {
+        let request = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 12,
+            "method": "mv_listModules",
+            "params": [
+                {
+                    "address": address,
+                    "after": after,
+                    "limit": limit,
+                },
+                block,
+            ]
+        });
+        let result = handle_request(request, &self.queue, self.reader.clone()).await?;
+        Ok(result)
+    }
+
+    pub async fn mv_list_resources(
+        &self,
+        address: Address,
+        after: Option<&StructTag>,
+        limit: Option<u32>,
+        block: BlockNumberOrTag,
+    ) -> anyhow::Result<Vec<StructTag>> {
+        let request = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 12,
+            "method": "mv_listResources",
+            "params": [
+                {
+                    "address": address,
+                    "after": after,
+                    "limit": limit,
+                },
+                block,
+            ]
+        });
+        let result = handle_request(request, &self.queue, self.reader.clone()).await?;
         Ok(result)
     }
 

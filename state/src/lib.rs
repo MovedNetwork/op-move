@@ -7,7 +7,11 @@ mod skip_list;
 mod state;
 
 pub use {
-    diff::Changes, in_memory::InMemoryState, resolver::EthTrieResolver, state::EthTrieState,
+    diff::Changes,
+    in_memory::InMemoryState,
+    resolver::EthTrieResolver,
+    skip_list::{Listable, SkipListIterator},
+    state::EthTrieState,
     umi_evm_ext::state::InMemoryDb as InMemoryTrieDb,
 };
 

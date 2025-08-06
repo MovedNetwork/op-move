@@ -3,7 +3,7 @@ use {
         Balance, BlockHeight, HeightToStateRootIndex, Nonce, ProofResponse, StateQueries,
     },
     eth_trie::{EthTrie, MemoryDB},
-    move_core_types::account_address::AccountAddress,
+    move_core_types::{account_address::AccountAddress, identifier::Identifier},
     move_table_extension::TableResolver,
     move_vm_types::resolver::MoveResolver,
     std::{convert::Infallible, sync::Arc},
@@ -59,6 +59,16 @@ impl StateQueries for MockStateQueries {
         _height: BlockHeight,
     ) -> Result<Option<Bytes>, state::Error> {
         Ok(Some(Bytes::from_static(&hex!("0123"))))
+    }
+
+    fn move_list_modules(
+        &self,
+        _account: AccountAddress,
+        _height: BlockHeight,
+        _start: Option<&Identifier>,
+        _limit: u32,
+    ) -> Result<Vec<Identifier>, state::Error> {
+        Ok(Vec::new())
     }
 
     fn resolver_at(

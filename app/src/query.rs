@@ -8,6 +8,7 @@ use {
         },
         rpc::types::{FeeHistory, TransactionRequest},
     },
+    move_core_types::identifier::Identifier,
     umi_blockchain::{
         block::{BaseGasFee, BlockQueries, BlockResponse, Eip1559GasFee},
         payload::{MaybePayloadResponse, PayloadId, PayloadQueries, PayloadResponse},
@@ -338,6 +339,19 @@ impl<'app, D: Dependencies<'app>> ApplicationReader<'app, D> {
             .by_hash(&self.storage, block_hash)
             .map_err(|_| Error::DatabaseState)?
             .ok_or(Error::User(UserError::InvalidBlockHash(block_hash)))
+    }
+
+    pub fn list_modules(
+        &self,
+        address: Address,
+        height: BlockNumberOrTag,
+        start: Option<&Identifier>,
+        limit: u32,
+    ) -> Result<Vec<Identifier>> {
+        let height = self.resolve_height(height)?;
+        Ok(self
+            .state_queries
+            .move_list_modules(address.to_move_address(), height, start, limit)?)
     }
 
     fn resolve_height(&self, height: BlockNumberOrTag) -> Result<u64> {

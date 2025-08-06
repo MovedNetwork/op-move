@@ -4,14 +4,15 @@ use {
         proof_from_trie_and_resolver,
     },
     eth_trie::{DB, EthTrie},
-    move_core_types::account_address::AccountAddress,
+    move_core_types::{account_address::AccountAddress, identifier::Identifier},
     move_table_extension::TableResolver,
     move_vm_types::resolver::MoveResolver,
+    serde::{Serialize, de::DeserializeOwned},
     std::sync::Arc,
     umi_evm_ext::state::{self, StorageTrieRepository},
     umi_execution::transaction::{L2_HIGHEST_ADDRESS, L2_LOWEST_ADDRESS},
     umi_shared::primitives::{B256, ToEthAddress, U256},
-    umi_state::EthTrieResolver,
+    umi_state::{EthTrieResolver, Listable},
 };
 
 #[derive(Debug)]
@@ -80,10 +81,57 @@ impl<R: HeightToStateRootIndex, D: DB> StateQueries for EthTrieStateQueries<R, D
         proof_from_trie_and_resolver(address, storage_slots, &mut tree, &resolver, evm_storage)
     }
 
+    fn move_list_modules(
+        &self,
+        account: AccountAddress,
+        height: BlockHeight,
+        after: Option<&Identifier>,
+        limit: u32,
+    ) -> Result<Vec<Identifier>, state::Error> {
+        let trie = self.trie_at(height)?;
+        move_list_elements(&trie, account, after, limit)
+    }
+
     fn resolver_at(
         &self,
         height: BlockHeight,
     ) -> Result<impl MoveResolver + TableResolver + '_, state::Error> {
         Ok(EthTrieResolver::new(self.trie_at(height)?))
     }
+}
+
+fn move_list_elements<T, D>(
+    trie: &EthTrie<D>,
+    account: AccountAddress,
+    after: Option<&T>,
+    limit: u32,
+) -> Result<Vec<T>, state::Error>
+where
+    T: Listable + Clone + Ord + Listable + Serialize + DeserializeOwned + 'static,
+    D: DB,
+{
+    if limit == 0 {
+        return Ok(Vec::new());
+    }
+
+    let mut limit = limit as usize;
+    let mut iter = umi_state::SkipListIterator::new(account, after, trie)?;
+    let mut result = Vec::with_capacity(limit);
+
+    // Check to make sure the first element in the iterator is different than `after`.
+    // If `after` is contained in the Skip List then it will be returned as the first
+    // element of the iterator, so it needs special handling.
+    match iter.next().transpose()? {
+        Some(id) if Some(&id) != after => {
+            result.push(id);
+            limit -= 1;
+        }
+        _ => (),
+    }
+
+    for id in iter.take(limit) {
+        result.push(id?);
+    }
+
+    Ok(result)
 }

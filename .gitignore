@@ -12,10 +12,6 @@ cache
 dist
 node_modules
 
-# SDK artifacts
-sdk/**/.env
-Move.lock
-
 # Log files from integration tests
 server/*.log
 

@@ -9,7 +9,7 @@ use {
 };
 
 /// Tag if the serialization needs fixing.
-/// The `Evm` tag is used for compatibility with EMV tooling (e.g. Forge).
+/// The `Evm` tag is used for compatibility with EVM tooling (e.g. Forge).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SerializationKind {
     Bcs,

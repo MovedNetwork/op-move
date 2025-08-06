@@ -162,6 +162,14 @@ pub trait StateQueries {
         Ok(bytes.map(Bytes))
     }
 
+    fn move_list_modules(
+        &self,
+        account: AccountAddress,
+        height: BlockHeight,
+        after: Option<&Identifier>,
+        limit: u32,
+    ) -> Result<Vec<Identifier>, state::Error>;
+
     fn resolver_at(
         &self,
         height: BlockHeight,

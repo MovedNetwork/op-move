@@ -12,6 +12,51 @@ use {
 
 const TRIE_SERIALIZATION_MESSAGE: &str = "SkipList serialization must succeed";
 
+pub fn delete_item<T, D>(
+    account: AccountAddress,
+    element: &T,
+    trie: &mut EthTrie<D>,
+) -> Result<(), TrieError>
+where
+    T: Clone + Listable + Ord + Serialize + DeserializeOwned + 'static,
+    D: DB,
+{
+    let bottom_key = SkipListKey::new(account, 0, element);
+
+    // The key is not present, so there is nothing to do.
+    if bottom_key.trie_value(trie)?.is_none() {
+        return Ok(());
+    }
+
+    let head_key = SkipListHeadKey::<T>::new(account);
+    let head = head_key.trie_value(trie)?;
+
+    let Some(first_value) = head.first_value else {
+        // The list is empty, so there is nothing to delete.
+        return Ok(());
+    };
+
+    let prevs = search_item(account, head.max_levels, first_value, element, trie)?;
+
+    // Search returns keys that are strictly less than the search element.
+    // If the search element is in the list then it will be the value of the returned key
+    for (key, value) in prevs.into_iter().flatten() {
+        if value.next_value.as_deref() != Some(element) {
+            continue;
+        }
+
+        let delete_key = SkipListKey::new(account, key.level, element);
+        let delete_trie_key = delete_key.key_hash();
+        let next_value = SkipListValue::<T>::read_trie(&delete_trie_key, trie)?;
+        trie.remove(delete_trie_key.as_slice())?;
+        if let Some(next_value) = next_value {
+            trie.insert(key.key_hash().as_slice(), &next_value.serialize())?;
+        }
+    }
+
+    Ok(())
+}
+
 pub fn insert_item<T, D, R>(
     account: AccountAddress,
     element: &T,
@@ -259,9 +304,7 @@ impl<T: Clone + Serialize + DeserializeOwned + 'static> SkipListKey<'_, T> {
         trie: &EthTrie<D>,
     ) -> Result<Option<SkipListValue<'static, T>>, TrieError> {
         let trie_key = self.key_hash();
-        let trie_bytes = trie.get(trie_key.as_slice())?;
-        let value = trie_bytes.map(|bytes| SkipListValue::deserialize(&bytes));
-        Ok(value)
+        SkipListValue::read_trie(&trie_key, trie)
     }
 }
 
@@ -277,6 +320,15 @@ impl<T: Clone + Serialize> SkipListValue<'_, T> {
 }
 
 impl<T: Clone + DeserializeOwned> SkipListValue<'static, T> {
+    pub fn read_trie<D: DB>(
+        trie_key: &FixedBytes<32>,
+        trie: &EthTrie<D>,
+    ) -> Result<Option<Self>, TrieError> {
+        let trie_bytes = trie.get(trie_key.as_slice())?;
+        let value = trie_bytes.map(|bytes| Self::deserialize(&bytes));
+        Ok(value)
+    }
+
     pub fn deserialize(bytes: &[u8]) -> Self {
         bcs::from_bytes(bytes).expect("Trie must contain valid SkipListValue")
     }
@@ -565,6 +617,31 @@ mod tests {
                 .unwrap();
         let values: Vec<u64> = iter.map(|v| v.unwrap()).collect();
         assert_eq!(values, vec![5, 8]);
+    }
+
+    #[test]
+    fn test_delete() {
+        let mut trie = mock_list();
+        delete_item::<u64, MemoryDB>(AccountAddress::ZERO, &5, &mut trie).unwrap();
+
+        // After delete skip list structure is:
+        // 0 ----------------> Nil
+        // 0 ----------------> Nil
+        // 0 -> 2 ------> 8 -> Nil
+        assert_eq!(values_at_level(&trie, 0), vec![0, 2, 8]);
+        assert_eq!(values_at_level(&trie, 1), vec![0]);
+        assert_eq!(values_at_level(&trie, 2), vec![0]);
+
+        let mut trie = mock_list();
+        delete_item::<u64, MemoryDB>(AccountAddress::ZERO, &8, &mut trie).unwrap();
+
+        // After delete skip list structure is:
+        // 0 ----------------> Nil
+        // 0 ------> 5 ------> Nil
+        // 0 -> 2 -> 5 ------> Nil
+        assert_eq!(values_at_level(&trie, 0), vec![0, 2, 5]);
+        assert_eq!(values_at_level(&trie, 1), vec![0, 5]);
+        assert_eq!(values_at_level(&trie, 2), vec![0]);
     }
 
     #[test]

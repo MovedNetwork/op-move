@@ -8,7 +8,7 @@ use {
         },
         rpc::types::{FeeHistory, TransactionRequest},
     },
-    move_core_types::identifier::Identifier,
+    move_core_types::{identifier::Identifier, language_storage::StructTag},
     umi_blockchain::{
         block::{BaseGasFee, BlockQueries, BlockResponse, Eip1559GasFee},
         payload::{MaybePayloadResponse, PayloadId, PayloadQueries, PayloadResponse},
@@ -341,17 +341,33 @@ impl<'app, D: Dependencies<'app>> ApplicationReader<'app, D> {
             .ok_or(Error::User(UserError::InvalidBlockHash(block_hash)))
     }
 
-    pub fn list_modules(
+    pub fn move_list_modules(
         &self,
         address: Address,
         height: BlockNumberOrTag,
-        start: Option<&Identifier>,
+        after: Option<&Identifier>,
         limit: u32,
     ) -> Result<Vec<Identifier>> {
         let height = self.resolve_height(height)?;
         Ok(self
             .state_queries
-            .move_list_modules(address.to_move_address(), height, start, limit)?)
+            .move_list_modules(address.to_move_address(), height, after, limit)?)
+    }
+
+    pub fn move_list_resources(
+        &self,
+        address: Address,
+        height: BlockNumberOrTag,
+        after: Option<&StructTag>,
+        limit: u32,
+    ) -> Result<Vec<StructTag>> {
+        let height = self.resolve_height(height)?;
+        Ok(self.state_queries.move_list_resources(
+            address.to_move_address(),
+            height,
+            after,
+            limit,
+        )?)
     }
 
     fn resolve_height(&self, height: BlockNumberOrTag) -> Result<u64> {

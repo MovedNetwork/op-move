@@ -4,7 +4,9 @@ use {
         proof_from_trie_and_resolver,
     },
     eth_trie::{DB, EthTrie},
-    move_core_types::{account_address::AccountAddress, identifier::Identifier},
+    move_core_types::{
+        account_address::AccountAddress, identifier::Identifier, language_storage::StructTag,
+    },
     move_table_extension::TableResolver,
     move_vm_types::resolver::MoveResolver,
     serde::{Serialize, de::DeserializeOwned},
@@ -88,6 +90,17 @@ impl<R: HeightToStateRootIndex, D: DB> StateQueries for EthTrieStateQueries<R, D
         after: Option<&Identifier>,
         limit: u32,
     ) -> Result<Vec<Identifier>, state::Error> {
+        let trie = self.trie_at(height)?;
+        move_list_elements(&trie, account, after, limit)
+    }
+
+    fn move_list_resources(
+        &self,
+        account: AccountAddress,
+        height: BlockHeight,
+        after: Option<&StructTag>,
+        limit: u32,
+    ) -> Result<Vec<StructTag>, state::Error> {
         let trie = self.trie_at(height)?;
         move_list_elements(&trie, account, after, limit)
     }

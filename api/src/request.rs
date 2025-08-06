@@ -8,18 +8,50 @@ use {
     umi_blockchain::payload::NewPayloadId,
 };
 
-#[tracing::instrument(level = "debug", skip(queue, is_allowed, payload_id, app))]
-pub async fn handle<'reader>(
+/// Tag if the serialization needs fixing.
+/// The `Evm` tag is used for compatibility with EVM tooling (e.g. Forge).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SerializationKind {
+    Bcs,
+    Evm,
+}
+
+/// Dependency injection that can change how requests are handled.
+pub struct RequestModifiers<'a, A, P> {
+    is_allowed: A,
+    payload_id: &'a P,
+    serialization_tag: SerializationKind,
+}
+
+impl<'a, A, P> RequestModifiers<'a, A, P>
+where
+    A: Fn(&MethodName) -> bool,
+    P: NewPayloadId,
+{
+    pub fn new(is_allowed: A, payload_id: &'a P, serialization_tag: SerializationKind) -> Self {
+        Self {
+            is_allowed,
+            payload_id,
+            serialization_tag,
+        }
+    }
+}
+
+#[tracing::instrument(level = "debug", skip(queue, modifiers, app))]
+pub async fn handle<'reader, A, P>(
     request: serde_json::Value,
     queue: CommandQueue,
-    is_allowed: impl Fn(&MethodName) -> bool,
-    payload_id: &impl NewPayloadId,
+    modifiers: RequestModifiers<'_, A, P>,
     app: ApplicationReader<'reader, impl Dependencies<'reader>>,
-) -> JsonRpcResponse {
+) -> JsonRpcResponse
+where
+    A: Fn(&MethodName) -> bool,
+    P: NewPayloadId,
+{
     let id = json_utils::get_field(&request, "id");
     let jsonrpc = json_utils::get_field(&request, "jsonrpc");
 
-    match inner_handle_request(request, queue, is_allowed, payload_id, &app).await {
+    match inner_handle_request(request, queue, modifiers, &app).await {
         Ok(r) => JsonRpcResponse {
             id,
             jsonrpc,
@@ -35,15 +67,23 @@ pub async fn handle<'reader>(
     }
 }
 
-async fn inner_handle_request<'reader>(
+async fn inner_handle_request<'reader, A, P>(
     request: serde_json::Value,
     queue: CommandQueue,
-    is_allowed: impl Fn(&MethodName) -> bool,
-    payload_id: &impl NewPayloadId,
+    modifiers: RequestModifiers<'_, A, P>,
     app: &ApplicationReader<'reader, impl Dependencies<'reader>>,
-) -> Result<serde_json::Value, JsonRpcError> {
+) -> Result<serde_json::Value, JsonRpcError>
+where
+    A: Fn(&MethodName) -> bool,
+    P: NewPayloadId,
+{
     use {crate::methods::*, MethodName::*};
 
+    let RequestModifiers {
+        is_allowed,
+        payload_id,
+        serialization_tag,
+    } = modifiers;
     let method: MethodName = json_utils::get_field(&request, "method")
         .as_str()
         .ok_or(JsonRpcError::missing_method(request.clone()))?
@@ -57,7 +97,9 @@ async fn inner_handle_request<'reader>(
         ForkChoiceUpdatedV3 => forkchoice_updated::execute_v3(request, queue, payload_id).await,
         GetPayloadV3 => get_payload::execute_v3(request, app).await,
         NewPayloadV3 => new_payload::execute_v3(request, app).await,
-        SendRawTransaction => send_raw_transaction::execute(request, queue).await,
+        SendRawTransaction => {
+            send_raw_transaction::execute(request, queue, serialization_tag).await
+        }
         ChainId => chain_id::execute(request, app).await,
         GetBalance => get_balance::execute(request, app).await,
         GetCode => get_code::execute(request, app).await,
@@ -67,8 +109,8 @@ async fn inner_handle_request<'reader>(
         GetBlockByNumber => get_block_by_number::execute(request, app).await,
         BlockNumber => block_number::execute(request, app).await,
         FeeHistory => fee_history::execute(request, app).await,
-        EstimateGas => estimate_gas::execute(request, app).await,
-        Call => call::execute(request, app).await,
+        EstimateGas => estimate_gas::execute(request, app, serialization_tag).await,
+        Call => call::execute(request, app, serialization_tag).await,
         TransactionReceipt => get_transaction_receipt::execute(request, app).await,
         GetProof => get_proof::execute(request, app).await,
         GasPrice => gas_price::execute(request, app).await,

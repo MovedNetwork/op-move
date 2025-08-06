@@ -1,6 +1,9 @@
 use {
-    crate::{json_utils, jsonrpc::JsonRpcError},
-    alloy::{eips::BlockNumberOrTag, rpc::types::TransactionRequest},
+    crate::{json_utils, jsonrpc::JsonRpcError, request::SerializationKind},
+    alloy::{
+        eips::BlockNumberOrTag,
+        rpc::types::{TransactionInput, TransactionRequest},
+    },
     umi_app::{ApplicationReader, Dependencies},
 };
 
@@ -9,8 +12,20 @@ const BASE_FEE: u64 = 21_000;
 pub async fn execute<'reader>(
     request: serde_json::Value,
     app: &ApplicationReader<'reader, impl Dependencies<'reader>>,
+    serialization_tag: SerializationKind,
 ) -> Result<serde_json::Value, JsonRpcError> {
-    let (transaction, block_number) = parse_params(request)?;
+    let (mut transaction, block_number) = parse_params(request)?;
+
+    if let SerializationKind::Evm = serialization_tag {
+        let evm_bytes = crate::evm_compat::bcs_serialize_evm_input(
+            transaction.input.input().map(|b| &b.0[..]),
+            transaction.to,
+        );
+        if let Some(bytes) = evm_bytes {
+            transaction = transaction.input(TransactionInput::new(bytes.into()));
+        }
+    }
+
     let response = std::cmp::max(app.estimate_gas(transaction, block_number)?, BASE_FEE);
 
     // Format the gas estimate as a hex string
@@ -135,7 +150,7 @@ mod tests {
              state_channel.reserve_many(10).await.unwrap();
           }
             let expected_response: serde_json::Value = serde_json::from_str(r#""0x63ec""#).unwrap();
-            let actual_response = execute(request, &reader).await.unwrap();
+            let actual_response = execute(request, &reader, SerializationKind::Bcs).await.unwrap();
 
             assert_eq!(actual_response, expected_response);
         }).await;

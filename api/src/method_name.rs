@@ -21,6 +21,8 @@ pub enum MethodName {
     GetProof,
     GasPrice,
     MaxPriorityFeePerGas,
+    ListModules,
+    ListResources,
 }
 
 impl MethodName {
@@ -60,6 +62,8 @@ impl FromStr for MethodName {
             "eth_getProof" => Self::GetProof,
             "eth_gasPrice" => Self::GasPrice,
             "eth_maxPriorityFeePerGas" => Self::MaxPriorityFeePerGas,
+            "mv_listModules" => Self::ListModules,
+            "mv_listResources" => Self::ListResources,
             other => {
                 return Err(JsonRpcError::invalid_method(other));
             }

@@ -1,7 +1,10 @@
 use {
     alloy::primitives::FixedBytes,
     eth_trie::{DB, EthTrie, Trie, TrieError},
-    move_core_types::account_address::AccountAddress,
+    move_core_types::{
+        account_address::AccountAddress, effects::Op, identifier::Identifier,
+        language_storage::StructTag,
+    },
     rand::{
         Rng,
         distributions::{Bernoulli, Distribution},
@@ -11,6 +14,25 @@ use {
 };
 
 const TRIE_SERIALIZATION_MESSAGE: &str = "SkipList serialization must succeed";
+
+pub fn update_trie<T, U, D, R>(
+    account: &AccountAddress,
+    element: &T,
+    update: &Op<U>,
+    trie: &mut EthTrie<D>,
+    rng: &mut R,
+) -> Result<(), TrieError>
+where
+    T: Clone + Listable + Ord + Serialize + DeserializeOwned + 'static,
+    D: DB,
+    R: Rng,
+{
+    match update {
+        Op::New(_) => insert_item(*account, element, trie, rng),
+        Op::Delete => delete_item(*account, element, trie),
+        Op::Modify(_) => Ok(()),
+    }
+}
 
 pub fn delete_item<T, D>(
     account: AccountAddress,
@@ -82,7 +104,7 @@ where
 
     let Some(first_value) = head.first_value else {
         // The list is empty, so we just insert this value
-        let new_head = SkipListHeadValue::new(1, element);
+        let new_head = SkipListHeadValue::new(0, element);
         trie.insert(trie_head_key.as_slice(), &new_head.serialize())?;
 
         trie.insert(insert_key.key_hash().as_slice(), &end_of_list)?;
@@ -172,15 +194,30 @@ where
             updated_heights += 1;
         }
 
-        let new_head = SkipListHeadValue::new(insert_height as u32, first_value.as_ref());
+        let new_head = SkipListHeadValue::new(level - 1, first_value.as_ref());
         trie.insert(trie_head_key.as_slice(), &new_head.serialize())?;
     }
 
     Ok(())
 }
 
+/// Each type that implements `Listable` must have a unique value for `kind`.
+/// It is used as a discriminator to make the byte-level representation of the keys
+/// in the trie unique.
 pub trait Listable {
     fn kind() -> u8;
+}
+
+impl Listable for StructTag {
+    fn kind() -> u8 {
+        0
+    }
+}
+
+impl Listable for Identifier {
+    fn kind() -> u8 {
+        1
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -461,7 +498,7 @@ where
     loop {
         let current_value = current_key
             .trie_value(trie)?
-            .expect("SkipListKey must exist in trie");
+            .unwrap_or_else(|| panic!("Failed to find trie value for key account={account} level={} max_level={max_levels}", current_key.level));
         let Some(next_value) = current_value.next_value.as_ref() else {
             prevs[current_key.level as usize] = Some((current_key.clone(), current_value));
             let Some(lower_level) = current_key.level.checked_sub(1) else {
@@ -709,15 +746,20 @@ mod tests {
         assert_eq!(values_at_level(&trie, 0), vec![1, 3, 7, 8, 20]);
 
         // With this rng seed the final list as the form:
-        // 1 ----------------------> Nil
         // 1 -> 3 ------> 8 -------> Nil
         // 1 -> 3 ------> 8 -> 20 -> Nil
         // 1 -> 3 -> 7 -> 8 -> 20 -> Nil
+        assert_eq!(
+            SkipListHeadKey::<u64>::new(AccountAddress::ZERO)
+                .trie_value(&trie)
+                .unwrap()
+                .max_levels,
+            2
+        );
         assert_eq!(values_at_level(&trie, 0), vec![1, 3, 7, 8, 20]);
         assert_eq!(values_at_level(&trie, 1), vec![1, 3, 8, 20]);
         assert_eq!(values_at_level(&trie, 2), vec![1, 3, 8]);
-        assert_eq!(values_at_level(&trie, 3), vec![1]);
-        assert!(values_at_level(&trie, 4).is_empty());
+        assert!(values_at_level(&trie, 3).is_empty());
     }
 
     fn values_at_level(trie: &EthTrie<MemoryDB>, level: u32) -> Vec<u64> {

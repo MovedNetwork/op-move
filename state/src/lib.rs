@@ -25,6 +25,7 @@ use {
     move_table_extension::TableResolver,
     move_vm_types::{code::ModuleBytesStorage, resolver::MoveResolver},
     nodes::{TreeKey, TreeValue},
+    rand::{SeedableRng, rngs::StdRng},
     std::{collections::HashMap, fmt::Debug},
     umi_evm_ext::{EVM_NATIVE_ADDRESS, EVM_NATIVE_MODULE, type_utils::ACCOUNT_INFO_PREFIX},
     umi_shared::primitives::{Address, B256, KeyHashable},
@@ -61,6 +62,7 @@ pub trait InsertChangeSetIntoMerkleTrie {
     fn insert_change_set_into_merkle_trie(
         &mut self,
         change_set: &Changes,
+        rng_seed: [u8; 32],
     ) -> Result<B256, Self::Err>;
 }
 
@@ -70,8 +72,20 @@ impl<D: DB> InsertChangeSetIntoMerkleTrie for EthTrie<D> {
     fn insert_change_set_into_merkle_trie(
         &mut self,
         change_set: &Changes,
+        rng_seed: [u8; 32],
     ) -> Result<B256, Self::Err> {
         let values = change_set.to_tree_values();
+
+        // Update modules+resources index
+        let mut rng = StdRng::from_seed(rng_seed);
+        for (address, changes) in change_set.accounts.accounts() {
+            for (tag, op) in changes.resources() {
+                skip_list::update_trie(address, tag, op, self, &mut rng)?;
+            }
+            for (id, op) in changes.modules() {
+                skip_list::update_trie(address, id, op, self, &mut rng)?;
+            }
+        }
 
         for (k, v) in values {
             let key_bytes = k.key_hash();
@@ -313,7 +327,7 @@ mod tests {
             .unwrap();
         state
             .trie_mut()
-            .insert_change_set_into_merkle_trie(&change_set)
+            .insert_change_set_into_merkle_trie(&change_set, [0; 32])
             .unwrap();
         let expected_state_root = state.state_root();
 
@@ -332,7 +346,7 @@ mod tests {
             .unwrap();
         state
             .trie_mut()
-            .insert_change_set_into_merkle_trie(&change_set)
+            .insert_change_set_into_merkle_trie(&change_set, [0; 32])
             .unwrap();
         let actual_state_root = state.state_root();
 

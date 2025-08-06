@@ -21,6 +21,7 @@ pub enum MethodName {
     GetProof,
     GasPrice,
     MaxPriorityFeePerGas,
+    ClientVersion,
 }
 
 impl MethodName {
@@ -44,6 +45,7 @@ impl FromStr for MethodName {
             "engine_forkchoiceUpdatedV3" => Self::ForkChoiceUpdatedV3,
             "engine_getPayloadV3" => Self::GetPayloadV3,
             "engine_newPayloadV3" => Self::NewPayloadV3,
+
             "eth_chainId" => Self::ChainId,
             "eth_getBalance" => Self::GetBalance,
             "eth_getCode" => Self::GetCode,
@@ -60,6 +62,9 @@ impl FromStr for MethodName {
             "eth_getProof" => Self::GetProof,
             "eth_gasPrice" => Self::GasPrice,
             "eth_maxPriorityFeePerGas" => Self::MaxPriorityFeePerGas,
+
+            "web3_clientVersion" => Self::ClientVersion,
+
             other => {
                 return Err(JsonRpcError::invalid_method(other));
             }

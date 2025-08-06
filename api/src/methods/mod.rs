@@ -1,6 +1,7 @@
 pub mod block_number;
 pub mod call;
 pub mod chain_id;
+pub mod client_version;
 pub mod estimate_gas;
 pub mod fee_history;
 pub mod forkchoice_updated;

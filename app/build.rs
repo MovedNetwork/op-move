@@ -12,7 +12,19 @@ fn main() {
         .nth(1)
         .unwrap_or("unknown_version")
         .to_string();
-    println!("cargo::rustc-env=RUSTC_VERSION=rust_{}", version);
+    println!("cargo::rustc-env=RUSTC_VERSION=rust{}", version);
+
+    let output = Command::new("git")
+        .arg("rev-parse")
+        .arg("--short")
+        .arg("HEAD")
+        .output()
+        .expect("Failed to parse current commit info from git");
+    let commit = str::from_utf8(&output.stdout)
+        .expect("Failed to convert git rev-parse output to a string")
+        .trim()
+        .to_string();
+    println!("cargo::rustc-env=GIT_HEAD={}", commit);
 
     let target = std::env::var("TARGET").unwrap_or("unknown_target".into());
     println!("cargo::rustc-env=TARGET_TRIPLET={}", target);

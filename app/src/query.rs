@@ -41,8 +41,9 @@ impl<'app, D: Dependencies<'app>> ApplicationReader<'app, D> {
 
     pub fn client_version(&self) -> String {
         format!(
-            "op-move/{}/{}/{}",
+            "op-move/v{}-{}/{}/{}",
             env!("CARGO_PKG_VERSION"),
+            env!("GIT_HEAD"),
             env!("TARGET_TRIPLET"),
             env!("RUSTC_VERSION")
         )

@@ -35,7 +35,6 @@ mod tests {
             .unwrap()
             .split("/")
             .collect::<Vec<_>>();
-        dbg!(&parts);
 
         assert_eq!(parts.len(), 4);
 

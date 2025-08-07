@@ -158,7 +158,7 @@ pub trait StateQueries {
         };
         let module_id = ModuleId::new(account, ident);
         let resolver = self.resolver_at(height)?;
-        let Some(bytes) = resolver.get_module(&module_id)?.map(Bytes) else {
+        let Some(bytes) = resolver.get_module(&module_id)? else {
             return Ok(None);
         };
 
@@ -169,7 +169,7 @@ pub trait StateQueries {
             .map(MoveModule::from);
 
         Ok(Some(MoveModuleResponse {
-            bytecode: bytes,
+            bytecode: bytes.to_vec().into(),
             abi,
         }))
     }

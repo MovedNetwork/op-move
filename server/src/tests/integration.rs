@@ -41,6 +41,12 @@ const OPTIMISM_PORTAL_PROXY: &str = "0x63F7A1fB6b1C1F0B620cEDF99bE217C5E3e8871D"
 mod erc20;
 mod withdrawal;
 
+pub fn create_move_counter_contract_bytecode(address: Address) -> Vec<u8> {
+    let bytecode_hex = std::fs::read_to_string("src/tests/res/counter.hex").unwrap();
+    let bytecode = hex::decode(bytecode_hex.trim()).unwrap();
+    set_module_address(bytecode, address)
+}
+
 #[tokio::test]
 async fn test_on_ethereum() -> Result<()> {
     dotenvy::dotenv().expect(".env file not found");
@@ -133,10 +139,7 @@ async fn deploy_move_counter() -> Result<()> {
         .wallet(EthereumWallet::from(from_wallet.to_owned()))
         .on_http(Url::parse(L2_RPC_URL)?);
 
-    let bytecode_hex = std::fs::read_to_string("src/tests/res/counter.hex").unwrap();
-    let bytecode = hex::decode(bytecode_hex.trim()).unwrap();
-    let bytecode = set_module_address(bytecode, from_wallet.address());
-
+    let bytecode = create_move_counter_contract_bytecode(from_wallet.address());
     let call = CallBuilder::<(), _, _, _>::new_raw_deploy(&provider, bytecode.into());
     let contract_address = call.deploy().await.unwrap();
 

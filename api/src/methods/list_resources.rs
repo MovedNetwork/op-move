@@ -7,6 +7,7 @@ use {
 };
 
 const DEFAULT_LIMIT: u32 = 10;
+const MAX_LIMIT: u32 = 100;
 
 pub async fn execute<'reader>(
     request: serde_json::Value,
@@ -25,7 +26,7 @@ pub async fn execute<'reader>(
         address,
         block_number,
         after.as_ref(),
-        limit.unwrap_or(DEFAULT_LIMIT),
+        limit.unwrap_or(DEFAULT_LIMIT).min(MAX_LIMIT),
     )?;
 
     Ok(serde_json::to_value(response).expect("Must be able to JSON-serialize response"))

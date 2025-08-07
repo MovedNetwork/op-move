@@ -165,7 +165,7 @@ impl TestContext<'static> {
     pub async fn mv_list_modules(
         &self,
         address: Address,
-        after: Option<Identifier>,
+        after: Option<&Identifier>,
         limit: Option<u32>,
         block: BlockNumberOrTag,
     ) -> anyhow::Result<Vec<Identifier>> {

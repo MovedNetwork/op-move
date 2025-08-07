@@ -6,7 +6,7 @@ use {
     },
     alloy::{
         consensus::{Receipt, constants::EMPTY_WITHDRAWALS},
-        primitives::{B256, Bloom},
+        primitives::Bloom,
         rlp::Encodable,
     },
     umi_blockchain::{
@@ -218,27 +218,18 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
 
         // Mempool should only be cleaned after all other building stages succeeded
         if !no_tx_pool {
-            let mempool_tx_count = new_transactions.len().saturating_sub(attributes_txs_len);
+            // Payload transactions always come first in the block
+            new_transactions
+                .iter()
+                .skip(attributes_txs_len)
+                .for_each(|tx| {
+                    self.mem_pool.remove_by_hash(tx.tx_hash(), tx.signer());
+                });
 
-            if mempool_tx_count > 0 {
-                // Payload transactions always come first in the block
-                let mempool_hashes: Vec<B256> = new_transactions
-                    .iter()
-                    .skip(attributes_txs_len)
-                    .map(|tx| tx.tx_hash())
-                    .collect();
-
-                for hash in mempool_hashes {
-                    if let Some(tx) = new_transactions.iter().find(|tx| tx.tx_hash() == hash) {
-                        self.mem_pool.remove_by_hash(hash, tx.signer());
-                    }
-                }
-
-                tracing::debug!(
-                    "Removed {} mempool transactions after successful block building",
-                    mempool_tx_count
-                );
-            }
+            tracing::debug!(
+                "Removed {} mempool transactions after successful block building",
+                new_transactions.len().saturating_sub(attributes_txs_len)
+            );
         }
 
         in_progress_payloads.finish_id(block, new_transactions.into_iter().map(Into::into));

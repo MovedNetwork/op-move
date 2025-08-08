@@ -222,9 +222,14 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
             new_transactions
                 .iter()
                 .skip(attributes_txs_len)
-                .for_each(|tx| {
-                    self.mem_pool.remove_by_hash(tx.tx_hash(), tx.signer());
-                });
+                .try_for_each(|tx| {
+                    let tx = tx.as_canonical().ok_or_else(|| {
+                        tracing::error!("Failure during `start_block_build`. Deposit transaction encountered outside of pyaload attributes in mempool removal.");
+                        UnrecoverableAppFailure
+                    })?;
+                    self.mem_pool.remove_by_nonce(tx.nonce, tx.signer);
+                    Ok(())
+                })?;
 
             tracing::debug!(
                 "Removed {} mempool transactions after successful block building",

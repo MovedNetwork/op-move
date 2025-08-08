@@ -39,6 +39,16 @@ impl<'app, D: Dependencies<'app>> ApplicationReader<'app, D> {
         self.genesis_config.chain_id
     }
 
+    pub fn client_version(&self) -> String {
+        format!(
+            "op-move/v{}-{}/{}/{}",
+            env!("CARGO_PKG_VERSION"),
+            env!("GIT_HEAD"),
+            env!("TARGET_TRIPLET"),
+            env!("RUSTC_VERSION")
+        )
+    }
+
     pub fn balance_by_height(&self, address: Address, height: BlockNumberOrTag) -> Result<U256> {
         self.state_queries.balance_at(
             &self.evm_storage,

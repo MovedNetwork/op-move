@@ -139,9 +139,9 @@ fn test_solidity_fixed_bytes() {
                 TxKind::Call(EVM_ADDRESS),
                 TransactionData::EntryFunction(entry_fn).to_bytes().unwrap(),
             );
-            let tx = tx.into_canonical().unwrap();
+            let tx = tx.as_canonical().unwrap();
             let input = CanonicalExecutionInput {
-                tx: &tx,
+                tx,
                 tx_hash: &tx.tx_hash,
                 state: state.resolver(),
                 storage_trie: evm_storage,

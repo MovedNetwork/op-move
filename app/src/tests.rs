@@ -27,7 +27,7 @@ use {
             InMemoryBlockRepository, UmiBlockHash,
         },
         in_memory::shared_memory,
-        payload::{InMemoryPayloadQueries, InProgressPayloads},
+        payload::{InMemoryPayloadQueries, InProgressPayloads, MaybePayloadResponse},
         receipt::{InMemoryReceiptQueries, InMemoryReceiptRepository, receipt_memory},
         state::{BlockHeight, InMemoryStateQueries, MockStateQueries, StateQueries},
         transaction::{InMemoryTransactionQueries, InMemoryTransactionRepository},
@@ -308,6 +308,7 @@ fn test_build_block_hash() {
         parent_beacon_block_root: Default::default(),
         transactions: Vec::new(),
         gas_limit: U64::from(0x1c9c380),
+        no_tx_pool: None,
     };
 
     let execution_outcome = ExecutionOutcome {
@@ -1004,4 +1005,90 @@ fn test_gas_price_vs_max_priority_fee_difference() {
     let actual_base_fee = block.0.header.inner.base_fee_per_gas.unwrap_or_default();
 
     assert_eq!(difference, actual_base_fee as u128);
+}
+
+#[test]
+fn test_no_tx_pool_does_not_affect_mempool() {
+    let payload_signer = Signer::new(&[0xbb; 32]);
+    let initial_balance = U256::from(1_000_000_000);
+
+    let (reader, mut app) = create_app_with_fake_queries(
+        payload_signer.inner.address().to_move_address(),
+        initial_balance,
+        0,
+        0,
+    );
+
+    let mempool_tx = create_transaction(0); // Uses the default signer (0xaa...)
+    app.add_transaction(mempool_tx.clone());
+    assert_eq!(
+        app.mem_pool.len(),
+        1,
+        "Mempool should have one transaction before block build"
+    );
+
+    let mut payload_tx_raw = TxEip1559 {
+        chain_id: CHAIN_ID,
+        nonce: 0,
+        gas_limit: 21000,
+        max_fee_per_gas: 1_000_000_000,
+        max_priority_fee_per_gas: 1_000_000_000,
+        to: TxKind::Call(Address::random()),
+        value: U256::from(1),
+        access_list: Default::default(),
+        input: Default::default(),
+    };
+    let signature = payload_signer
+        .inner
+        .sign_transaction_sync(&mut payload_tx_raw)
+        .unwrap();
+    let payload_tx_envelope = TxEnvelope::Eip1559(payload_tx_raw.into_signed(signature));
+    let payload_tx: NormalizedEthTransaction = (UmiTxEnvelope::try_from(payload_tx_envelope)
+        .unwrap())
+    .try_into()
+    .unwrap();
+
+    let payload_attributes = PayloadForExecution {
+        no_tx_pool: Some(true),
+        transactions: vec![payload_tx.clone().into()],
+        ..Default::default()
+    };
+    let payload_id = U64::from(1);
+
+    app.start_block_build(payload_attributes, payload_id)
+        .unwrap();
+
+    assert_eq!(
+        app.mem_pool.len(),
+        1,
+        "Mempool should still have one transaction after block build"
+    );
+    let remaining_mempool_tx = app.mem_pool.iter().next().unwrap();
+    assert_eq!(
+        remaining_mempool_tx.tx_hash, mempool_tx.tx_hash,
+        "The transaction in the mempool should be the original one"
+    );
+
+    let payload_response =
+        if let MaybePayloadResponse::Some(payload) = reader.payload(payload_id).unwrap() {
+            payload
+        } else {
+            unreachable!("Payload should have been applied in block build")
+        };
+    assert_eq!(
+        payload_response.execution_payload.transactions.len(),
+        1,
+        "Built block should contain exactly one transaction"
+    );
+
+    let built_tx_bytes = &payload_response.execution_payload.transactions[0];
+    let built_tx_hash = alloy::primitives::keccak256(built_tx_bytes.as_ref());
+    assert_eq!(
+        built_tx_hash, payload_tx.tx_hash,
+        "The transaction in the block should be the one from payload_attributes"
+    );
+    assert_ne!(
+        built_tx_hash, mempool_tx.tx_hash,
+        "The transaction in the block should NOT be the one from the mempool"
+    );
 }

@@ -20,6 +20,14 @@ impl JsonRpcError {
         }
     }
 
+    pub fn invalid_fc_state() -> Self {
+        Self::without_data(-38002, "Invalid forkchoice state")
+    }
+
+    pub fn invalid_attributes() -> Self {
+        Self::without_data(-38003, "Invalid payload attributes")
+    }
+
     pub fn parse_error(request: serde_json::Value, message: impl Display) -> Self {
         Self {
             // invalid params code as defined in geth's beacon/engine/errors.go

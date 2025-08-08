@@ -80,6 +80,7 @@ pub fn blocks_1000() -> impl Iterator<Item = Command> {
                 parent_beacon_block_root: B256::ZERO,
                 transactions: vec![tx.clone()],
                 gas_limit: U64::from_limbs([30000000u64]),
+                no_tx_pool: None,
             }
             .try_into()
             .unwrap(),

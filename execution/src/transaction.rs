@@ -167,17 +167,16 @@ impl From<NormalizedEthTransaction> for NormalizedExtendedTxEnvelope {
 }
 
 impl NormalizedExtendedTxEnvelope {
-    pub fn into_canonical(self) -> Option<NormalizedEthTransaction> {
-        if let Self::Canonical(tx) = self {
-            Some(tx)
-        } else {
-            None
-        }
-    }
-
     pub fn as_deposit(&self) -> Option<&TxDeposit> {
         match self {
             Self::DepositedTx(tx) => Some(tx),
+            _ => None,
+        }
+    }
+
+    pub fn as_canonical(&self) -> Option<&NormalizedEthTransaction> {
+        match self {
+            Self::Canonical(tx) => Some(tx),
             _ => None,
         }
     }
@@ -221,7 +220,7 @@ impl NormalizedExtendedTxEnvelope {
         self.tx_hash()
     }
 
-    pub fn from(&self) -> Address {
+    pub fn signer(&self) -> Address {
         match self {
             Self::Canonical(tx) => tx.signer,
             Self::DepositedTx(tx) => tx.from,

@@ -28,7 +28,7 @@ impl ExtendedTransaction {
     ) -> Self {
         Self {
             effective_gas_price,
-            from: inner.from(),
+            from: inner.signer(),
             hash: inner.tx_hash(),
             inner: inner.into(),
             block_number,

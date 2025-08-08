@@ -18,6 +18,7 @@ pub struct Payload {
     pub parent_beacon_block_root: B256,
     pub transactions: Vec<Bytes>,
     pub gas_limit: U64,
+    pub no_tx_pool: Option<bool>,
 }
 
 /// Internal representation of [`Payload`] that has its `transactions`
@@ -31,6 +32,7 @@ pub struct PayloadForExecution {
     pub parent_beacon_block_root: B256,
     pub transactions: Vec<NormalizedExtendedTxEnvelope>,
     pub gas_limit: U64,
+    pub no_tx_pool: Option<bool>,
 }
 
 impl TryFrom<Payload> for PayloadForExecution {
@@ -53,6 +55,7 @@ impl TryFrom<Payload> for PayloadForExecution {
             parent_beacon_block_root: value.parent_beacon_block_root,
             transactions,
             gas_limit: value.gas_limit,
+            no_tx_pool: value.no_tx_pool,
         })
     }
 }

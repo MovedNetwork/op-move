@@ -38,6 +38,7 @@ aptos-native-interface = { git = "https://github.com/aptos-labs/aptos-core", tag
 aptos-storage-interface = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.27.2" }
 aptos-table-natives = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.27.2" }
 aptos-types = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.27.2" }
+aptos-api-types = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.27.2" }
 aptos-vm = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.27.2" }
 aptos-vm-types = { git = "https://github.com/aptos-labs/aptos-core", tag = "aptos-node-v1.27.2" }
 arbitrary = "1"

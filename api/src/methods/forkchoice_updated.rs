@@ -7,18 +7,23 @@ use {
             PayloadStatusV1, Status,
         },
     },
-    umi_app::{Command, CommandQueue, Payload, PayloadForExecution, ToPayloadIdInput},
+    alloy::primitives::B256,
+    umi_app::{
+        ApplicationReader, Command, CommandQueue, Dependencies, Payload, PayloadForExecution,
+        ToPayloadIdInput,
+    },
     umi_blockchain::payload::NewPayloadId,
 };
 
-pub async fn execute_v3(
+pub async fn execute_v3<'reader>(
     request: serde_json::Value,
     queue: CommandQueue,
+    app: &ApplicationReader<'reader, impl Dependencies<'reader>>,
     payload_id: &impl NewPayloadId,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let (forkchoice_state, payload_attributes) = parse_params_v3(request)?;
     let response =
-        inner_execute_v3(forkchoice_state, payload_attributes, queue, payload_id).await?;
+        inner_execute_v3(forkchoice_state, payload_attributes, queue, app, payload_id).await?;
     Ok(serde_json::to_value(response).expect("Must be able to JSON-serialize response"))
 }
 
@@ -44,15 +49,16 @@ fn parse_params_v3(
     }
 }
 
-async fn inner_execute_v3(
+async fn inner_execute_v3<'reader>(
     forkchoice_state: ForkchoiceStateV1,
     payload_attributes: Option<PayloadForExecution>,
     queue: CommandQueue,
+    app: &ApplicationReader<'reader, impl Dependencies<'reader>>,
     payload_id_generator: &impl NewPayloadId,
 ) -> Result<ForkchoiceUpdatedResponseV1, JsonRpcError> {
     // Spec: https://github.com/ethereum/execution-apis/blob/main/src/engine/cancun.md#specification-1
 
-    // TODO: implement proper validation of Forkchoice state
+    validate_forkchoice_state(&forkchoice_state, app)?;
 
     let payload_status = PayloadStatusV1 {
         status: Status::Valid,
@@ -78,6 +84,34 @@ async fn inner_execute_v3(
         payload_status,
         payload_id,
     })
+}
+
+fn validate_forkchoice_state<'reader>(
+    forkchoice_state: &ForkchoiceStateV1,
+    app: &ApplicationReader<'reader, impl Dependencies<'reader>>,
+) -> Result<(), JsonRpcError> {
+    // TODO: some of the required checks, such as block validity in terms of PoW terminal
+    // conditions or payload attributes timestamp validation, need the block referenced by
+    // `fc_state.head_block_hash` to already exist. For this to be applicable,
+    // we need to rework the overall engine API flow as currently
+    // we assume that every call to `forkchoice_updated` results in block building only.
+
+    if forkchoice_state.head_block_hash == B256::ZERO {
+        return Err(JsonRpcError::invalid_fc_state());
+    }
+
+    let current_block_num = app.block_number()?;
+    if current_block_num != 0 {
+        let _finalized_block = app
+            .block_by_hash(forkchoice_state.finalized_block_hash, false)
+            .map_err(|_| JsonRpcError::invalid_fc_state())?;
+
+        let _safe_block = app
+            .block_by_hash(forkchoice_state.safe_block_hash, false)
+            .map_err(|_| JsonRpcError::invalid_fc_state())?;
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -176,6 +210,8 @@ pub(super) mod tests {
                     "7ef8f8a0de86bef815fc910df65a9459ccb2b9a35fa8596dfcfed1ff01bbf28891d86d5e94deaddeaddeaddeaddeaddeaddeaddeaddead00019442000000000000000000000000000000000000158080830f424080b8a4440a5e2000000558000c5fc50000000000000000000000006660735b00000000000001a9000000000000000000000000000000000000000000000000000000000000000700000000000000000000000000000000000000000000000000000000000000017ae3f74f0134521a7d62a387ac75a5153bcd1aab1c7e003e9b9e15a5d8846363000000000000000000000000e25583099ba105d9ec0a67f5ae86d90e50036425"
                 ))],
                 gas_limit: U64::from_be_slice(&hex!("01c9c380")),
+                no_tx_pool: None,
+                eip1559_params: None
             }).try_into().unwrap()),
         );
 
@@ -219,7 +255,7 @@ pub(super) mod tests {
 
     #[tokio::test]
     async fn test_execute_v3() {
-        umi_app::run(create_app, 10, |queue, _reader| async move {
+        umi_app::run(create_app, 10, |queue, reader| async move {
             let request = example_request();
 
             let expected_response: serde_json::Value = serde_json::from_str(r#"
@@ -233,7 +269,7 @@ pub(super) mod tests {
                 }
             "#).unwrap();
 
-            let response = execute_v3(request, queue, &0x03421ee50df45cacu64)
+            let response = execute_v3(request, queue, &reader, &0x03421ee50df45cacu64)
                 .await
                 .unwrap();
 

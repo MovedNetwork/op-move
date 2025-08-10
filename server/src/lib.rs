@@ -1,5 +1,6 @@
 use {
     crate::mirror::MirrorLog,
+    alloy::consensus::{EMPTY_OMMER_ROOT_HASH, EMPTY_ROOT_HASH},
     jsonwebtoken::{DecodingKey, Validation},
     move_core_types::account_address::AccountAddress,
     std::{
@@ -26,9 +27,7 @@ use {
     },
     umi_shared::{
         hex,
-        primitives::{
-            ToSaturatedU64, B2048, B256, B64, EMPTY_LIST_ROOT, EMPTY_OMMERS_ROOT_HASH, U256,
-        },
+        primitives::{ToSaturatedU64, B2048, B256, B64, U256},
     },
     warp::{
         http::{header::CONTENT_TYPE, HeaderMap, HeaderValue, StatusCode},
@@ -294,15 +293,15 @@ fn create_genesis_block(
         number: genesis_config.l2_contract_genesis.number.unwrap_or(0),
         parent_beacon_block_root: Some(B256::ZERO),
         parent_hash: B256::ZERO,
-        receipts_root: EMPTY_LIST_ROOT,
+        receipts_root: EMPTY_ROOT_HASH,
         state_root: B256::new(hex!(
             "30b67e4b5ef34eacb9e083c07fd5578982c2cb4e0ee1dc0a14d72b99a28ed80e"
         )),
         timestamp: genesis_config.l2_contract_genesis.timestamp,
-        transactions_root: EMPTY_LIST_ROOT,
-        withdrawals_root: Some(EMPTY_LIST_ROOT),
+        transactions_root: EMPTY_ROOT_HASH,
+        withdrawals_root: Some(EMPTY_ROOT_HASH),
         beneficiary: genesis_config.l2_contract_genesis.coinbase,
-        ommers_hash: EMPTY_OMMERS_ROOT_HASH,
+        ommers_hash: EMPTY_OMMER_ROOT_HASH,
         requests_hash: None,
     };
     let hash = block_hash.block_hash(&genesis_header);

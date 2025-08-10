@@ -15,6 +15,7 @@ pub async fn execute_v3<'reader>(
     let payload_id: PayloadId = parse_params_1(request)?;
 
     // Spec: https://github.com/ethereum/execution-apis/blob/main/src/engine/cancun.md#specification-2
+    // unsupported fork if ts < cancun
     let response = match app.payload(payload_id.into())? {
         MaybePayloadResponse::Some(response) => response,
         MaybePayloadResponse::Delayed(mut rx) => {
@@ -192,6 +193,7 @@ mod tests {
             forkchoice_updated::execute_v3(
                 forkchoice_updated::tests::example_request(),
                 queue.clone(),
+                &reader,
                 &0x03421ee50df45cacu64,
             )
                 .await

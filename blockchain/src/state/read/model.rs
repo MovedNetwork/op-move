@@ -81,7 +81,7 @@ pub trait StateQueries {
         Ok(quick_get_nonce(&account, &resolver, evm_storage))
     }
 
-    /// Queries the blockchain state version corresponding with block `height` for the  
+    /// Queries the blockchain state version corresponding with block `height` for the
     /// account and storage proofs associated with `account`.
     fn proof_at(
         &self,
@@ -91,7 +91,7 @@ pub trait StateQueries {
         height: BlockHeight,
     ) -> Result<ProofResponse, state::Error>;
 
-    /// Queries the blockchain state version corresponding with block `height` for the  
+    /// Queries the blockchain state version corresponding with block `height` for the
     /// `account` EVM bytecode.
     fn evm_bytecode_at(
         &self,
@@ -160,6 +160,29 @@ pub trait StateQueries {
         let bytes = resolver.get_module(&module_id)?;
 
         Ok(bytes.map(Bytes))
+    }
+
+    /// Queries the blockchain state version corresponding with block `height` for the value of a
+    /// single EVM storage slot `index` at `account`.
+    fn evm_storage_at(
+        &self,
+        evm_storage: &impl StorageTrieRepository,
+        account: Address,
+        index: U256,
+        height: BlockHeight,
+    ) -> Result<U256, state::Error> {
+        let resolver = self.resolver_at(height)?;
+
+        // Read account info to get the storage root
+        let evm_db = ResolverBackedDB::new(evm_storage, &resolver, &(), 0);
+        let Some(account_info) = evm_db.get_account(&account)? else {
+            return Ok(U256::ZERO);
+        };
+
+        // Read the slot from the account's storage trie
+        let storage =
+            evm_storage.for_account_with_root(&account, &account_info.inner.storage_root)?;
+        Ok(storage.get(&index)?.unwrap_or_default())
     }
 
     fn resolver_at(

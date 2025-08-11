@@ -58,7 +58,13 @@ where
         return Ok(());
     };
 
-    let prevs = collect_predecessors(account, head.max_levels, first_value, element, trie)?;
+    let prevs = collect_predecessors(
+        account,
+        head.current_highest_level,
+        first_value,
+        element,
+        trie,
+    )?;
 
     // Search returns keys that are strictly less than the search element.
     // If the search element is in the list then it will be the value of the returned key
@@ -119,7 +125,7 @@ where
         let reinsert_level = pick_insert_level(rng) as u32;
 
         // Update head value
-        let max_levels = std::cmp::max(reinsert_level as u32, head.max_levels);
+        let max_levels = std::cmp::max(reinsert_level as u32, head.current_highest_level);
         let new_head = SkipListHeadValue::new(max_levels, element);
         trie.insert(trie_head_key.as_slice(), &new_head.serialize())?;
 
@@ -170,7 +176,13 @@ where
         next_value: Some(Cow::Borrowed(element)),
     }
     .serialize();
-    let prevs = collect_predecessors(account, head.max_levels, first_value.clone(), element, trie)?;
+    let prevs = collect_predecessors(
+        account,
+        head.current_highest_level,
+        first_value.clone(),
+        element,
+        trie,
+    )?;
     let mut updated_heights = 0;
     for (key, original_value) in prevs.into_iter().flatten().take(insert_level + 1) {
         trie.insert(key.key_hash().as_slice(), &insert_value)?;
@@ -187,7 +199,7 @@ where
     if updated_heights <= insert_level {
         // New element is taller than previous max height.
         // Add new keys pointing from first to new element and update head value.
-        let mut level = head.max_levels + 1;
+        let mut level = head.current_highest_level + 1;
         while updated_heights <= insert_level {
             let key = SkipListKey::new(account, level, first_value.as_ref());
             trie.insert(key.key_hash().as_slice(), &insert_value)?;
@@ -262,14 +274,14 @@ impl<T: Clone + DeserializeOwned + 'static> SkipListHeadKey<T> {
 
 #[derive(Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct SkipListHeadValue<'a, T: Clone> {
-    pub max_levels: u32,
+    pub current_highest_level: u32,
     pub first_value: Option<Cow<'a, T>>,
 }
 
 impl<T: Clone> Default for SkipListHeadValue<'_, T> {
     fn default() -> Self {
         Self {
-            max_levels: 0,
+            current_highest_level: 0,
             first_value: None,
         }
     }
@@ -278,7 +290,7 @@ impl<T: Clone> Default for SkipListHeadValue<'_, T> {
 impl<'a, T: Clone> SkipListHeadValue<'a, T> {
     pub fn new(max_levels: u32, first_value: &'a T) -> Self {
         Self {
-            max_levels,
+            current_highest_level: max_levels,
             first_value: Some(Cow::Borrowed(first_value)),
         }
     }
@@ -432,8 +444,13 @@ where
                     next_key: None,
                 });
             };
-            let mut prevs =
-                collect_predecessors(account, head.max_levels, first_value, start, trie)?;
+            let mut prevs = collect_predecessors(
+                account,
+                head.current_highest_level,
+                first_value,
+                start,
+                trie,
+            )?;
             let mut this = Self {
                 trie,
                 level,
@@ -765,7 +782,7 @@ mod tests {
             SkipListHeadKey::<u64>::new(AccountAddress::ZERO)
                 .trie_value(&trie)
                 .unwrap()
-                .max_levels,
+                .current_highest_level,
             2
         );
         assert_eq!(values_at_level(&trie, 0), vec![1, 3, 7, 8, 20]);

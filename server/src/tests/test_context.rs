@@ -191,8 +191,7 @@ impl TestContext<'static> {
             "method": "eth_getStorageAt",
             "params": [address, index, "latest"]
         });
-        let value_hex: String = handle_request(request, &self.queue, self.reader.clone()).await?;
-        let value = U256::from_str_radix(value_hex.trim_start_matches("0x"), 16)?;
+        let value: U256 = handle_request(request, &self.queue, self.reader.clone()).await?;
         Ok(value)
     }
 

@@ -128,27 +128,32 @@ where
             next_value: Some(Cow::Borrowed(&first_value)),
         }
         .serialize();
+        // For levels less than or equal to the reinsert level (i.e. the max level for what is now
+        // the second element in the list), the new head points at the old head.
         for level in 0..=reinsert_level {
             let fv_key = SkipListKey::new(account, level, first_value.as_ref());
             let insert_key = SkipListKey::new(account, level, element);
+            trie.insert(insert_key.key_hash().as_slice(), &insert_value)?;
 
+            // The reinsert level could be higher than the previous highest level, therefore
+            // we must handle the case that the value is missing and insert it.
             let fv_value = fv_key.trie_value(trie)?;
-            match fv_value {
-                Some(_) => trie.insert(insert_key.key_hash().as_slice(), &insert_value)?,
-                None => {
-                    trie.insert(insert_key.key_hash().as_slice(), &insert_value)?;
-                    trie.insert(fv_key.key_hash().as_slice(), &end_of_list)?;
-                }
+            if fv_value.is_none() {
+                trie.insert(fv_key.key_hash().as_slice(), &end_of_list)?;
             }
         }
+        // For levels after the reinsert level, we must delete the old key and the new
+        // head points where the old head used to point (or to the end of the list if
+        // there was no previous reference).
         for level in (reinsert_level + 1)..=max_levels {
             let fv_key = SkipListKey::new(account, level, first_value.as_ref());
             let insert_key = SkipListKey::new(account, level, element);
 
-            let fv_value = fv_key.trie_value(trie)?;
+            let fv_trie_key = fv_key.key_hash();
+            let fv_value = SkipListValue::<T>::read_trie(&fv_trie_key, trie)?;
             match fv_value {
                 Some(value) => {
-                    trie.remove(fv_key.key_hash().as_slice())?;
+                    trie.remove(fv_trie_key.as_slice())?;
                     trie.insert(insert_key.key_hash().as_slice(), &value.serialize())?;
                 }
                 None => trie.insert(insert_key.key_hash().as_slice(), &end_of_list)?,

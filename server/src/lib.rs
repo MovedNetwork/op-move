@@ -30,11 +30,10 @@ use {
         primitives::{ToSaturatedU64, B2048, B256, B64, U256},
     },
     warp::{
-        http::{header::CONTENT_TYPE, HeaderMap, HeaderValue, StatusCode},
+        http::{header::CONTENT_TYPE, HeaderMap, HeaderValue},
         hyper::Response,
-        Filter, Rejection, Reply,
+        Filter, Rejection,
     },
-    warp_reverse_proxy::{extract_request_data_filter, Method, Request},
 };
 
 mod allow;
@@ -174,22 +173,30 @@ fn serve(
     let content_type =
         HeaderMap::from_iter([(CONTENT_TYPE, HeaderValue::from_static("application/json"))]);
 
-    let route = warp::any()
-        .map(move || services.clone())
-        .and(extract_request_data_filter())
-        .and(validate_jwt(jwt))
-        .and_then(
-            move |(queue, reader), path, query, method, headers, body, _| {
+    let get_method_auto_response = warp::get().map(warp::reply);
+    let app_state = warp::any().map(move || services.clone());
+    let jwt_validation = validate_jwt(jwt);
+    let request_body = warp::body::json::<serde_json::Value>();
+    let evm_path = warp::path!("evm").map(|| SerializationKind::Evm);
+    let root_path = warp::any().map(|| SerializationKind::Bcs);
+    let serialization_kind = evm_path.or(root_path).unify();
+
+    let route = get_method_auto_response
+        .or(serialization_kind
+            .and(app_state)
+            .and(jwt_validation)
+            .and(request_body)
+            .and_then(move |serialization_tag, (queue, reader), _, request| {
                 handle_request(
                     queue,
-                    (path, query, method, headers, body),
+                    serialization_tag,
+                    request,
                     port,
                     is_allowed,
                     &StatePayloadId,
                     reader,
                 )
-            },
-        )
+            }))
         .with(warp::reply::with::headers(content_type))
         .with(warp::cors().allow_any_origin());
 
@@ -354,28 +361,13 @@ pub fn validate_jwt(
 
 async fn handle_request<'reader>(
     queue: CommandQueue,
-    request: Request,
+    serialization_tag: SerializationKind,
+    request: serde_json::Value,
     port: &str,
     is_allowed: &impl Fn(&MethodName) -> bool,
     payload_id: &impl NewPayloadId,
     app: ApplicationReader<'reader, impl Dependencies<'reader>>,
 ) -> Result<warp::reply::Response, Rejection> {
-    let (path, _, method, _, body) = request;
-
-    // Handle load balancer health check with a simple response
-    if method == Method::GET {
-        return Ok(StatusCode::OK.into_response());
-    }
-
-    let Ok(request) = serde_json::from_slice::<serde_json::Value>(&body) else {
-        return Ok(StatusCode::BAD_REQUEST.into_response());
-    };
-
-    let serialization_tag = if path.as_str().contains("evm") {
-        SerializationKind::Evm
-    } else {
-        SerializationKind::Bcs
-    };
     let modifiers = RequestModifiers::new(is_allowed, payload_id, serialization_tag);
     let op_move_response =
         umi_api::request::handle(request.clone(), queue.clone(), modifiers, app).await;

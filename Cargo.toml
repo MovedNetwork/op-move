@@ -103,7 +103,6 @@ tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
 warp = "0.3"
-warp-reverse-proxy = "1"
 evmap = "10"
 toml = "0.8"
 

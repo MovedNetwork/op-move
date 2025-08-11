@@ -174,7 +174,7 @@ pub trait StateQueries {
         let resolver = self.resolver_at(height)?;
 
         // Read account info to get the storage root
-        let evm_db = ResolverBackedDB::new(evm_storage, &resolver, &(), 0);
+        let evm_db = ResolverBackedDB::new(evm_storage, &resolver, &(), height);
         let Some(account_info) = evm_db.get_account(&account)? else {
             return Ok(U256::ZERO);
         };

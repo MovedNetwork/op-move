@@ -3,7 +3,7 @@ use {
     alloy::{
         consensus::transaction::TxEnvelope,
         eips::{BlockNumberOrTag, Encodable2718},
-        primitives::{hex, B256},
+        primitives::{hex, Address, B256},
         rpc::types::TransactionRequest,
     },
     serde::de::DeserializeOwned,
@@ -182,6 +182,18 @@ impl TestContext<'static> {
         let block: GetBlockResponse =
             handle_request(request, &self.queue, self.reader.clone()).await?;
         Ok(block)
+    }
+
+    pub async fn eth_get_storage_at(&self, address: Address, index: U256) -> anyhow::Result<U256> {
+        let request = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 12,
+            "method": "eth_getStorageAt",
+            "params": [address, index, "latest"]
+        });
+        let value_hex: String = handle_request(request, &self.queue, self.reader.clone()).await?;
+        let value = U256::from_str_radix(value_hex.trim_start_matches("0x"), 16)?;
+        Ok(value)
     }
 
     pub async fn shutdown(self) {

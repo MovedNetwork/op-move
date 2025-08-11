@@ -58,7 +58,7 @@ where
         return Ok(());
     };
 
-    let prevs = search_item(account, head.max_levels, first_value, element, trie)?;
+    let prevs = collect_predecessors(account, head.max_levels, first_value, element, trie)?;
 
     // Search returns keys that are strictly less than the search element.
     // If the search element is in the list then it will be the value of the returned key
@@ -165,7 +165,7 @@ where
         next_value: Some(Cow::Borrowed(element)),
     }
     .serialize();
-    let prevs = search_item(account, head.max_levels, first_value.clone(), element, trie)?;
+    let prevs = collect_predecessors(account, head.max_levels, first_value.clone(), element, trie)?;
     let mut updated_heights = 0;
     for (key, original_value) in prevs.into_iter().flatten().take(insert_height) {
         trie.insert(key.key_hash().as_slice(), &insert_value)?;
@@ -427,7 +427,7 @@ where
                     next_key: None,
                 });
             };
-            let mut prevs = search_item(account, head.max_levels, first_value, start, trie)?;
+            let mut prevs = collect_predecessors(account, head.max_levels, first_value, start, trie)?;
             let mut this = Self {
                 trie,
                 level,
@@ -473,7 +473,7 @@ where
 
 type SkipListPair<T> = (SkipListKey<'static, T>, SkipListValue<'static, T>);
 
-fn search_item<T, D>(
+fn collect_predecessors<T, D>(
     account: AccountAddress,
     max_levels: u32,
     first_value: Cow<'static, T>,
@@ -614,11 +614,11 @@ mod tests {
     }
 
     #[test]
-    fn test_search() {
+    fn test_collect_predecessors() {
         let trie = mock_list();
 
         assert_eq!(
-            search_item::<u64, MemoryDB>(AccountAddress::ZERO, 2, Cow::Owned(0), &3, &trie)
+            collect_predecessors::<u64, MemoryDB>(AccountAddress::ZERO, 2, Cow::Owned(0), &3, &trie)
                 .unwrap(),
             vec![
                 Some((

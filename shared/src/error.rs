@@ -101,6 +101,8 @@ pub enum UserError {
     RewardPercentilesTooLong { max: usize, given: usize },
     #[error("Invalid address requested: {0}")]
     InvalidAddress(Address),
+    #[error("Missing module requested: {0}")]
+    MissingModule(String),
 }
 
 /// The error caused by invalid transaction input parameter.

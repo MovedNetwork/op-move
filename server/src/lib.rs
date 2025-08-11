@@ -13,6 +13,7 @@ use {
     umi_api::{
         method_name::MethodName,
         request::{RequestModifiers, SerializationKind},
+        schema::BlockNumberOrTag,
     },
     umi_app::{Application, ApplicationReader, CommandQueue, Dependencies},
     umi_blockchain::{
@@ -32,7 +33,7 @@ use {
         http::{header::CONTENT_TYPE, HeaderMap, HeaderValue},
         hyper::Response,
         reply::Reply,
-        Filter, Rejection,
+        reject, Filter, Rejection,
     },
 };
 
@@ -160,6 +161,11 @@ pub async fn run(args: Config) {
     .ok();
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
+struct AptosQuery {
+    ledger_version: u64,
+}
+
 pub fn server_filter(
     queue: &CommandQueue,
     reader: &ApplicationReader<'static, dependency::ReaderDependency>,
@@ -170,6 +176,19 @@ pub fn server_filter(
     let services = (queue.clone(), reader.clone());
     let content_type =
         HeaderMap::from_iter([(CONTENT_TYPE, HeaderValue::from_static("application/json"))]);
+
+    let aptos_route = warp::path!("v1" / "accounts" / AccountAddress / "module" / String)
+        .and(warp::query::<AptosQuery>())
+        .map({
+            let reader = reader.clone();
+
+            move |address: AccountAddress, module: String, http_query: AptosQuery| {
+                (address, module, http_query, reader.clone())
+            }
+        })
+        .and_then(move |(address, module, headers, reader)| {
+            handle_move_module_at_request(address, module, headers, reader)
+        });
 
     let get_method_auto_response = warp::get().map(warp::reply);
     let app_state = warp::any().map(move || services.clone());
@@ -197,6 +216,7 @@ pub fn server_filter(
             }))
         .with(warp::reply::with::headers(content_type))
         .with(warp::cors().allow_any_origin())
+        .or(aptos_route);
 }
 
 fn serve(
@@ -389,5 +409,26 @@ async fn handle_request<'reader>(
     let body = hyper::Body::from(
         serde_json::to_vec(&op_move_response).expect("Must be able to serialize response"),
     );
+    Ok(Response::new(body))
+}
+
+async fn handle_move_module_at_request(
+    address: AccountAddress,
+    module: String,
+    headers: AptosQuery,
+    reader: ApplicationReader<'static, dependency::ReaderDependency>,
+) -> Result<warp::reply::Response, Rejection> {
+    let response = reader
+        .move_module_by_height(
+            address,
+            module.as_str(),
+            BlockNumberOrTag::Number(headers.ledger_version),
+        )
+        .map_err(|_e| reject::not_found())?;
+
+    let body = hyper::Body::from(
+        serde_json::to_vec(&response).expect("Must be able to serialize response"),
+    );
+
     Ok(Response::new(body))
 }

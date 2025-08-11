@@ -115,11 +115,11 @@ where
     if element < first_value.as_ref() {
         // The new element needs to become the head of the list.
 
-        // Randomly pick the height for the old head (now second element).
-        let insert_level = (pick_insert_height(rng) - 1) as u32;
+        // Randomly pick the level for the old head (now second element).
+        let reinsert_level = pick_insert_level(rng) as u32;
 
         // Update head value
-        let max_levels = std::cmp::max(insert_level as u32, head.max_levels);
+        let max_levels = std::cmp::max(reinsert_level as u32, head.max_levels);
         let new_head = SkipListHeadValue::new(max_levels, element);
         trie.insert(trie_head_key.as_slice(), &new_head.serialize())?;
 
@@ -128,7 +128,7 @@ where
             next_value: Some(Cow::Borrowed(&first_value)),
         }
         .serialize();
-        for level in 0..=insert_level {
+        for level in 0..=reinsert_level {
             let fv_key = SkipListKey::new(account, level, first_value.as_ref());
             let insert_key = SkipListKey::new(account, level, element);
 
@@ -141,7 +141,7 @@ where
                 }
             }
         }
-        for level in (insert_level + 1)..=max_levels {
+        for level in (reinsert_level + 1)..=max_levels {
             let fv_key = SkipListKey::new(account, level, first_value.as_ref());
             let insert_key = SkipListKey::new(account, level, element);
 
@@ -160,14 +160,14 @@ where
 
     // For each height the new key occupies, insert it into the corresponding
     // linked list.
-    let insert_height = pick_insert_height(rng);
+    let insert_level = pick_insert_level(rng);
     let insert_value = SkipListValue::<T> {
         next_value: Some(Cow::Borrowed(element)),
     }
     .serialize();
     let prevs = collect_predecessors(account, head.max_levels, first_value.clone(), element, trie)?;
     let mut updated_heights = 0;
-    for (key, original_value) in prevs.into_iter().flatten().take(insert_height) {
+    for (key, original_value) in prevs.into_iter().flatten().take(insert_level + 1) {
         trie.insert(key.key_hash().as_slice(), &insert_value)?;
 
         let insert_key = SkipListKey::new(account, key.level, element);
@@ -179,11 +179,11 @@ where
         updated_heights += 1;
     }
 
-    if updated_heights < insert_height {
+    if updated_heights <= insert_level {
         // New element is taller than previous max height.
         // Add new keys pointing from first to new element and update head value.
         let mut level = head.max_levels + 1;
-        while updated_heights < insert_height {
+        while updated_heights <= insert_level {
             let key = SkipListKey::new(account, level, first_value.as_ref());
             trie.insert(key.key_hash().as_slice(), &insert_value)?;
 
@@ -427,7 +427,8 @@ where
                     next_key: None,
                 });
             };
-            let mut prevs = collect_predecessors(account, head.max_levels, first_value, start, trie)?;
+            let mut prevs =
+                collect_predecessors(account, head.max_levels, first_value, start, trie)?;
             let mut this = Self {
                 trie,
                 level,
@@ -524,8 +525,8 @@ where
     }
 }
 
-fn pick_insert_height<R: Rng>(rng: &mut R) -> usize {
-    let mut result = 1;
+fn pick_insert_level<R: Rng>(rng: &mut R) -> usize {
+    let mut result = 0;
     let d = Bernoulli::new(0.5).expect("Probability is valid.");
     while d.sample(rng) {
         result += 1;
@@ -618,8 +619,14 @@ mod tests {
         let trie = mock_list();
 
         assert_eq!(
-            collect_predecessors::<u64, MemoryDB>(AccountAddress::ZERO, 2, Cow::Owned(0), &3, &trie)
-                .unwrap(),
+            collect_predecessors::<u64, MemoryDB>(
+                AccountAddress::ZERO,
+                2,
+                Cow::Owned(0),
+                &3,
+                &trie
+            )
+            .unwrap(),
             vec![
                 Some((
                     SkipListKey::from_cow(AccountAddress::ZERO, 0, Cow::Owned(2)),

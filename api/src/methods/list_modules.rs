@@ -1,8 +1,6 @@
 use {
-    crate::{json_utils::parse_params_2, jsonrpc::JsonRpcError},
-    alloy::primitives::Address,
+    crate::{json_utils::parse_params_2, jsonrpc::JsonRpcError, schema::mv::ListingArgs},
     move_core_types::identifier::Identifier,
-    serde::Deserialize,
     umi_app::{ApplicationReader, Dependencies},
 };
 
@@ -14,7 +12,7 @@ pub async fn execute<'reader>(
     app: &ApplicationReader<'reader, impl Dependencies<'reader>>,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let (
-        ListingArgs {
+        ListingArgs::<Identifier> {
             address,
             after,
             limit,
@@ -30,13 +28,4 @@ pub async fn execute<'reader>(
     )?;
 
     Ok(serde_json::to_value(response).expect("Must be able to JSON-serialize response"))
-}
-
-#[derive(Debug, Deserialize)]
-struct ListingArgs {
-    address: Address,
-    #[serde(default)]
-    after: Option<Identifier>,
-    #[serde(default)]
-    limit: Option<u32>,
 }

@@ -76,6 +76,13 @@ impl<'app, D: Dependencies<'app>> ApplicationReader<'app, D> {
         )?)
     }
 
+    pub fn storage(&self, address: Address, index: U256, height: BlockNumberOrTag) -> Result<U256> {
+        let height = self.resolve_height(height)?;
+        self.state_queries
+            .evm_storage_at(&self.evm_storage, address, index, height)
+            .map_err(|_| Error::DatabaseState)
+    }
+
     pub fn block_by_hash(&self, hash: B256, include_transactions: bool) -> Result<BlockResponse> {
         self.block_queries
             .by_hash(&self.storage, hash, include_transactions)

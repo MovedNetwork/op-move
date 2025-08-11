@@ -106,6 +106,7 @@ where
         GetBalance => get_balance::execute(request, app).await,
         GetCode => get_code::execute(request, app).await,
         GetNonce => get_nonce::execute(request, app).await,
+        GetStorageAt => get_storage_at::execute(request, app).await,
         GetTransactionByHash => get_transaction_by_hash::execute(request, app).await,
         GetBlockByHash => get_block_by_hash::execute(request, app).await,
         GetBlockByNumber => get_block_by_number::execute(request, app).await,

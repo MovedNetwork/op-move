@@ -83,6 +83,39 @@ async fn test_storage_evm_contract() -> anyhow::Result<()> {
     .await
 }
 
+#[tokio::test]
+async fn test_get_storage_at_evm_contract() -> anyhow::Result<()> {
+    TestContext::run(|mut ctx| async move {
+        let chain_id = ctx.genesis_config.chain_id;
+
+        // 1. Deploy contract in block with height = 1
+        let tx = deploy_evm_contract(chain_id, evm_contract::BYTE_CODE);
+        let receipt = ctx.execute_transaction(tx).await.unwrap();
+        assert!(receipt.inner.inner.is_success());
+        let contract_address = receipt.inner.contract_address.unwrap();
+
+        // Storage index for first slot (0)
+        let slot_index = U256::ZERO;
+
+        // 2. Before calling set, storage should be zero at height 1
+        let before = ctx.eth_get_storage_at(contract_address, slot_index).await?;
+        assert_eq!(before, U256::ZERO);
+
+        // 3. Call `set` at height 2
+        let tx = call_contract(chain_id, contract_address, setCall::SELECTOR.to_vec());
+        let receipt = ctx.execute_transaction(tx).await.unwrap();
+        assert_eq!(receipt.inner.block_number.unwrap(), 2);
+
+        // 4. After calling set, storage at zero index should equal 2
+        let after_h2 = ctx.eth_get_storage_at(contract_address, slot_index).await?;
+        assert_eq!(after_h2, U256::from(2));
+
+        ctx.shutdown().await;
+        Ok(())
+    })
+    .await
+}
+
 fn get_logged_height(receipt: &TransactionReceipt) -> U256 {
     let log = receipt.inner.inner.logs().first().unwrap();
     let AccountStorageEvents::TheHeight(height) =

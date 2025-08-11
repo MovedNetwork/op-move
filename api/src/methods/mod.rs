@@ -13,6 +13,7 @@ pub mod get_code;
 pub mod get_nonce;
 pub mod get_payload;
 pub mod get_proof;
+pub mod get_storage_at;
 pub mod get_transaction_by_hash;
 pub mod get_transaction_receipt;
 pub mod max_priority_fee_per_gas;

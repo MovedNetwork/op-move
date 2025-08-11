@@ -48,14 +48,14 @@ async fn test_sending_the_same_payload_twice_produces_one_block() -> anyhow::Res
         };
 
         let actual_response: ForkchoiceUpdatedResponseV1 =
-            handle_request(request.clone(), &ctx.queue, ctx.reader.clone())
+            handle_request("/", request.clone(), &ctx.queue, &ctx.reader)
                 .await
                 .unwrap();
 
         assert_eq!(actual_response, expected_response);
 
         let actual_response: ForkchoiceUpdatedResponseV1 =
-            handle_request(request.clone(), &ctx.queue, ctx.reader.clone())
+            handle_request("/", request.clone(), &ctx.queue, &ctx.reader)
                 .await
                 .unwrap();
 
@@ -73,7 +73,7 @@ async fn test_sending_the_same_payload_twice_produces_one_block() -> anyhow::Res
         });
 
         let actual_response: GetPayloadResponseV3 =
-            handle_request(request, &ctx.queue, ctx.reader.clone())
+            handle_request("/", request, &ctx.queue, &ctx.reader)
                 .await
                 .unwrap();
 

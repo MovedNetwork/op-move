@@ -32,6 +32,7 @@ use {
     warp::{
         http::{header::CONTENT_TYPE, HeaderMap, HeaderValue},
         hyper::Response,
+        reply::Reply,
         Filter, Rejection,
     },
 };
@@ -161,14 +162,13 @@ pub async fn run(args: Config) {
     .ok();
 }
 
-fn serve(
-    addr: SocketAddr,
+pub fn server_filter(
     queue: &CommandQueue,
     reader: &ApplicationReader<'static, dependency::ReaderDependency>,
     port: &'static str,
     is_allowed: &'static (impl Fn(&MethodName) -> bool + Send + Sync),
     jwt: Option<DecodingKey>,
-) -> impl Future<Output = ()> {
+) -> impl Filter<Extract = impl Reply> + Clone {
     let services = (queue.clone(), reader.clone());
     let content_type =
         HeaderMap::from_iter([(CONTENT_TYPE, HeaderValue::from_static("application/json"))]);
@@ -181,7 +181,7 @@ fn serve(
     let root_path = warp::any().map(|| SerializationKind::Bcs);
     let serialization_kind = evm_path.or(root_path).unify();
 
-    let route = get_method_auto_response
+    get_method_auto_response
         .or(serialization_kind
             .and(app_state)
             .and(jwt_validation)
@@ -198,8 +198,18 @@ fn serve(
                 )
             }))
         .with(warp::reply::with::headers(content_type))
-        .with(warp::cors().allow_any_origin());
+        .with(warp::cors().allow_any_origin())
+}
 
+fn serve(
+    addr: SocketAddr,
+    queue: &CommandQueue,
+    reader: &ApplicationReader<'static, dependency::ReaderDependency>,
+    port: &'static str,
+    is_allowed: &'static (impl Fn(&MethodName) -> bool + Send + Sync),
+    jwt: Option<DecodingKey>,
+) -> impl Future<Output = ()> {
+    let route = server_filter(queue, reader, port, is_allowed, jwt);
     warp::serve(route)
         .bind_with_graceful_shutdown(addr, queue.shutdown_listener())
         .1

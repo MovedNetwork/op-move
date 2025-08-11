@@ -4,7 +4,7 @@ use umi_shared::error::UserError;
 
 use crate::schema;
 
-#[derive(Debug, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct JsonRpcError {
     pub code: i64,
     pub data: serde_json::Value,
@@ -149,7 +149,7 @@ impl From<umi_shared::error::Error> for JsonRpcError {
     }
 }
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct JsonRpcResponse {
     pub id: serde_json::Value,
     pub jsonrpc: serde_json::Value,

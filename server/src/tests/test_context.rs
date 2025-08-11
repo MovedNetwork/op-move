@@ -1,5 +1,5 @@
 use {
-    crate::{dependency, initialize_app},
+    crate::{allow, dependency, initialize_app},
     alloy::{
         consensus::transaction::TxEnvelope,
         eips::{BlockNumberOrTag, Encodable2718},
@@ -9,13 +9,12 @@ use {
     serde::de::DeserializeOwned,
     std::future::Future,
     umi_api::{
-        request::{RequestModifiers, SerializationKind},
+        jsonrpc::JsonRpcResponse,
         schema::{ForkchoiceUpdatedResponseV1, GetBlockResponse, GetPayloadResponseV3},
     },
-    umi_app::{ApplicationReader, CommandQueue, Dependencies},
+    umi_app::{ApplicationReader, CommandQueue},
     umi_blockchain::{
         block::{Block, BlockHash, ExtendedBlock, Header},
-        payload::StatePayloadId,
         receipt::TransactionReceipt,
     },
     umi_execution::U256,
@@ -31,6 +30,7 @@ pub struct TestContext<'test> {
     pub reader: ApplicationReader<'test, dependency::ReaderDependency>,
     head: B256,
     pub timestamp: u64,
+    path: &'static str,
 }
 
 impl TestContext<'static> {
@@ -56,9 +56,14 @@ impl TestContext<'static> {
             reader,
             head,
             timestamp,
+            path: "/",
         };
 
         umi_app::run_with_actor(state, future(ctx)).await
+    }
+
+    pub fn with_path(&mut self, path: &'static str) {
+        self.path = path;
     }
 
     pub async fn produce_block(&mut self) -> anyhow::Result<B256> {
@@ -90,7 +95,7 @@ impl TestContext<'static> {
             ]
         });
         let response: ForkchoiceUpdatedResponseV1 =
-            handle_request(request, &self.queue, self.reader.clone()).await?;
+            handle_request(self.path, request, &self.queue, &self.reader).await?;
         let payload_id = response.payload_id.unwrap();
 
         self.queue.wait_for_pending_commands().await;
@@ -104,7 +109,7 @@ impl TestContext<'static> {
             ]
         });
         let response: GetPayloadResponseV3 =
-            handle_request(request, &self.queue, self.reader.clone()).await?;
+            handle_request(self.path, request, &self.queue, &self.reader).await?;
 
         self.head = response.execution_payload.block_hash;
         Ok(self.head)
@@ -120,7 +125,7 @@ impl TestContext<'static> {
                 format!("0x{}", hex::encode(bytes)),
             ]
         });
-        let tx_hash: B256 = handle_request(request, &self.queue, self.reader.clone()).await?;
+        let tx_hash: B256 = handle_request(self.path, request, &self.queue, &self.reader).await?;
         Ok(tx_hash)
     }
 
@@ -136,7 +141,7 @@ impl TestContext<'static> {
                 format!("{tx_hash:?}"),
             ]
         });
-        let receipt = handle_request(request, &self.queue, self.reader.clone()).await?;
+        let receipt = handle_request(self.path, request, &self.queue, &self.reader).await?;
         Ok(receipt)
     }
 
@@ -154,7 +159,7 @@ impl TestContext<'static> {
                 block,
             ]
         });
-        let result = handle_request(request, &self.queue, self.reader.clone()).await?;
+        let result = handle_request(self.path, request, &self.queue, &self.reader).await?;
         Ok(result)
     }
 
@@ -180,7 +185,7 @@ impl TestContext<'static> {
             ]
         });
         let block: GetBlockResponse =
-            handle_request(request, &self.queue, self.reader.clone()).await?;
+            handle_request(self.path, request, &self.queue, &self.reader).await?;
         Ok(block)
     }
 
@@ -191,7 +196,7 @@ impl TestContext<'static> {
             "method": "eth_getStorageAt",
             "params": [address, index, "latest"]
         });
-        let value: U256 = handle_request(request, &self.queue, self.reader.clone()).await?;
+        let value: U256 = handle_request(self.path, request, &self.queue, &self.reader).await?;
         Ok(value)
     }
 
@@ -200,13 +205,21 @@ impl TestContext<'static> {
     }
 }
 
-pub async fn handle_request<'reader, T: DeserializeOwned>(
+pub async fn handle_request<T: DeserializeOwned>(
+    path: &str,
     request: serde_json::Value,
     queue: &CommandQueue,
-    app: ApplicationReader<'reader, impl Dependencies<'reader>>,
+    app: &ApplicationReader<'static, dependency::ReaderDependency>,
 ) -> anyhow::Result<T> {
-    let modifiers = RequestModifiers::new(|_| true, &StatePayloadId, SerializationKind::Bcs);
-    let response = umi_api::request::handle(request.clone(), queue.clone(), modifiers, app).await;
+    let server = crate::server_filter(queue, app, "1234", &allow::auth, None);
+
+    let response = warp::test::request()
+        .method("POST")
+        .json(&request)
+        .path(path)
+        .reply(&server)
+        .await;
+    let response: JsonRpcResponse = serde_json::from_slice(response.body()).unwrap();
 
     if let Some(error) = response.error {
         anyhow::bail!("Error response from request {request:?}: {error:?}");

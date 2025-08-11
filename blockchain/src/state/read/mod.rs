@@ -1,6 +1,7 @@
 mod eth_trie;
 mod in_memory;
 mod model;
+mod response;
 #[cfg(any(feature = "test-doubles", test))]
 mod test_doubles;
 #[cfg(test)]
@@ -15,4 +16,5 @@ pub use {
         Balance, BlockHeight, HeightToStateRootIndex, Nonce, ProofResponse, StateQueries,
         StorageProof, Version, proof_from_trie_and_resolver,
     },
+    response::*,
 };

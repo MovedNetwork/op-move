@@ -12,7 +12,7 @@ use {
         rlp::{Decodable, Encodable},
         rpc::types::TransactionRequest,
     },
-    aptos_types::transaction::{EntryFunction, Module, Script},
+    aptos_types::transaction::{EntryFunction, ModuleBundle, Script},
     move_core_types::{account_address::AccountAddress, language_storage::ModuleId},
     op_alloy::consensus::{
         OpDepositReceipt, OpDepositReceiptWithBloom, OpReceiptEnvelope, OpTxEnvelope, TxDeposit,
@@ -491,7 +491,7 @@ impl From<NormalizedExtendedTxEnvelope> for OpTxEnvelope {
 #[derive(Debug, PartialEq, Eq, Clone, Deserialize, Serialize)]
 pub enum ScriptOrDeployment {
     Script(Script),
-    Module(Module),
+    ModuleBundle(ModuleBundle),
     EvmContract(Vec<u8>),
 }
 

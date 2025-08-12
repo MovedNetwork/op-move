@@ -15,7 +15,7 @@ use {
     anyhow::Context,
     aptos_types::{
         contract_event::ContractEventV2,
-        transaction::{EntryFunction, Module, Script, TransactionArgument},
+        transaction::{EntryFunction, Script, TransactionArgument},
     },
     move_binary_format::{
         CompiledModule,

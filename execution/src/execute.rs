@@ -3,10 +3,10 @@ use {
     crate::{ADDRESS_LAYOUT, SIGNER_LAYOUT, U256_LAYOUT, layout::has_value_invariants},
     alloy::primitives::Address,
     aptos_types::{
-        transaction::{EntryFunction, Module, Script},
+        transaction::{EntryFunction, ModuleBundle, Script},
         vm_status::StatusCode,
     },
-    move_binary_format::{CompiledModule, errors::PartialVMError},
+    move_binary_format::errors::PartialVMError,
     move_core_types::{
         account_address::AccountAddress,
         effects::{ChangeSet, Op},
@@ -246,20 +246,20 @@ fn strip_reference(t: &Type) -> umi_shared::error::Result<&Type> {
 }
 
 pub(super) fn deploy_module(
-    code: Module,
+    bundle: ModuleBundle,
     address: AccountAddress,
     module_storage: &impl ModuleStorage,
 ) -> umi_shared::error::Result<(ModuleId, ChangeSet)> {
-    let code = code.into_inner();
-    let module = CompiledModule::deserialize(&code)?;
+    let mut first_id: Option<ModuleId> = None;
 
     let staged_module_storage =
-        StagingModuleStorage::create(&address, module_storage, vec![code.into()])?;
+        StagingModuleStorage::create(&address, module_storage, bundle.into_bytes())?;
     let bundle = staged_module_storage.release_verified_module_bundle();
     let mut writes = ChangeSet::new();
     for (module_id, bytes) in bundle.into_iter() {
         let addr = module_id.address();
         let name = module_id.name();
+        first_id = Some(module_id.clone());
 
         let module_exists = module_storage.check_module_exists(addr, name)?;
         let op = if module_exists {
@@ -272,5 +272,5 @@ pub(super) fn deploy_module(
             .expect("No duplicate module IDs in `VerifiedModuleBundle`");
     }
 
-    Ok((module.self_id(), writes))
+    Ok((first_id.expect("Should have at least 1 module"), writes))
 }

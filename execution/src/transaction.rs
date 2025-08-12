@@ -13,7 +13,6 @@ use {
         rpc::types::TransactionRequest,
     },
     aptos_types::transaction::{EntryFunction, ModuleBundle, Script},
-    move_core_types::{account_address::AccountAddress, language_storage::ModuleId},
     op_alloy::consensus::{
         OpDepositReceipt, OpDepositReceiptWithBloom, OpReceiptEnvelope, OpTxEnvelope, TxDeposit,
     },
@@ -267,8 +266,8 @@ pub struct TransactionExecutionOutcome {
     pub l2_price: U256,
     /// All emitted Move events converted to Ethereum logs.
     pub logs: Vec<Log<LogData>>,
-    /// AccountAddress + ModuleId of a deployed module (if any).
-    pub deployment: Option<(AccountAddress, ModuleId)>,
+    /// Address of a deployed contract or module (if any).
+    pub deployment: Option<Address>,
 }
 
 impl TransactionExecutionOutcome {
@@ -278,7 +277,7 @@ impl TransactionExecutionOutcome {
         gas_used: u64,
         l2_price: U256,
         logs: Vec<Log<LogData>>,
-        deployment: Option<(AccountAddress, ModuleId)>,
+        deployment: Option<Address>,
     ) -> Self {
         Self {
             vm_outcome,

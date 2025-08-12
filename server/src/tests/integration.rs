@@ -13,7 +13,7 @@ use {
         transports::http::reqwest::Url,
     },
     anyhow::{Context, Result},
-    aptos_types::transaction::{EntryFunction, Module},
+    aptos_types::transaction::{EntryFunction, ModuleBundle},
     move_binary_format::CompiledModule,
     move_core_types::{ident_str, language_storage::ModuleId, value::MoveValue},
     std::{
@@ -166,17 +166,22 @@ async fn deploy_move_counter() -> Result<()> {
 
 // Ensure the self-address of the module to deploy matches the given address
 fn set_module_address(bytecode: Vec<u8>, address: Address) -> Vec<u8> {
-    let module: ScriptOrDeployment = bcs::from_bytes(&bytecode).unwrap();
-    if let ScriptOrDeployment::Module(module) = module {
-        let mut code = module.into_inner();
-        let mut compiled_module = CompiledModule::deserialize(&code).unwrap();
-        let self_module_index = compiled_module.self_module_handle_idx.0 as usize;
-        let self_address_index =
-            compiled_module.module_handles[self_module_index].address.0 as usize;
-        compiled_module.address_identifiers[self_address_index] = address.to_move_address();
-        code.clear();
-        compiled_module.serialize(&mut code).unwrap();
-        bcs::to_bytes(&ScriptOrDeployment::Module(Module::new(code))).unwrap()
+    let payload: ScriptOrDeployment = bcs::from_bytes(&bytecode).unwrap();
+    if let ScriptOrDeployment::ModuleBundle(bundle) = payload {
+        // Update the self-address for all modules in the bundle
+        let mut updated = Vec::new();
+        for module in bundle.into_iter() {
+            let mut code = module.into_inner();
+            let mut compiled = CompiledModule::deserialize(&code).unwrap();
+            let self_module_index = compiled.self_module_handle_idx.0 as usize;
+            let self_address_index = compiled.module_handles[self_module_index].address.0 as usize;
+            compiled.address_identifiers[self_address_index] = address.to_move_address();
+            code.clear();
+            compiled.serialize(&mut code).unwrap();
+            updated.push(code);
+        }
+        let module_bundle = ModuleBundle::new(updated);
+        bcs::to_bytes(&ScriptOrDeployment::ModuleBundle(module_bundle)).unwrap()
     } else {
         bytecode
     }

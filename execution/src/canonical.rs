@@ -36,7 +36,6 @@ use {
     },
     move_vm_types::{gas::UnmeteredGasMeter, resolver::MoveResolver},
     umi_evm_ext::{
-        EVM_NATIVE_ADDRESS, EVM_NATIVE_MODULE,
         events::EthTransfersLogger,
         state::{BlockHashLookup, StorageTrieRepository},
     },
@@ -204,17 +203,18 @@ pub(super) fn execute_canonical_transaction<
             &mut gas_meter,
             &code_storage,
         ),
-        TransactionData::ScriptOrDeployment(ScriptOrDeployment::Module(module)) => {
+        TransactionData::ScriptOrDeployment(ScriptOrDeployment::ModuleBundle(bundle)) => {
+            let bytes_len: u64 = bundle.iter().map(|m| m.code().len() as u64).sum();
             let charge_gas = crate::gas::charge_new_module_processing(
                 &mut gas_meter,
                 input.genesis_config,
                 &sender_move_address,
-                module.code().len() as u64,
+                bytes_len,
             );
-            let module_id =
-                charge_gas.and_then(|_| deploy_module(module, sender_move_address, &code_storage));
-            module_id.map(|(id, writes)| {
-                deployment = Some((sender_move_address, id));
+            let writes =
+                charge_gas.and_then(|_| deploy_module(bundle, sender_move_address, &code_storage));
+            writes.map(|writes| {
+                deployment = Some(input.tx.signer);
                 deploy_changes
                     .squash(writes)
                     .expect("Move module deployment changes should be compatible");
@@ -230,12 +230,7 @@ pub(super) fn execute_canonical_transaction<
                 &mut gas_meter,
                 &code_storage,
             );
-            address.map(|a| {
-                deployment = Some((
-                    a.to_move_address(),
-                    ModuleId::new(EVM_NATIVE_ADDRESS, EVM_NATIVE_MODULE.into()),
-                ))
-            })
+            address.map(|a| deployment = Some(a))
         }
         TransactionData::EoaBaseTokenTransfer(to) => {
             let to = to.to_move_address();

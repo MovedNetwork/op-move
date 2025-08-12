@@ -2,6 +2,7 @@ use {
     super::*,
     crate::transaction::UmiTxEnvelope,
     alloy::consensus::Sealed,
+    aptos_types::transaction::ModuleBundle,
     move_binary_format::errors::VMError,
     move_compiler::{
         compiled_unit::AnnotatedCompiledUnit,
@@ -697,7 +698,8 @@ impl TestContext {
 /// # Returns
 /// Serialized transaction payload
 pub fn module_bytes_to_tx_data(module_bytes: Vec<u8>) -> Vec<u8> {
-    bcs::to_bytes(&ScriptOrDeployment::Module(Module::new(module_bytes))).unwrap()
+    let module_bundle = ScriptOrDeployment::ModuleBundle(ModuleBundle::new(vec![module_bytes]));
+    bcs::to_bytes(&module_bundle).unwrap()
 }
 
 /// Creates a test transaction for a Move entry function

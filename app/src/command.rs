@@ -26,7 +26,7 @@ use {
     },
     umi_shared::{
         error::Error::{DatabaseState, InvalidTransaction, InvariantViolation, User},
-        primitives::{ToEthAddress, U64, U256},
+        primitives::{U64, U256},
     },
     umi_state::State,
 };
@@ -381,9 +381,7 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
                 gas_used: outcome.gas_used,
                 l2_gas_price: outcome.l2_price,
                 transaction_index: tx_index,
-                contract_address: outcome
-                    .deployment
-                    .map(|(address, _)| address.to_eth_address()),
+                contract_address: outcome.deployment,
                 logs_offset: tx_log_offset,
                 block_hash: Default::default(),
                 block_number: block_header.number,

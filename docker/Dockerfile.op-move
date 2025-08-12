@@ -6,7 +6,7 @@ WORKDIR /volume
 COPY rust-toolchain rust-toolchain
 
 # Install build dependencies
-RUN apk add --no-cache clang clang-dev lld curl build-base linux-headers git openssl-dev 
+RUN apk add --no-cache clang clang-dev lld curl build-base linux-headers git openssl-dev
 
 # Add `cargo` to `PATH`
 ENV PATH="/root/.cargo/bin:${PATH}"
@@ -15,7 +15,7 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 COPY . .
 
 # RocksDB breaks the build with libclang.so not found, point its location explicitly
-ENV LIBCLANG_PATH="/usr/lib/llvm19/lib/libclang.so.19.1.4"
+ENV LIBCLANG_PATH="/usr/lib/llvm20/lib/libclang.so.20.1.8"
 
 # Build release binary
 RUN --mount=type=cache,target=/root/.cargo/registry \

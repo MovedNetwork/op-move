@@ -10,6 +10,7 @@ pub mod get_balance;
 pub mod get_block_by_hash;
 pub mod get_block_by_number;
 pub mod get_code;
+pub mod get_module;
 pub mod get_nonce;
 pub mod get_payload;
 pub mod get_proof;

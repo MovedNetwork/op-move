@@ -182,7 +182,7 @@ impl TestContext<'static> {
                 block,
             ]
         });
-        let result = handle_request(request, &self.queue, self.reader.clone()).await?;
+        let result = self.handle_request(&request).await?;
         Ok(result)
     }
 
@@ -206,7 +206,7 @@ impl TestContext<'static> {
                 block,
             ]
         });
-        let result = handle_request(request, &self.queue, self.reader.clone()).await?;
+        let result = self.handle_request(&request).await?;
         Ok(result)
     }
 

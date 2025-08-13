@@ -113,7 +113,7 @@ async fn test_mv_list_resources() -> anyhow::Result<()> {
             .unwrap();
         assert_eq!(account_resources, Vec::new());
 
-        // When a new resources is created the listing API sees it
+        // When a new resource is created the listing API sees it
         let deploy_receipt = deploy_counter_contract(&mut ctx, &signer).await;
         let account_resources = ctx
             .mv_list_resources(address, None, None, BlockNumberOrTag::Latest)

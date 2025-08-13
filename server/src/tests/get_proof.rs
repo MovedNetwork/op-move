@@ -1,5 +1,5 @@
 use {
-    crate::tests::test_context::{handle_request, TestContext},
+    crate::tests::test_context::TestContext,
     eth_trie::{EthTrie, MemoryDB, Trie},
     std::sync::Arc,
     umi_blockchain::state::ProofResponse,
@@ -23,9 +23,7 @@ async fn test_get_proof() -> anyhow::Result<()> {
                format!("{block_hash}")
             ]
         });
-        let response: ProofResponse = handle_request("/", request, &ctx.queue, &ctx.reader)
-            .await
-            .unwrap();
+        let response: ProofResponse = ctx.handle_request(&request).await.unwrap();
 
         // Proof is verified successfully
         let trie = EthTrie::new(Arc::new(MemoryDB::new(false)));

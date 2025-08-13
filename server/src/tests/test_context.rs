@@ -94,8 +94,7 @@ impl TestContext<'static> {
                 }
             ]
         });
-        let response: ForkchoiceUpdatedResponseV1 =
-            handle_request(self.path, request, &self.queue, &self.reader).await?;
+        let response: ForkchoiceUpdatedResponseV1 = self.handle_request(&request).await?;
         let payload_id = response.payload_id.unwrap();
 
         self.queue.wait_for_pending_commands().await;
@@ -108,8 +107,7 @@ impl TestContext<'static> {
                String::from(payload_id),
             ]
         });
-        let response: GetPayloadResponseV3 =
-            handle_request(self.path, request, &self.queue, &self.reader).await?;
+        let response: GetPayloadResponseV3 = self.handle_request(&request).await?;
 
         self.head = response.execution_payload.block_hash;
         Ok(self.head)
@@ -125,7 +123,7 @@ impl TestContext<'static> {
                 format!("0x{}", hex::encode(bytes)),
             ]
         });
-        let tx_hash: B256 = handle_request(self.path, request, &self.queue, &self.reader).await?;
+        let tx_hash: B256 = self.handle_request(&request).await?;
         Ok(tx_hash)
     }
 
@@ -141,7 +139,7 @@ impl TestContext<'static> {
                 format!("{tx_hash:?}"),
             ]
         });
-        let receipt = handle_request(self.path, request, &self.queue, &self.reader).await?;
+        let receipt = self.handle_request(&request).await?;
         Ok(receipt)
     }
 
@@ -159,7 +157,7 @@ impl TestContext<'static> {
                 block,
             ]
         });
-        let result = handle_request(self.path, request, &self.queue, &self.reader).await?;
+        let result = self.handle_request(&request).await?;
         Ok(result)
     }
 
@@ -184,8 +182,7 @@ impl TestContext<'static> {
                 true
             ]
         });
-        let block: GetBlockResponse =
-            handle_request(self.path, request, &self.queue, &self.reader).await?;
+        let block: GetBlockResponse = self.handle_request(&request).await?;
         Ok(block)
     }
 
@@ -196,37 +193,36 @@ impl TestContext<'static> {
             "method": "eth_getStorageAt",
             "params": [address, index, "latest"]
         });
-        let value: U256 = handle_request(self.path, request, &self.queue, &self.reader).await?;
+        let value: U256 = self.handle_request(&request).await?;
         Ok(value)
+    }
+
+    pub async fn handle_request<T: DeserializeOwned>(
+        &self,
+        request: &serde_json::Value,
+    ) -> anyhow::Result<T> {
+        let server = crate::server_filter(&self.queue, &self.reader, "1234", &allow::auth, None);
+
+        let response = warp::test::request()
+            .method("POST")
+            .json(request)
+            .path(self.path)
+            .reply(&server)
+            .await;
+        let response: JsonRpcResponse = serde_json::from_slice(response.body()).unwrap();
+
+        if let Some(error) = response.error {
+            anyhow::bail!("Error response from request {request:?}: {error:?}");
+        }
+
+        let result: T =
+            serde_json::from_value(response.result.expect("If not error then has result"))?;
+        Ok(result)
     }
 
     pub async fn shutdown(self) {
         drop(self.queue);
     }
-}
-
-pub async fn handle_request<T: DeserializeOwned>(
-    path: &str,
-    request: serde_json::Value,
-    queue: &CommandQueue,
-    app: &ApplicationReader<'static, dependency::ReaderDependency>,
-) -> anyhow::Result<T> {
-    let server = crate::server_filter(queue, app, "1234", &allow::auth, None);
-
-    let response = warp::test::request()
-        .method("POST")
-        .json(&request)
-        .path(path)
-        .reply(&server)
-        .await;
-    let response: JsonRpcResponse = serde_json::from_slice(response.body()).unwrap();
-
-    if let Some(error) = response.error {
-        anyhow::bail!("Error response from request {request:?}: {error:?}");
-    }
-
-    let result: T = serde_json::from_value(response.result.expect("If not error then has result"))?;
-    Ok(result)
 }
 
 /// Test genesis block differs primarily in that it makes gas free and has Move state root.

@@ -1,5 +1,5 @@
 use {
-    crate::tests::test_context::{handle_request, TestContext},
+    crate::tests::test_context::TestContext,
     alloy::hex,
     umi_api::schema::{
         BlobsBundleV1, ExecutionPayloadV3, ForkchoiceUpdatedResponseV1, GetPayloadResponseV3,
@@ -47,17 +47,15 @@ async fn test_sending_the_same_payload_twice_produces_one_block() -> anyhow::Res
             payload_id: Some(payload_id),
         };
 
-        let actual_response: ForkchoiceUpdatedResponseV1 =
-            handle_request("/", request.clone(), &ctx.queue, &ctx.reader)
-                .await
-                .unwrap();
+        let actual_response: ForkchoiceUpdatedResponseV1 = ctx.handle_request(&request)
+            .await
+            .unwrap();
 
         assert_eq!(actual_response, expected_response);
 
-        let actual_response: ForkchoiceUpdatedResponseV1 =
-            handle_request("/", request.clone(), &ctx.queue, &ctx.reader)
-                .await
-                .unwrap();
+        let actual_response: ForkchoiceUpdatedResponseV1 = ctx.handle_request(&request)
+            .await
+            .unwrap();
 
         assert_eq!(actual_response, expected_response);
 
@@ -72,10 +70,9 @@ async fn test_sending_the_same_payload_twice_produces_one_block() -> anyhow::Res
             ]
         });
 
-        let actual_response: GetPayloadResponseV3 =
-            handle_request("/", request, &ctx.queue, &ctx.reader)
-                .await
-                .unwrap();
+        let actual_response: GetPayloadResponseV3 = ctx.handle_request(&request)
+            .await
+            .unwrap();
 
         let expected_response: GetPayloadResponseV3 = GetPayloadResponseV3 {
             execution_payload: ExecutionPayloadV3 {

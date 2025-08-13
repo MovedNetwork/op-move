@@ -44,19 +44,80 @@ where
     D: DB,
 {
     let bottom_key = SkipListKey::new(account, 0, element);
-
-    // The key is not present, so there is nothing to do.
-    if bottom_key.trie_value(trie)?.is_none() {
+    let Some(bottom_value) = bottom_key.trie_value(trie)? else {
+        // The key is not present, so there is nothing to do.
         return Ok(());
-    }
+    };
 
     let head_key = SkipListHeadKey::<T>::new(account);
-    let head = head_key.trie_value(trie)?;
+    let head_trie_key = head_key.key_hash();
+    let head = SkipListHeadValue::<T>::read_trie(&head_trie_key, trie)?;
 
     let Some(first_value) = head.first_value else {
         // The list is empty, so there is nothing to delete.
         return Ok(());
     };
+
+    // Special handling for deleting the first element
+    if first_value.as_ref() == element {
+        let max_level = head.current_highest_level;
+
+        // Note: since the element being deleted is the first element,
+        // the `bottom_key` we checked above is the first key in the list and so
+        // its value references the second element of the list
+        let Some(second_element) = bottom_value.next_value else {
+            // If there is no second element then deleting the first value results in an empty list.
+
+            // Update head
+            trie.insert(
+                head_trie_key.as_slice(),
+                &SkipListHeadValue::<T>::default().serialize(),
+            )?;
+
+            // Delete old keys
+            for level in 0..=max_level {
+                trie.remove(
+                    SkipListKey::new(account, level, element)
+                        .key_hash()
+                        .as_slice(),
+                )?;
+            }
+
+            return Ok(());
+        };
+
+        // Update head to point at second element instead
+        trie.insert(
+            head_trie_key.as_slice(),
+            &SkipListHeadValue::<T>::new(max_level, &second_element).serialize(),
+        )?;
+
+        // If we delete the first element then the second element needs to
+        // go as high as `current_highest_level`.
+        for level in 0..=max_level {
+            let key_to_delete = SkipListKey::new(account, level, element).key_hash();
+            let second_key = SkipListKey::new(account, level, &second_element).key_hash();
+            match SkipListValue::<T>::read_trie(&second_key, trie)? {
+                Some(_) => {
+                    // Second key already exists at this level so
+                    // it is safe to just delete the first key
+                    trie.remove(key_to_delete.as_slice())?;
+                }
+                None => {
+                    // Second key does not yet exist at this level.
+                    // We need to insert it and have it reference the same
+                    // value as the old first key.
+                    if let Some(value) = SkipListValue::<T>::read_trie(&key_to_delete, trie)? {
+                        trie.insert(second_key.as_slice(), &value.serialize())?;
+                    }
+                    // Now it is safe to delete the old key.
+                    trie.remove(key_to_delete.as_slice())?;
+                }
+            }
+        }
+
+        return Ok(());
+    }
 
     let prevs = collect_predecessors(
         account,
@@ -510,8 +571,8 @@ where
     let mut prevs: Vec<Option<(SkipListKey<'static, T>, SkipListValue<'static, T>)>> =
         vec![None; (max_levels + 1) as usize];
 
-    // If new element is before the first element then there is nothing to do.
-    if element < first_value.as_ref() {
+    // If new element is less than or equal to the first element then there is nothing to do.
+    if element <= first_value.as_ref() {
         return Ok(prevs);
     }
 
@@ -667,6 +728,19 @@ mod tests {
                     SkipListValue { next_value: None }
                 )),
             ]
+        );
+
+        // There are no predecessors to the first element
+        assert_eq!(
+            collect_predecessors::<u64, MemoryDB>(
+                AccountAddress::ZERO,
+                2,
+                Cow::Owned(0),
+                &0,
+                &trie
+            )
+            .unwrap(),
+            vec![None, None, None],
         )
     }
 
@@ -708,6 +782,45 @@ mod tests {
         assert_eq!(values_at_level(&trie, 0), vec![0, 2, 5]);
         assert_eq!(values_at_level(&trie, 1), vec![0, 5]);
         assert_eq!(values_at_level(&trie, 2), vec![0]);
+
+        // Ensure deleting the first element works properly
+        let mut trie = mock_list();
+        delete_item::<u64, MemoryDB>(AccountAddress::ZERO, &0, &mut trie).unwrap();
+
+        // After delete skip list structure is:
+        // 2 -----------> Nil
+        // 2 -> 5 ------> Nil
+        // 2 -> 5 -> 8 -> Nil
+        assert_eq!(values_at_level(&trie, 0), vec![2, 5, 8]);
+        assert_eq!(values_at_level(&trie, 1), vec![2, 5]);
+        assert_eq!(values_at_level(&trie, 2), vec![2]);
+
+        delete_item::<u64, MemoryDB>(AccountAddress::ZERO, &2, &mut trie).unwrap();
+
+        // After delete skip list structure is:
+        // 5 ------> Nil
+        // 5 ------> Nil
+        // 5 -> 8 -> Nil
+        assert_eq!(values_at_level(&trie, 0), vec![5, 8]);
+        assert_eq!(values_at_level(&trie, 1), vec![5]);
+        assert_eq!(values_at_level(&trie, 2), vec![5]);
+
+        delete_item::<u64, MemoryDB>(AccountAddress::ZERO, &5, &mut trie).unwrap();
+
+        // After delete skip list structure is:
+        // 8 -> Nil
+        // 8 -> Nil
+        // 8 -> Nil
+        assert_eq!(values_at_level(&trie, 0), vec![8]);
+        assert_eq!(values_at_level(&trie, 1), vec![8]);
+        assert_eq!(values_at_level(&trie, 2), vec![8]);
+
+        delete_item::<u64, MemoryDB>(AccountAddress::ZERO, &8, &mut trie).unwrap();
+
+        // After delete skip list is empty
+        assert!(values_at_level(&trie, 0).is_empty());
+        assert!(values_at_level(&trie, 1).is_empty());
+        assert!(values_at_level(&trie, 2).is_empty());
     }
 
     #[test]

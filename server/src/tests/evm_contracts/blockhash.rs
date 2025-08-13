@@ -33,6 +33,7 @@ mod evm_contract {
 async fn test_blockhash_evm_contract() -> anyhow::Result<()> {
     TestContext::run(|mut ctx| async move {
         let chain_id = ctx.genesis_config.chain_id;
+        ctx.with_path("/evm"); // Use EVM endpoint
 
         // 1. Deploy contract in block with height = 1
         let tx = deploy_evm_contract(chain_id, evm_contract::BYTE_CODE);

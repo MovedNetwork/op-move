@@ -5,7 +5,7 @@ use {
     alloy::{
         eips::BlockNumberOrTag,
         primitives::U256,
-        rpc::types::{TransactionInput, TransactionRequest},
+        rpc::types::TransactionRequest,
         sol_types::{SolCall, SolEventInterface},
     },
     umi_blockchain::receipt::TransactionReceipt,
@@ -38,6 +38,7 @@ mod evm_contract {
 async fn test_storage_evm_contract() -> anyhow::Result<()> {
     TestContext::run(|mut ctx| async move {
         let chain_id = ctx.genesis_config.chain_id;
+        ctx.with_path("/evm"); // Use EVM endpoint
 
         // 1. Deploy contract in block with height = 1
         let tx = deploy_evm_contract(chain_id, evm_contract::BYTE_CODE);
@@ -55,13 +56,9 @@ async fn test_storage_evm_contract() -> anyhow::Result<()> {
         }
 
         // 3. Use a view call to check the value stored in the contract at heights 2 and 3.
-        let input = TransactionData::EvmContract {
-            address: contract_address,
-            data: getCall::SELECTOR.to_vec(),
-        };
         let view_request = TransactionRequest {
             to: Some(TxKind::Call(contract_address)),
-            input: TransactionInput::new(input.to_bytes().unwrap().into()),
+            input: getCall::SELECTOR.to_vec().into(),
             ..Default::default()
         };
         let height_2 = ctx
@@ -87,6 +84,7 @@ async fn test_storage_evm_contract() -> anyhow::Result<()> {
 async fn test_get_storage_at_evm_contract() -> anyhow::Result<()> {
     TestContext::run(|mut ctx| async move {
         let chain_id = ctx.genesis_config.chain_id;
+        ctx.with_path("/evm"); // Use EVM endpoint
 
         // 1. Deploy contract in block with height = 1
         let tx = deploy_evm_contract(chain_id, evm_contract::BYTE_CODE);

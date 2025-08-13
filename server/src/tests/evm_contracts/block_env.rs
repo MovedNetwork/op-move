@@ -46,6 +46,7 @@ async fn test_block_env_evm_contract() -> anyhow::Result<()> {
         // Change the timestamp so that time != block height
         ctx.timestamp = 1000;
         let chain_id = ctx.genesis_config.chain_id;
+        ctx.with_path("/evm"); // Use EVM endpoint
 
         // 1. Deploy contract
         let bytecode = alloy::hex::decode(evm_contract::BYTE_CODE_HEX).unwrap();

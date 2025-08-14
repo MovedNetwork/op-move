@@ -74,7 +74,7 @@ pub fn defaults() -> DefaultLayer {
         genesis: Some(OptionalGenesis {
             chain_id: Some(42069),
             initial_state_root: Some(B256::new(hex!(
-                "4805267476cb522274ec2fe790b4dc6e889ed0d57377f90770d4a658f6b8e4ae"
+                "7a60fc9568ab4beac4305f381312125963c32ffb7a0d5b3afdd4a9ecca902348"
             ))),
             treasury: Some(AccountAddress::ONE), // TODO: fill in the real address,
             l2_contract_genesis: Some(

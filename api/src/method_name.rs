@@ -23,6 +23,8 @@ pub enum MethodName {
     GasPrice,
     MaxPriorityFeePerGas,
     ClientVersion,
+    ListModules,
+    ListResources,
 }
 
 impl MethodName {
@@ -67,6 +69,8 @@ impl FromStr for MethodName {
 
             "web3_clientVersion" => Self::ClientVersion,
 
+            "mv_listModules" => Self::ListModules,
+            "mv_listResources" => Self::ListResources,
             other => {
                 return Err(JsonRpcError::invalid_method(other));
             }

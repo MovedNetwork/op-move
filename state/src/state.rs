@@ -47,9 +47,10 @@ impl<D: DbWithRoot> State for EthTrieState<D> {
     type Err = TrieError;
 
     fn apply(&mut self, changes: Changes) -> Result<(), Self::Err> {
+        let rng_seed = self.state_root.unwrap_or_default();
         let root = self
             .trie_mut()
-            .insert_change_set_into_merkle_trie(&changes)?;
+            .insert_change_set_into_merkle_trie(&changes, rng_seed.0)?;
         self.state_root.replace(root);
         self.db()
             .put_root(root)

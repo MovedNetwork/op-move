@@ -8,7 +8,9 @@ use {
     eth_trie::{DB, EthTrie, Trie},
     move_binary_format::{CompiledModule, errors::PartialVMError},
     move_core_types::{
-        account_address::AccountAddress, identifier::Identifier, language_storage::ModuleId,
+        account_address::AccountAddress,
+        identifier::Identifier,
+        language_storage::{ModuleId, StructTag},
         vm_status::StatusCode,
     },
     move_table_extension::TableResolver,
@@ -196,6 +198,22 @@ pub trait StateQueries {
             evm_storage.for_account_with_root(&account, &account_info.inner.storage_root)?;
         Ok(storage.get(&index)?.unwrap_or_default())
     }
+
+    fn move_list_modules(
+        &self,
+        account: AccountAddress,
+        height: BlockHeight,
+        after: Option<&Identifier>,
+        limit: u32,
+    ) -> Result<Vec<Identifier>, state::Error>;
+
+    fn move_list_resources(
+        &self,
+        account: AccountAddress,
+        height: BlockHeight,
+        after: Option<&StructTag>,
+        limit: u32,
+    ) -> Result<Vec<StructTag>, state::Error>;
 
     fn resolver_at(
         &self,

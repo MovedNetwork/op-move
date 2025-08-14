@@ -11,6 +11,7 @@ workspace = true
 alloy.workspace = true
 bcs.workspace = true
 alloy-trie.workspace = true
+move-core-types.workspace = true
 umi-app.workspace = true
 umi-blockchain.workspace = true
 umi-evm-ext.workspace = true

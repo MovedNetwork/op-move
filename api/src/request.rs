@@ -119,5 +119,7 @@ where
         GasPrice => gas_price::execute(request, app).await,
         MaxPriorityFeePerGas => max_priority_fee_per_gas::execute(request, app).await,
         ClientVersion => client_version::execute(request, app).await,
+        ListModules => list_modules::execute(request, app).await,
+        ListResources => list_resources::execute(request, app).await,
     }
 }

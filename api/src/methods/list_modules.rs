@@ -1,0 +1,31 @@
+use {
+    crate::{json_utils::parse_params_2, jsonrpc::JsonRpcError, schema::mv::ListingArgs},
+    move_core_types::identifier::Identifier,
+    umi_app::{ApplicationReader, Dependencies},
+};
+
+const DEFAULT_LIMIT: u32 = 10;
+const MAX_LIMIT: u32 = 100;
+
+pub async fn execute<'reader>(
+    request: serde_json::Value,
+    app: &ApplicationReader<'reader, impl Dependencies<'reader>>,
+) -> Result<serde_json::Value, JsonRpcError> {
+    let (
+        ListingArgs::<Identifier> {
+            address,
+            after,
+            limit,
+        },
+        block_number,
+    ) = parse_params_2(request)?;
+
+    let response = app.move_list_modules(
+        address,
+        block_number,
+        after.as_ref(),
+        limit.unwrap_or(DEFAULT_LIMIT).min(MAX_LIMIT),
+    )?;
+
+    Ok(serde_json::to_value(response).expect("Must be able to JSON-serialize response"))
+}

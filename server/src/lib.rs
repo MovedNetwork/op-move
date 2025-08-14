@@ -1,8 +1,7 @@
 use {
     crate::mirror::MirrorLog,
-    alloy::consensus::{EMPTY_OMMER_ROOT_HASH, EMPTY_ROOT_HASH},
+    alloy::consensus::{proofs::state_root_unhashed, EMPTY_OMMER_ROOT_HASH, EMPTY_ROOT_HASH},
     jsonwebtoken::{DecodingKey, Validation},
-    move_core_types::account_address::AccountAddress,
     std::{
         future::Future,
         net::{Ipv4Addr, SocketAddr, SocketAddrV4},
@@ -49,6 +48,7 @@ struct Claims {
 }
 
 pub fn defaults() -> DefaultLayer {
+    let default_genesis_config = GenesisConfig::default();
     let umi_root_path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .expect("Cargo manifest has a parent");
@@ -73,10 +73,8 @@ pub fn defaults() -> DefaultLayer {
         }),
         genesis: Some(OptionalGenesis {
             chain_id: Some(42069),
-            initial_state_root: Some(B256::new(hex!(
-                "7a60fc9568ab4beac4305f381312125963c32ffb7a0d5b3afdd4a9ecca902348"
-            ))),
-            treasury: Some(AccountAddress::ONE), // TODO: fill in the real address,
+            initial_state_root: Some(default_genesis_config.initial_state_root),
+            treasury: Some(default_genesis_config.treasury), // TODO: fill in the real address,
             l2_contract_genesis: Some(
                 umi_root_path.join("server/src/tests/optimism/packages/contracts-bedrock/deployments/genesis.json")
                     .into(),
@@ -311,9 +309,7 @@ fn create_genesis_block(
         parent_beacon_block_root: Some(B256::ZERO),
         parent_hash: B256::ZERO,
         receipts_root: EMPTY_ROOT_HASH,
-        state_root: B256::new(hex!(
-            "30b67e4b5ef34eacb9e083c07fd5578982c2cb4e0ee1dc0a14d72b99a28ed80e"
-        )),
+        state_root: state_root_unhashed(genesis_config.l2_contract_genesis.alloc.clone()),
         timestamp: genesis_config.l2_contract_genesis.timestamp,
         transactions_root: EMPTY_ROOT_HASH,
         withdrawals_root: Some(EMPTY_ROOT_HASH),

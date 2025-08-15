@@ -11,6 +11,7 @@ pub enum MethodName {
     GetCode,
     GetBlockByHash,
     GetBlockByNumber,
+    GetModule,
     GetStorageAt,
     GetTransactionByHash,
     GetNonce,
@@ -69,8 +70,10 @@ impl FromStr for MethodName {
 
             "web3_clientVersion" => Self::ClientVersion,
 
+            "mv_getModule" => Self::GetModule,
             "mv_listModules" => Self::ListModules,
             "mv_listResources" => Self::ListResources,
+
             other => {
                 return Err(JsonRpcError::invalid_method(other));
             }

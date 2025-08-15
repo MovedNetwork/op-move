@@ -8,12 +8,14 @@ use {
         },
         rpc::types::{FeeHistory, TransactionRequest},
     },
-    move_core_types::{identifier::Identifier, language_storage::StructTag},
+    move_core_types::{
+        account_address::AccountAddress, identifier::Identifier, language_storage::StructTag,
+    },
     umi_blockchain::{
         block::{BaseGasFee, BlockQueries, BlockResponse, Eip1559GasFee},
         payload::{MaybePayloadResponse, PayloadId, PayloadQueries, PayloadResponse},
         receipt::{ReceiptQueries, TransactionReceipt},
-        state::{ProofResponse, StateQueries},
+        state::{MoveModuleResponse, ProofResponse, StateQueries},
         transaction::{TransactionQueries, TransactionResponse},
     },
     umi_evm_ext::HeaderForExecution,
@@ -75,6 +77,17 @@ impl<'app, D: Dependencies<'app>> ApplicationReader<'app, D> {
             address.to_move_address(),
             self.resolve_height(height)?,
         )?)
+    }
+
+    pub fn move_module_by_height(
+        &self,
+        address: AccountAddress,
+        module_name: &str,
+        height: BlockNumberOrTag,
+    ) -> Result<MoveModuleResponse> {
+        self.state_queries
+            .move_module_at(address, module_name, self.resolve_height(height)?)?
+            .ok_or_else(|| Error::User(UserError::MissingModule(module_name.to_string())))
     }
 
     pub fn storage(&self, address: Address, index: U256, height: BlockNumberOrTag) -> Result<U256> {

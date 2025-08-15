@@ -4,6 +4,15 @@ use {
     umi_shared::primitives::{Address, ToMoveAddress},
 };
 
+/// Fetches `module` by name that belongs to the `account` in the blockchain state corresponding
+/// with the block `number`.
+///
+/// # Arguments
+/// * `account`: A "0x" prefixed, 20-byte long, hex encoded number that represents an Ethereum
+///   account address. Example: `0x0000000000000000000000000000000000000001`
+/// * `module`: A string encoded identifier of the module. Example: `event`
+/// * `number`: A string that represents a tagged block height, or a "0x" prefixed, hex encoded
+///   number that represents the exact block height to read from. Example: `latest`
 pub async fn execute<'reader>(
     request: serde_json::Value,
     app: &ApplicationReader<'reader, impl Dependencies<'reader>>,

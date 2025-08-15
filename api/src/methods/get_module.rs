@@ -47,11 +47,11 @@ mod tests {
         })
     }
 
-    pub fn byte_code_from_response(response: serde_json::Value) -> String {
+    pub fn bytecode_from_response(response: serde_json::Value) -> String {
         response
             .as_object()
             .unwrap()
-            .get("bytecode") // Bytecode
+            .get("bytecode")
             .unwrap()
             .as_str()
             .unwrap()
@@ -187,7 +187,7 @@ mod tests {
             let request = example_request(Latest);
             let response = execute(request, &reader).await.unwrap();
 
-            let actual_bytecode = byte_code_from_response(response);
+            let actual_bytecode = bytecode_from_response(response);
             let expected_bytecode = BYTE_CODE;
 
             assert_eq!(actual_bytecode, expected_bytecode);
@@ -204,7 +204,7 @@ mod tests {
             let request = example_request(Latest);
             let response = execute(request, &reader).await.unwrap();
 
-            let actual_bytecode = byte_code_from_response(response);
+            let actual_bytecode = bytecode_from_response(response);
             let expected_bytecode = BYTE_CODE;
 
             assert_eq!(actual_bytecode, expected_bytecode);
@@ -233,7 +233,7 @@ mod tests {
             let request = example_request(tag);
             let response = execute(request, &reader).await.unwrap();
 
-            let actual_bytecode = byte_code_from_response(response);
+            let actual_bytecode = bytecode_from_response(response);
             let expected_bytecode = BYTE_CODE;
 
             assert_eq!(actual_bytecode, expected_bytecode);

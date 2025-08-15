@@ -17,7 +17,7 @@ pub async fn execute<'reader>(
     request: serde_json::Value,
     app: &ApplicationReader<'reader, impl Dependencies<'reader>>,
 ) -> Result<serde_json::Value, JsonRpcError> {
-    let (number, account, module): (_, Address, String) = parse_params_3(request)?;
+    let (account, module, number): (Address, String, _) = parse_params_3(request)?;
 
     let response = app.move_module_by_height(account.to_move_address(), module.as_str(), number)?;
 
@@ -43,7 +43,7 @@ mod tests {
             "id": 1,
             "jsonrpc": "2.0",
             "method": "mv_getModule",
-            "params": [tag, umi_genesis::FRAMEWORK_ADDRESS.to_eth_address(), "event"]
+            "params": [umi_genesis::FRAMEWORK_ADDRESS.to_eth_address(), "event", tag]
         })
     }
 

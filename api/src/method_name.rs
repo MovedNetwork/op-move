@@ -12,6 +12,7 @@ pub enum MethodName {
     GetBlockByHash,
     GetBlockByNumber,
     GetModule,
+    GetResource,
     GetStorageAt,
     GetTransactionByHash,
     GetNonce,
@@ -71,6 +72,7 @@ impl FromStr for MethodName {
             "web3_clientVersion" => Self::ClientVersion,
 
             "mv_getModule" => Self::GetModule,
+            "mv_getResource" => Self::GetResource,
             "mv_listModules" => Self::ListModules,
             "mv_listResources" => Self::ListResources,
 

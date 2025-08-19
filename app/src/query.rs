@@ -15,7 +15,7 @@ use {
         block::{BaseGasFee, BlockQueries, BlockResponse, Eip1559GasFee},
         payload::{MaybePayloadResponse, PayloadId, PayloadQueries, PayloadResponse},
         receipt::{ReceiptQueries, TransactionReceipt},
-        state::{MoveModuleResponse, ProofResponse, StateQueries},
+        state::{MoveModuleResponse, MoveResourceResponse, ProofResponse, StateQueries},
         transaction::{TransactionQueries, TransactionResponse},
     },
     umi_evm_ext::HeaderForExecution,
@@ -88,6 +88,17 @@ impl<'app, D: Dependencies<'app>> ApplicationReader<'app, D> {
         self.state_queries
             .move_module_at(address, module_name, self.resolve_height(height)?)?
             .ok_or_else(|| Error::User(UserError::MissingModule(module_name.to_string())))
+    }
+
+    pub fn move_resource_by_height(
+        &self,
+        address: AccountAddress,
+        resource_name: &str,
+        height: BlockNumberOrTag,
+    ) -> Result<MoveResourceResponse> {
+        self.state_queries
+            .move_resource_at(address, resource_name, self.resolve_height(height)?)?
+            .ok_or_else(|| Error::User(UserError::MissingResource(resource_name.to_string())))
     }
 
     pub fn storage(&self, address: Address, index: U256, height: BlockNumberOrTag) -> Result<U256> {

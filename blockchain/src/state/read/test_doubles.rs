@@ -3,6 +3,7 @@ use {
         Balance, BlockHeight, HeightToStateRootIndex, Nonce, ProofResponse, StateQueries,
     },
     eth_trie::{EthTrie, MemoryDB},
+    move_bytecode_utils::compiled_module_viewer::CompiledModuleView,
     move_core_types::{
         account_address::AccountAddress, identifier::Identifier, language_storage::StructTag,
     },
@@ -86,7 +87,7 @@ impl StateQueries for MockStateQueries {
     fn resolver_at(
         &self,
         _: BlockHeight,
-    ) -> Result<impl MoveResolver + TableResolver + '_, state::Error> {
+    ) -> Result<impl MoveResolver + TableResolver + CompiledModuleView + '_, state::Error> {
         Ok(EthTrieResolver::new(EthTrie::new(Arc::new(MemoryDB::new(
             true,
         )))))

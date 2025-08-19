@@ -12,6 +12,7 @@ test-doubles = []
 workspace = true
 
 [dependencies]
+anyhow.workspace = true
 alloy.workspace = true
 aptos-table-natives.workspace = true
 aptos-types.workspace = true
@@ -19,6 +20,7 @@ bcs.workspace = true
 bytes.workspace = true
 eth_trie.workspace = true
 move-binary-format.workspace = true
+move-bytecode-utils.workspace = true
 move-core-types.workspace = true
 move-table-extension.workspace = true
 move-vm-types.workspace = true

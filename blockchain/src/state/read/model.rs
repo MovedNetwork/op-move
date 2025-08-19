@@ -211,6 +211,25 @@ pub trait StateQueries {
         ))
     }
 
+    /// Queries the blockchain state version corresponding with block `height` for the nonce of an
+    /// EVM address.
+    fn evm_nonce_at(
+        &self,
+        evm_storage: &impl StorageTrieRepository,
+        address: Address,
+        height: BlockHeight,
+    ) -> Result<Nonce, state::Error> {
+        let resolver = self.resolver_at(height)?;
+
+        // Read account info to get the storage root
+        let evm_db = ResolverBackedDB::new(evm_storage, &resolver, &(), height);
+        let Some(account_info) = evm_db.get_account(&address)? else {
+            return Ok(0);
+        };
+
+        Ok(account_info.inner.nonce)
+    }
+
     /// Queries the blockchain state version corresponding with block `height` for the value of a
     /// single EVM storage slot `index` at `account`.
     fn evm_storage_at(

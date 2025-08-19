@@ -1,5 +1,5 @@
 use {
-    crate::{json_utils, jsonrpc::JsonRpcError},
+    crate::{json_utils, jsonrpc::JsonRpcError, request::SerializationKind},
     alloy::{eips::BlockNumberOrTag, primitives::Address},
     umi_app::{ApplicationReader, Dependencies},
 };
@@ -7,10 +7,14 @@ use {
 pub async fn execute<'reader>(
     request: serde_json::Value,
     app: &ApplicationReader<'reader, impl Dependencies<'reader>>,
+    serialization_tag: SerializationKind,
 ) -> Result<serde_json::Value, JsonRpcError> {
     let (address, block_number) = parse_params(request)?;
 
-    let response = app.nonce_by_height(address, block_number)?;
+    let response = match serialization_tag {
+        SerializationKind::Bcs => app.nonce_by_height(address, block_number)?,
+        SerializationKind::Evm => app.evm_nonce_by_height(address, block_number)?,
+    };
 
     // Format the balance as a hex string
     Ok(serde_json::to_value(format!("0x{:x}", response))
@@ -89,7 +93,9 @@ mod tests {
         });
 
         let expected_response: serde_json::Value = serde_json::from_str(r#""0x3""#).unwrap();
-        let response = execute(request, &reader).await.unwrap();
+        let response = execute(request, &reader, SerializationKind::Bcs)
+            .await
+            .unwrap();
 
         assert_eq!(response, expected_response);
     }
@@ -111,7 +117,9 @@ mod tests {
         let expected_response = JsonRpcError::block_not_found(umi_shared::error::Error::User(
             umi_shared::error::UserError::InvalidBlockHeight(5),
         ));
-        let response = execute(request, &reader).await.unwrap_err();
+        let response = execute(request, &reader, SerializationKind::Bcs)
+            .await
+            .unwrap_err();
 
         assert_eq!(response, expected_response);
     }
@@ -139,7 +147,9 @@ mod tests {
         });
 
         let expected_response = serde_json::Value::String(format!("0x{expected_nonce}"));
-        let response = execute(request, &reader).await.unwrap();
+        let response = execute(request, &reader, SerializationKind::Bcs)
+            .await
+            .unwrap();
 
         assert_eq!(response, expected_response);
     }

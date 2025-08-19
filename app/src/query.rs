@@ -79,6 +79,14 @@ impl<'app, D: Dependencies<'app>> ApplicationReader<'app, D> {
         )?)
     }
 
+    pub fn evm_nonce_by_height(&self, address: Address, height: BlockNumberOrTag) -> Result<u64> {
+        Ok(self.state_queries.evm_nonce_at(
+            &self.evm_storage,
+            address,
+            self.resolve_height(height)?,
+        )?)
+    }
+
     pub fn move_module_by_height(
         &self,
         address: AccountAddress,

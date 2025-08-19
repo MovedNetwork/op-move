@@ -4,7 +4,7 @@ use {
         BaseTokenAccounts, CanonicalExecutionInput,
         canonical::{CanonicalVerificationInput, verify_transaction},
         create_vm_session,
-        execute::execute_evm_contract,
+        execute::{EvmExecutionArgs, execute_evm_contract},
         execute_transaction,
         gas::new_gas_meter,
         quick_get_nonce,
@@ -35,7 +35,6 @@ use {
     umi_state::ResolverBasedModuleBytesStorage,
 };
 
-#[allow(clippy::too_many_arguments)]
 pub fn simulate_transaction(
     request: TransactionRequest,
     state: &(impl MoveResolver + TableResolver),
@@ -158,10 +157,12 @@ pub fn call_transaction(
         }
         TransactionData::L2Contract(contract) => {
             let outcome = execute_evm_contract(
-                &tx.signer.to_move_address(),
-                &contract.to_move_address(),
-                tx.value,
-                tx.data.to_vec(),
+                EvmExecutionArgs::new(
+                    tx.signer.to_move_address(),
+                    contract.to_move_address(),
+                    tx.value,
+                    tx.data.to_vec(),
+                ),
                 &mut session,
                 &mut traversal_context,
                 &mut gas_meter,
@@ -171,10 +172,12 @@ pub fn call_transaction(
         }
         TransactionData::EvmContract { address, data } => {
             let outcome = execute_evm_contract(
-                &tx.signer.to_move_address(),
-                &address.to_move_address(),
-                tx.value,
-                data,
+                EvmExecutionArgs::new(
+                    tx.signer.to_move_address(),
+                    address.to_move_address(),
+                    tx.value,
+                    data,
+                ),
                 &mut session,
                 &mut traversal_context,
                 &mut gas_meter,

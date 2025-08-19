@@ -34,6 +34,48 @@ use {
     },
 };
 
+pub(super) struct EvmExecutionArgs {
+    signer: AccountAddress,
+    contract: AccountAddress,
+    value: U256,
+    data: Vec<u8>,
+}
+
+impl EvmExecutionArgs {
+    pub fn new(
+        signer: AccountAddress,
+        contract: AccountAddress,
+        value: U256,
+        data: Vec<u8>,
+    ) -> Self {
+        Self {
+            signer,
+            contract,
+            value,
+            data,
+        }
+    }
+
+    fn encode(self) -> Result<Vec<Vec<u8>>, Error> {
+        [
+            (Value::master_signer(self.signer), &SIGNER_LAYOUT),
+            (Value::address(self.contract), &ADDRESS_LAYOUT),
+            (Value::u256(self.value.to_move_u256()), &U256_LAYOUT),
+            (Value::vector_u8(self.data), &CODE_LAYOUT),
+        ]
+        .into_iter()
+        .map(|(value, layout)| {
+            Ok(ValueSerDeContext::new()
+                .serialize(&value, layout)?
+                .ok_or_else(|| {
+                    PartialVMError::new(StatusCode::VALUE_SERIALIZATION_ERROR)
+                        .with_message("Failed to serialize EVM contract call args".into())
+                })?)
+        })
+        .collect()
+    }
+}
+
 pub(super) fn execute_entry_function<G: GasMeter, MS: ModuleStorage>(
     entry_fn: EntryFunction,
     signer: &AccountAddress,
@@ -179,14 +221,8 @@ pub(super) fn deploy_evm_contract<G: GasMeter, MS: ModuleStorage>(
     Ok(address)
 }
 
-// TODO(#329): group MoveVM elements (session, traversal_context,
-// gas_meter, module_storage) together.
-#[allow(clippy::too_many_arguments)]
 pub(super) fn execute_evm_contract<G: GasMeter, MS: ModuleStorage>(
-    signer: &AccountAddress,
-    contract: &AccountAddress,
-    value: U256,
-    data: Vec<u8>,
+    args: EvmExecutionArgs,
     session: &mut Session,
     traversal_context: &mut TraversalContext,
     gas_meter: &mut G,
@@ -194,28 +230,12 @@ pub(super) fn execute_evm_contract<G: GasMeter, MS: ModuleStorage>(
 ) -> umi_shared::error::Result<EvmNativeOutcome> {
     let module = ModuleId::new(EVM_NATIVE_ADDRESS, EVM_NATIVE_MODULE.into());
     let function_name = EVM_CALL_FN_NAME;
-    let args: Result<Vec<Vec<u8>>, Error> = [
-        (Value::master_signer(*signer), &SIGNER_LAYOUT),
-        (Value::address(*contract), &ADDRESS_LAYOUT),
-        (Value::u256(value.to_move_u256()), &U256_LAYOUT),
-        (Value::vector_u8(data), &CODE_LAYOUT),
-    ]
-    .into_iter()
-    .map(|(value, layout)| {
-        Ok(ValueSerDeContext::new()
-            .serialize(&value, layout)?
-            .ok_or_else(|| {
-                PartialVMError::new(StatusCode::VALUE_SERIALIZATION_ERROR)
-                    .with_message("Failed to serialize EVM contract call args".into())
-            })?)
-    })
-    .collect();
     let outcome = session
         .execute_function_bypass_visibility(
             &module,
             function_name,
             Vec::new(),
-            args?,
+            args.encode()?,
             gas_meter,
             traversal_context,
             module_storage,

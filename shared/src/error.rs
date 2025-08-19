@@ -103,6 +103,8 @@ pub enum UserError {
     InvalidAddress(Address),
     #[error("Missing module requested: {0}")]
     MissingModule(String),
+    #[error("Missing resource requested: {0}")]
+    MissingResource(String),
 }
 
 /// The error caused by invalid transaction input parameter.

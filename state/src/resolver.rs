@@ -3,7 +3,13 @@ use {
     aptos_types::state_store::{state_key::StateKey, state_value::StateValue},
     bytes::Bytes,
     eth_trie::{DB, EthTrie, Trie, TrieError},
-    move_binary_format::errors::PartialVMError,
+    move_binary_format::{
+        CompiledModule,
+        deserializer::DeserializerConfig,
+        errors::PartialVMError,
+        file_format_common::{IDENTIFIER_SIZE_MAX, VERSION_MAX},
+    },
+    move_bytecode_utils::compiled_module_viewer::CompiledModuleView,
     move_core_types::{
         account_address::AccountAddress,
         language_storage::{ModuleId, StructTag},
@@ -100,6 +106,20 @@ impl<D: DB> TableResolver for EthTrieResolver<D> {
         let value = deserialize_state_value(value);
 
         Ok(value)
+    }
+}
+
+impl<D: DB> CompiledModuleView for EthTrieResolver<D> {
+    type Item = CompiledModule;
+
+    fn view_compiled_module(&self, id: &ModuleId) -> anyhow::Result<Option<Self::Item>> {
+        Ok(match self.get_module(id)? {
+            Some(bytes) => {
+                let config = DeserializerConfig::new(VERSION_MAX, IDENTIFIER_SIZE_MAX);
+                Some(CompiledModule::deserialize_with_config(&bytes, &config)?)
+            }
+            None => None,
+        })
     }
 }
 

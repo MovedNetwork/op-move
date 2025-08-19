@@ -1,5 +1,5 @@
 use {
-    crate::state::{MoveModule, MoveModuleResponse},
+    crate::state::{MoveModule, MoveModuleResponse, MoveResourceResponse},
     alloy::{
         consensus::constants::KECCAK_EMPTY,
         primitives::keccak256,
@@ -7,19 +7,21 @@ use {
     },
     eth_trie::{DB, EthTrie, Trie},
     move_binary_format::{CompiledModule, errors::PartialVMError},
+    move_bytecode_utils::compiled_module_viewer::CompiledModuleView,
     move_core_types::{
         account_address::AccountAddress,
         identifier::Identifier,
         language_storage::{ModuleId, StructTag},
         vm_status::StatusCode,
     },
+    move_resource_viewer::MoveValueAnnotator,
     move_table_extension::TableResolver,
     move_vm_types::{
         resolver::{ModuleResolver, MoveResolver, ResourceResolver},
         value_serde::ValueSerDeContext,
         values::VMValueCast,
     },
-    std::error,
+    std::{error, str::FromStr},
     umi_evm_ext::{
         CODE_LAYOUT, EVM_NATIVE_ADDRESS, ResolverBackedDB,
         state::{self, StorageTrieRepository},
@@ -176,6 +178,39 @@ pub trait StateQueries {
         }))
     }
 
+    fn move_resource_at(
+        &self,
+        account: AccountAddress,
+        name: &str,
+        height: BlockHeight,
+    ) -> Result<Option<MoveResourceResponse>, state::Error> {
+        let Ok(struct_tag) = StructTag::from_str(name) else {
+            return Ok(None);
+        };
+
+        let resolver = self.resolver_at(height)?;
+
+        let (Some(bytes), _) = resolver.get_resource_bytes_with_metadata_and_layout(
+            &account,
+            &struct_tag,
+            &[],
+            None,
+        )?
+        else {
+            return Ok(None);
+        };
+
+        let annotator = MoveValueAnnotator::new(resolver);
+
+        Ok(Some(
+            annotator
+                .view_resource(&struct_tag, &bytes)
+                .expect("Serialization should be compatible")
+                .try_into()
+                .expect("Serialization should be compatible"),
+        ))
+    }
+
     /// Queries the blockchain state version corresponding with block `height` for the value of a
     /// single EVM storage slot `index` at `account`.
     fn evm_storage_at(
@@ -218,7 +253,7 @@ pub trait StateQueries {
     fn resolver_at(
         &self,
         height: BlockHeight,
-    ) -> Result<impl MoveResolver + TableResolver + '_, state::Error>;
+    ) -> Result<impl MoveResolver + TableResolver + CompiledModuleView + '_, state::Error>;
 }
 
 pub trait HeightToStateRootIndex {

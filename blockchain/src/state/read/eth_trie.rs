@@ -4,6 +4,7 @@ use {
         proof_from_trie_and_resolver,
     },
     eth_trie::{DB, EthTrie},
+    move_bytecode_utils::compiled_module_viewer::CompiledModuleView,
     move_core_types::{
         account_address::AccountAddress, identifier::Identifier, language_storage::StructTag,
     },
@@ -108,7 +109,7 @@ impl<R: HeightToStateRootIndex, D: DB> StateQueries for EthTrieStateQueries<R, D
     fn resolver_at(
         &self,
         height: BlockHeight,
-    ) -> Result<impl MoveResolver + TableResolver + '_, state::Error> {
+    ) -> Result<impl MoveResolver + TableResolver + CompiledModuleView + '_, state::Error> {
         Ok(EthTrieResolver::new(self.trie_at(height)?))
     }
 }

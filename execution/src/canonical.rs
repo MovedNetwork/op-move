@@ -4,8 +4,8 @@ use {
         CanonicalExecutionInput, Logs, create_vm_session,
         eth_token::{self, BaseTokenAccounts, TransferArgs},
         execute::{
-            deploy_evm_contract, deploy_module, execute_entry_function, execute_evm_contract,
-            execute_script,
+            EvmExecutionArgs, deploy_evm_contract, deploy_module, execute_entry_function,
+            execute_evm_contract, execute_script,
         },
         gas::{new_gas_meter, total_gas_used},
         nonces::check_nonce,
@@ -250,10 +250,12 @@ pub(super) fn execute_canonical_transaction<
             )
         }
         TransactionData::L2Contract(contract) => execute_evm_contract(
-            &sender_move_address,
-            &contract.to_move_address(),
-            input.tx.value,
-            input.tx.data.to_vec(),
+            EvmExecutionArgs::new(
+                sender_move_address,
+                contract.to_move_address(),
+                input.tx.value,
+                input.tx.data.to_vec(),
+            ),
             &mut session,
             &mut traversal_context,
             &mut gas_meter,
@@ -261,10 +263,12 @@ pub(super) fn execute_canonical_transaction<
         )
         .map(|_| ()),
         TransactionData::EvmContract { address, data } => execute_evm_contract(
-            &sender_move_address,
-            &address.to_move_address(),
-            input.tx.value,
-            data,
+            EvmExecutionArgs::new(
+                sender_move_address,
+                address.to_move_address(),
+                input.tx.value,
+                data,
+            ),
             &mut session,
             &mut traversal_context,
             &mut gas_meter,

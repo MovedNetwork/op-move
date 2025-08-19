@@ -1,7 +1,7 @@
 use {
     op_alloy::{consensus::OpReceiptEnvelope, rpc_types::L1BlockInfo},
     std::fmt::Debug,
-    umi_shared::primitives::{Address, B256, U256},
+    umi_shared::primitives::{Address, B256},
 };
 
 pub trait ReceiptRepository {
@@ -26,7 +26,7 @@ pub struct ExtendedReceipt {
     pub receipt: OpReceiptEnvelope,
     pub l1_block_info: Option<L1BlockInfo>,
     pub gas_used: u64,
-    pub l2_gas_price: U256,
+    pub l2_gas_price: u128,
     /// If the transaction deployed a new contract, gives the address.
     ///
     /// In Move contracts are identified by AccountAddress + ModuleID,

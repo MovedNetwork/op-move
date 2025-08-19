@@ -105,6 +105,8 @@ pub enum UserError {
     MissingModule(String),
     #[error("Missing resource requested: {0}")]
     MissingResource(String),
+    #[error("Given gas price {0} is too high. Must be less than u64::MAX.")]
+    InvalidGasPrice(u128),
 }
 
 /// The error caused by invalid transaction input parameter.

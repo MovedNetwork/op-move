@@ -148,7 +148,7 @@ fn test_solidity_fixed_bytes() {
                 genesis_config: &ctx.genesis_config,
                 l1_cost: U256::ZERO,
                 l2_fee: U256::ZERO,
-                l2_input: (u64::MAX, U256::ZERO).into(),
+                l2_input: (u64::MAX, 0).into(),
                 base_token: &(),
                 block_header: HeaderForExecution::default(),
                 block_hash_lookup: &(),

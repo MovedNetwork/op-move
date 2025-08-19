@@ -60,7 +60,7 @@ pub fn simulate_transaction(
         chain_id: genesis_config.chain_id,
     };
 
-    let l2_input = L2GasFeeInput::new(u64::MAX, U256::ZERO);
+    let l2_input = L2GasFeeInput::new(u64::MAX, 0);
     let l2_fee = CreateUmiL2GasFee.with_default_gas_fee_multiplier();
     let input = CanonicalExecutionInput {
         tx: &tx,

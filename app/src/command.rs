@@ -103,7 +103,7 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
         let base_fee = self.gas_fee.base_fee_per_gas(
             parent.block.header.gas_limit,
             parent.block.header.gas_used,
-            U256::from(parent.block.header.base_fee_per_gas.unwrap_or_default()),
+            parent.block.header.base_fee_per_gas.unwrap_or_default(),
         );
 
         let header_for_execution = HeaderForExecution {
@@ -138,7 +138,7 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
             transactions_root,
             // TODO: (#201) set to OP's L2ToL1MessagePasser storage root after upgrading beyond Isthmus
             withdrawals_root: Some(EMPTY_WITHDRAWALS),
-            base_fee_per_gas: Some(base_fee.saturating_to()),
+            base_fee_per_gas: Some(base_fee),
             blob_gas_used: Some(0),
             excess_blob_gas: Some(0),
             ..Default::default()
@@ -257,7 +257,7 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
     fn execute_transactions(
         &mut self,
         transactions: impl Iterator<Item = NormalizedExtendedTxEnvelope>,
-        base_fee: U256,
+        base_fee: u64,
         block_header: &HeaderForExecution,
     ) -> Result<(ExecutionOutcome, Vec<ExtendedReceipt>), UnrecoverableAppFailure> {
         let mut total_tip = U256::ZERO;
@@ -364,7 +364,8 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
             let receipt = normalized_tx.wrap_receipt(receipt, bloom);
 
             total_tip = total_tip.saturating_add(
-                U256::from(outcome.gas_used).saturating_mul(normalized_tx.tip_per_gas(base_fee)),
+                U256::from(outcome.gas_used)
+                    .saturating_mul(U256::from(normalized_tx.tip_per_gas(base_fee))),
             );
 
             let (to, from) = match &normalized_tx {

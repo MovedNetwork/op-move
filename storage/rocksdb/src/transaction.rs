@@ -119,7 +119,7 @@ mod tests {
         let normalized_tx = NormalizedEthTransaction::try_from(signed_tx).unwrap();
 
         let transaction = ExtendedTransaction::new(
-            U256::ONE,
+            1,
             normalized_tx.into(),
             1,
             B256::new(hex!(
@@ -150,7 +150,7 @@ mod tests {
         let sealed_tx = NormalizedExtendedTxEnvelope::DepositedTx(tx.seal_slow());
 
         let transaction = ExtendedTransaction::new(
-            U256::ONE,
+            1,
             sealed_tx,
             1,
             B256::new(hex!(

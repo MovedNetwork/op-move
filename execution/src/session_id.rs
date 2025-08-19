@@ -1,6 +1,5 @@
 use {
     crate::transaction::NormalizedEthTransaction,
-    alloy::primitives::U256,
     aptos_types::transaction::EntryFunction,
     aptos_vm::move_vm_ext::UserTransactionContext,
     op_alloy::consensus::TxDeposit,
@@ -39,7 +38,7 @@ impl SessionId {
             Vec::new(),
             sender,
             tx.gas_limit(),
-            u64_gas_price(&tx.max_fee_per_gas),
+            u64_gas_price(tx.max_fee_per_gas),
             chain_id,
             maybe_entry_fn.map(EntryFunction::as_entry_function_payload),
             None,
@@ -81,12 +80,8 @@ impl SessionId {
     }
 }
 
-// TODO: Should we make it an invariant that the gas price is always less than u64::MAX?
-fn u64_gas_price(u256_gas_price: &U256) -> u64 {
-    match u256_gas_price.as_limbs() {
-        [value, 0, 0, 0] => *value,
-        _ => u64::MAX,
-    }
+fn u64_gas_price(u128_gas_price: u128) -> u64 {
+    u128_gas_price.try_into().unwrap_or(u64::MAX)
 }
 
 /// Ethereum uses U256 (and most projects on Ethereum use u64) for chain id,

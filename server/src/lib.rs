@@ -91,7 +91,7 @@ pub fn defaults() -> DefaultLayer {
 }
 
 const EIP1559_ELASTICITY_MULTIPLIER: u64 = 6;
-const EIP1559_BASE_FEE_MAX_CHANGE_DENOMINATOR: U256 = U256::from_limbs([250, 0, 0, 0]);
+const EIP1559_BASE_FEE_MAX_CHANGE_DENOMINATOR: u128 = 250;
 const JWT_VALID_DURATION_IN_SECS: u64 = 60;
 
 pub fn set_global_tracing_subscriber() {

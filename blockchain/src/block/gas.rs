@@ -1,6 +1,6 @@
 //! This module is concerned about calculating fees charged for gas usage.
 
-use {std::cmp::Ordering, umi_shared::primitives::U256};
+use std::cmp::Ordering;
 
 /// Determines amount of fees charged per gas used in transaction execution.
 ///
@@ -14,8 +14,8 @@ pub trait BaseGasFee {
         &self,
         parent_gas_limit: u64,
         parent_gas_used: u64,
-        parent_base_fee_per_gas: U256,
-    ) -> U256;
+        parent_base_fee_per_gas: u64,
+    ) -> u64;
 }
 
 /// Calculates base fee per gas according to the Ethereum model based on EIP-1559.
@@ -49,7 +49,7 @@ pub struct Eip1559GasFee {
     /// * The greater the value the smaller the increase or decrease of the base fee per gas.
     /// * This value has to be greater than zero.
     /// * A value of 1 makes the greatest fee increases or decreases.
-    base_fee_max_change_denominator: U256,
+    base_fee_max_change_denominator: u128,
 }
 
 impl Eip1559GasFee {
@@ -57,10 +57,10 @@ impl Eip1559GasFee {
     ///
     /// # Panics
     /// If either `elasticity_multiplier` or `base_fee_max_change_denominator` is zero.
-    pub fn new(elasticity_multiplier: u64, base_fee_max_change_denominator: U256) -> Self {
+    pub fn new(elasticity_multiplier: u64, base_fee_max_change_denominator: u128) -> Self {
         assert!(elasticity_multiplier > 0, "{elasticity_multiplier} > 0");
         assert!(
-            base_fee_max_change_denominator > U256::ZERO,
+            base_fee_max_change_denominator > 0,
             "{base_fee_max_change_denominator} > 0"
         );
 
@@ -76,30 +76,33 @@ impl BaseGasFee for Eip1559GasFee {
         &self,
         parent_gas_limit: u64,
         parent_gas_used: u64,
-        parent_base_fee_per_gas: U256,
-    ) -> U256 {
+        parent_base_fee_per_gas: u64,
+    ) -> u64 {
+        // Bump up to 128 bits for calculation to avoid overflows.
+        let parent_base_fee_per_gas: u128 = parent_base_fee_per_gas.into();
         let gas_target = parent_gas_limit / self.elasticity_multiplier;
 
-        match parent_gas_used.cmp(&gas_target) {
+        let result = match parent_gas_used.cmp(&gas_target) {
             Ordering::Greater => {
                 let delta = (parent_base_fee_per_gas
-                    .saturating_mul(U256::from(parent_gas_used - gas_target))
-                    / U256::from(gas_target)
+                    .saturating_mul(u128::from(parent_gas_used - gas_target))
+                    / u128::from(gas_target)
                     / self.base_fee_max_change_denominator)
-                    .max(U256::from(1));
+                    .max(1);
 
                 parent_base_fee_per_gas.saturating_add(delta)
             }
             Ordering::Less => {
                 let delta = parent_base_fee_per_gas
-                    .saturating_mul(U256::from(gas_target - parent_gas_used))
-                    / U256::from(gas_target)
+                    .saturating_mul(u128::from(gas_target - parent_gas_used))
+                    / u128::from(gas_target)
                     / self.base_fee_max_change_denominator;
 
                 parent_base_fee_per_gas.saturating_sub(delta)
             }
             Ordering::Equal => parent_base_fee_per_gas,
-        }
+        };
+        result.try_into().unwrap_or(u64::MAX)
     }
 }
 
@@ -108,7 +111,7 @@ mod test_doubles {
     use super::*;
 
     const ELASTICITY_MULTIPLIER: u64 = 2;
-    const BASE_FEE_MAX_CHANGE_DENOMINATOR: U256 = U256::from_limbs([8, 0, 0, 0]);
+    const BASE_FEE_MAX_CHANGE_DENOMINATOR: u128 = 8;
 
     impl Default for Eip1559GasFee {
         fn default() -> Self {
@@ -132,7 +135,7 @@ mod tests {
     #[test]
     fn test_fee_is_not_changed_when_gas_used_matches_gas_target() {
         let gas_limit = 15_000_000;
-        let parent_fee = U256::from_limbs([1, 0, 0, 0]);
+        let parent_fee = 1;
 
         let actual_fee = Eip1559GasFee::default()
             .with_max_gas_target()
@@ -145,7 +148,7 @@ mod tests {
     fn test_fee_is_increased_when_gas_used_exceeds_gas_target() {
         let gas_limit = 15_000_000;
         let gas_used = 8_500_000;
-        let parent_fee = U256::from_limbs([2, 0, 0, 0]);
+        let parent_fee = 2;
 
         let actual_fee = Eip1559GasFee::default().base_fee_per_gas(gas_limit, gas_used, parent_fee);
 
@@ -156,7 +159,7 @@ mod tests {
     fn test_fee_is_decreased_when_gas_used_falls_below_gas_target() {
         let gas_limit = 15_000_000;
         let gas_used = 6_500_000;
-        let parent_fee = U256::from_limbs([200, 0, 0, 0]);
+        let parent_fee = 200;
 
         let actual_fee = Eip1559GasFee::default().base_fee_per_gas(gas_limit, gas_used, parent_fee);
 

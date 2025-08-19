@@ -43,7 +43,7 @@ use {
     umi_shared::{
         error::{
             Error::{InvalidTransaction, User},
-            EthToken, InvalidTransactionCause,
+            EthToken, InvalidTransactionCause, UserError,
         },
         primitives::ToMoveAddress,
         resolver_utils::{ChangesBasedResolver, PairedResolvers},
@@ -144,6 +144,16 @@ pub(super) fn execute_canonical_transaction<
 
     let tx_data = TransactionData::parse_from(input.tx)?;
 
+    let gas_unit_price = input
+        .l2_input
+        .effective_gas_price
+        .try_into()
+        .map(FeePerGasUnit::new)
+        .map_err(|_| {
+            User(UserError::InvalidGasPrice(
+                input.l2_input.effective_gas_price,
+            ))
+        })?;
     let umi_vm = UmiVm::new(input.genesis_config);
     let module_bytes_storage = ResolverBasedModuleBytesStorage::new(&cached_resolver);
     let code_storage = module_bytes_storage.as_unsync_code_storage(&umi_vm);
@@ -299,7 +309,6 @@ pub(super) fn execute_canonical_transaction<
         .squash(deploy_changes)
         .expect("Module deploy changes must merge with other session changes");
 
-    let gas_unit_price = FeePerGasUnit::new(input.l2_input.effective_gas_price.saturating_to());
     let vm_outcome = vm_outcome.and_then(|_| {
         charge_io_gas(
             &cached_resolver.borrow_cache(),

@@ -16,7 +16,7 @@ fn test_treasury_charges_l1_and_l2_cost_to_sender_account_on_success() {
     let l1_cost = 1;
     // Set a gas limit higher than the cost of operation
     let l2_gas_limit = 100_000;
-    let l2_gas_price = U256::from(10).pow(U256::from(9)); // 1 Gwei
+    let l2_gas_price = 10_u64.pow(9); // 1 Gwei
     let receiver = ALT_EVM_ADDRESS;
     let transfer_amount = mint_amount.wrapping_shr(2);
 
@@ -31,9 +31,7 @@ fn test_treasury_charges_l1_and_l2_cost_to_sender_account_on_success() {
         .expect("Transfer should succeed");
     outcome.vm_outcome.unwrap();
 
-    let l2_cost = outcome
-        .gas_used
-        .saturating_mul(l2_gas_price.saturating_to());
+    let l2_cost = outcome.gas_used.saturating_mul(l2_gas_price);
     let expected_sender_balance = mint_amount - transfer_amount - U256::from(l1_cost + l2_cost);
     let sender_balance = ctx.get_balance(sender);
     assert_eq!(sender_balance, expected_sender_balance);
@@ -54,7 +52,7 @@ fn test_treasury_charges_correct_l1_and_l2_cost_to_sender_account_on_user_error(
     let l1_cost = 1;
     // Set a gas limit higher than the cost of operation
     let l2_gas_limit = 100_000;
-    let l2_gas_price = U256::from(2);
+    let l2_gas_price = 2;
     let receiver = ALT_EVM_ADDRESS;
     let transfer_amount = mint_amount.saturating_add(U256::from(1));
 
@@ -71,9 +69,7 @@ fn test_treasury_charges_correct_l1_and_l2_cost_to_sender_account_on_user_error(
     assert!(outcome.vm_outcome.is_err());
 
     let sender_balance = ctx.get_balance(sender);
-    let l2_cost = outcome
-        .gas_used
-        .saturating_mul(l2_gas_price.saturating_to());
+    let l2_cost = outcome.gas_used.saturating_mul(l2_gas_price);
     let expected_sender_balance = mint_amount - U256::from(l1_cost + l2_cost);
     let receiver_balance = ctx.get_balance(receiver);
 
@@ -92,7 +88,7 @@ fn test_very_low_gas_limit_makes_tx_invalid() {
     ctx.deposit_eth(sender, mint_amount);
 
     let l1_cost = 1;
-    let l2_gas_price = U256::from(2);
+    let l2_gas_price = 2;
     let receiver = ALT_EVM_ADDRESS;
     let transfer_amount = mint_amount.wrapping_shr(1);
 
@@ -134,7 +130,7 @@ fn test_low_gas_limit_gets_charged_and_fails_the_tx() {
     ctx.deposit_eth(sender, mint_amount);
 
     let l1_cost = 1;
-    let l2_gas_price = U256::from(2);
+    let l2_gas_price = 2;
     let receiver = ALT_EVM_ADDRESS;
     let transfer_amount = mint_amount.wrapping_shr(1);
 
@@ -148,7 +144,7 @@ fn test_low_gas_limit_gets_charged_and_fails_the_tx() {
         l2_gas_price,
     );
 
-    let l2_cost = l2_gas_limit.saturating_mul(l2_gas_price.saturating_to());
+    let l2_cost = l2_gas_limit.saturating_mul(l2_gas_price);
     let expected_sender_balance = mint_amount - U256::from(l1_cost + l2_cost);
     let sender_balance = ctx.get_balance(sender);
     let receiver_balance = ctx.get_balance(receiver);
@@ -172,7 +168,7 @@ fn test_storage_update_cost() {
 
     let gas_limit = 50_000;
     // Choose gas price equal to 1 for convenience in checking how much the gas changes.
-    let gas_price = U256::ONE;
+    let gas_price = 1;
 
     // Create the resource
     let text = "Hello, world";

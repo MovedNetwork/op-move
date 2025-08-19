@@ -47,8 +47,7 @@ impl From<ExtendedReceipt> for TransactionReceipt {
                 block_hash: Some(rx.block_hash),
                 block_number: Some(rx.block_number),
                 gas_used: rx.gas_used,
-                // TODO: make all gas prices bounded by u128?
-                effective_gas_price: rx.l2_gas_price.saturating_to(),
+                effective_gas_price: rx.l2_gas_price,
                 // Always None because we do not support eip-4844 transactions
                 blob_gas_used: None,
                 blob_gas_price: None,

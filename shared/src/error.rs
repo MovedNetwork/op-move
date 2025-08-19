@@ -105,8 +105,6 @@ pub enum UserError {
     MissingModule(String),
     #[error("Missing resource requested: {0}")]
     MissingResource(String),
-    #[error("Given gas price {0} is too high. Must be less than u64::MAX.")]
-    InvalidGasPrice(u128),
 }
 
 /// The error caused by invalid transaction input parameter.
@@ -148,6 +146,8 @@ pub enum InvalidTransactionCause {
     FailedToPayL1Fee,
     #[error("Failed to pay L2 fee")]
     FailedToPayL2Fee,
+    #[error("Given gas price {0} is too high. Must be less than u64::MAX.")]
+    InvalidGasPrice(u128),
 }
 
 impl From<InvalidTransactionCause> for Error {

@@ -43,7 +43,7 @@ use {
     umi_shared::{
         error::{
             Error::{InvalidTransaction, User},
-            EthToken, InvalidTransactionCause, UserError,
+            EthToken, InvalidTransactionCause,
         },
         primitives::ToMoveAddress,
         resolver_utils::{ChangesBasedResolver, PairedResolvers},
@@ -150,9 +150,7 @@ pub(super) fn execute_canonical_transaction<
         .try_into()
         .map(FeePerGasUnit::new)
         .map_err(|_| {
-            User(UserError::InvalidGasPrice(
-                input.l2_input.effective_gas_price,
-            ))
+            InvalidTransactionCause::InvalidGasPrice(input.l2_input.effective_gas_price)
         })?;
     let umi_vm = UmiVm::new(input.genesis_config);
     let module_bytes_storage = ResolverBasedModuleBytesStorage::new(&cached_resolver);
@@ -165,7 +163,7 @@ pub(super) fn execute_canonical_transaction<
         input.genesis_config,
         input.block_header,
         tx_data.script_hash(),
-    );
+    )?;
     let eth_transfers_logger = EthTransfersLogger::default();
     let mut session = create_vm_session(
         &vm,

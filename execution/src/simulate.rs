@@ -105,7 +105,7 @@ pub fn call_transaction(
         genesis_config,
         block_header,
         tx_data.script_hash(),
-    );
+    )?;
     let mut session =
         create_vm_session(&vm, state, session_id, storage_trie, &(), block_hash_lookup);
     let traversal_storage = TraversalStorage::new();

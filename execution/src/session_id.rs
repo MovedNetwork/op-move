@@ -5,7 +5,10 @@ use {
     op_alloy::consensus::TxDeposit,
     umi_evm_ext::HeaderForExecution,
     umi_genesis::config::{CHAIN_ID, GenesisConfig},
-    umi_shared::primitives::{B256, ToMoveAddress},
+    umi_shared::{
+        error::{InvalidTransactionCause, Result},
+        primitives::{B256, ToMoveAddress},
+    },
 };
 
 /// This struct represents a unique identifier for the current session of the MoveVM.
@@ -30,7 +33,7 @@ impl SessionId {
         genesis_config: &GenesisConfig,
         block_header: HeaderForExecution,
         script_hash: Option<B256>,
-    ) -> Self {
+    ) -> Result<Self> {
         let chain_id = u8_chain_id(genesis_config);
         let sender = tx.signer.to_move_address();
         let user_context = UserTransactionContext::new(
@@ -38,18 +41,18 @@ impl SessionId {
             Vec::new(),
             sender,
             tx.gas_limit(),
-            u64_gas_price(tx.max_fee_per_gas),
+            u64_gas_price(tx.max_fee_per_gas)?,
             chain_id,
             maybe_entry_fn.map(EntryFunction::as_entry_function_payload),
             None,
         );
-        Self {
+        Ok(Self {
             txn_hash: tx_hash.0,
             script_hash: script_hash.map(|x| x.0),
             chain_id,
             user_txn_context: Some(user_context),
             block_header,
-        }
+        })
     }
 
     pub fn new_from_deposited(
@@ -80,8 +83,10 @@ impl SessionId {
     }
 }
 
-fn u64_gas_price(u128_gas_price: u128) -> u64 {
-    u128_gas_price.try_into().unwrap_or(u64::MAX)
+fn u64_gas_price(u128_gas_price: u128) -> Result<u64> {
+    u128_gas_price
+        .try_into()
+        .map_err(|_| InvalidTransactionCause::InvalidGasPrice(u128_gas_price).into())
 }
 
 /// Ethereum uses U256 (and most projects on Ethereum use u64) for chain id,

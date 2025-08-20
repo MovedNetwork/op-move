@@ -29,7 +29,7 @@ impl From<ExtendedTransaction> for TransactionResponse {
                 block_hash: Some(value.block_hash),
                 block_number: Some(value.block_number),
                 transaction_index: Some(value.transaction_index),
-                effective_gas_price: Some(value.effective_gas_price.saturating_to()),
+                effective_gas_price: Some(value.effective_gas_price),
             },
             deposit_nonce,
             deposit_receipt_version,

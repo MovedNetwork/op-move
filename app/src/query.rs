@@ -455,15 +455,13 @@ impl<'app, D: Dependencies<'app>> ApplicationReader<'app, D> {
         if matches!(block_id, BlockNumberOrHash::Number(_)) {
             // Reusing the parameters from the prod config
             // TODO: pass a constant
-            let gas_fee = Eip1559GasFee::new(6, U256::from_limbs([250, 0, 0, 0]));
-            let next_block_base_fee = gas_fee
-                .base_fee_per_gas(
-                    gas_limit,
-                    block_gas_used,
-                    U256::from(base_fee_per_gas.unwrap_or_default()),
-                )
-                .saturating_to();
-            base_fees.push(next_block_base_fee);
+            let gas_fee = Eip1559GasFee::new(6, 250);
+            let next_block_base_fee = gas_fee.base_fee_per_gas(
+                gas_limit,
+                block_gas_used,
+                base_fee_per_gas.unwrap_or_default(),
+            );
+            base_fees.push(next_block_base_fee.into());
         }
 
         base_fees.push(base_fee_per_gas.unwrap_or_default().into());

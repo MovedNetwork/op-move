@@ -180,9 +180,9 @@ impl NormalizedExtendedTxEnvelope {
         }
     }
 
-    pub fn tip_per_gas(&self, base_fee: U256) -> U256 {
+    pub fn tip_per_gas(&self, base_fee: u64) -> u128 {
         match self {
-            Self::DepositedTx(..) => U256::ZERO,
+            Self::DepositedTx(..) => 0,
             Self::Canonical(tx) => tx.tip_per_gas(base_fee),
         }
     }
@@ -194,9 +194,9 @@ impl NormalizedExtendedTxEnvelope {
         }
     }
 
-    pub fn effective_gas_price(&self, base_fee: U256) -> U256 {
+    pub fn effective_gas_price(&self, base_fee: u64) -> u128 {
         match self {
-            Self::DepositedTx(..) => U256::ZERO,
+            Self::DepositedTx(..) => 0,
             Self::Canonical(tx) => tx.effective_gas_price(base_fee),
         }
     }
@@ -263,7 +263,7 @@ pub struct TransactionExecutionOutcome {
     /// Total amount of gas spent during the transaction execution.
     pub gas_used: u64,
     /// Effective L2 gas price during transaction execution.
-    pub l2_price: U256,
+    pub l2_price: u128,
     /// All emitted Move events converted to Ethereum logs.
     pub logs: Vec<Log<LogData>>,
     /// Address of a deployed contract or module (if any).
@@ -275,7 +275,7 @@ impl TransactionExecutionOutcome {
         vm_outcome: Result<(), UserError>,
         changes: Changes,
         gas_used: u64,
-        l2_price: U256,
+        l2_price: u128,
         logs: Vec<Log<LogData>>,
         deployment: Option<Address>,
     ) -> Self {
@@ -302,8 +302,8 @@ pub struct NormalizedEthTransaction {
     original_input: Option<Bytes>,
     pub chain_id: Option<u64>,
     gas_limit: U256,
-    pub max_priority_fee_per_gas: U256,
-    pub max_fee_per_gas: U256,
+    pub max_priority_fee_per_gas: u128,
+    pub max_fee_per_gas: u128,
     pub access_list: AccessList,
     /// Set to 0 during conversions to minimize encoding burden, so it needs
     /// to be set manually via [`Self::with_gas_input`].
@@ -348,8 +348,8 @@ impl TryFrom<Signed<TxEip1559>> for NormalizedEthTransaction {
             value: tx.value,
             chain_id: tx.chain_id(),
             gas_limit: U256::from(tx.gas_limit()),
-            max_priority_fee_per_gas: U256::from(tx.max_priority_fee_per_gas),
-            max_fee_per_gas: U256::from(tx.max_fee_per_gas),
+            max_priority_fee_per_gas: tx.max_priority_fee_per_gas,
+            max_fee_per_gas: tx.max_fee_per_gas,
             data: tx.input,
             access_list: tx.access_list,
             l1_gas_fee_input: L1GasFeeInput::default(),
@@ -376,8 +376,8 @@ impl TryFrom<Signed<TxEip2930>> for NormalizedEthTransaction {
             value: tx.value,
             chain_id: tx.chain_id(),
             gas_limit: U256::from(tx.gas_limit()),
-            max_priority_fee_per_gas: U256::from(tx.gas_price),
-            max_fee_per_gas: U256::from(tx.gas_price),
+            max_priority_fee_per_gas: tx.gas_price,
+            max_fee_per_gas: tx.gas_price,
             data: tx.input,
             access_list: tx.access_list,
             l1_gas_fee_input: L1GasFeeInput::default(),
@@ -404,8 +404,8 @@ impl TryFrom<Signed<TxLegacy>> for NormalizedEthTransaction {
             value: tx.value,
             chain_id: tx.chain_id(),
             gas_limit: U256::from(tx.gas_limit()),
-            max_priority_fee_per_gas: U256::from(tx.gas_price),
-            max_fee_per_gas: U256::from(tx.gas_price),
+            max_priority_fee_per_gas: tx.gas_price,
+            max_fee_per_gas: tx.gas_price,
             data: tx.input,
             access_list: AccessList(Vec::new()),
             l1_gas_fee_input: L1GasFeeInput::default(),
@@ -422,7 +422,7 @@ impl From<NormalizedEthTransaction> for OpTxEnvelope {
                 let tx_legacy = TxLegacy {
                     chain_id: normalized.chain_id,
                     nonce: normalized.nonce,
-                    gas_price: normalized.max_fee_per_gas.saturating_to(),
+                    gas_price: normalized.max_fee_per_gas,
                     gas_limit: normalized.gas_limit.saturating_to(),
                     to: normalized.to,
                     value: normalized.value,
@@ -440,7 +440,7 @@ impl From<NormalizedEthTransaction> for OpTxEnvelope {
                         .chain_id
                         .expect("Chain ID can be unset only for legacy txs"),
                     nonce: normalized.nonce,
-                    gas_price: normalized.max_fee_per_gas.saturating_to(),
+                    gas_price: normalized.max_fee_per_gas,
                     gas_limit: normalized.gas_limit.saturating_to(),
                     to: normalized.to,
                     value: normalized.value,
@@ -460,8 +460,8 @@ impl From<NormalizedEthTransaction> for OpTxEnvelope {
                         .expect("Chain ID can be unset only for legacy txs"),
                     nonce: normalized.nonce,
                     gas_limit: normalized.gas_limit.saturating_to(),
-                    max_fee_per_gas: normalized.max_fee_per_gas.saturating_to(),
-                    max_priority_fee_per_gas: normalized.max_priority_fee_per_gas.saturating_to(),
+                    max_fee_per_gas: normalized.max_fee_per_gas,
+                    max_priority_fee_per_gas: normalized.max_priority_fee_per_gas,
                     to: normalized.to,
                     value: normalized.value,
                     access_list: normalized.access_list,
@@ -592,10 +592,8 @@ impl From<TransactionRequest> for NormalizedEthTransaction {
             value: value.value.unwrap_or_default(),
             chain_id: value.chain_id,
             gas_limit: U256::from(value.gas.unwrap_or(u64::MAX)),
-            max_priority_fee_per_gas: U256::from(
-                value.max_priority_fee_per_gas.unwrap_or_default(),
-            ),
-            max_fee_per_gas: U256::from(value.max_fee_per_gas.unwrap_or_default()),
+            max_priority_fee_per_gas: value.max_priority_fee_per_gas.unwrap_or_default(),
+            max_fee_per_gas: value.max_fee_per_gas.unwrap_or_default(),
             data: value.input.into_input().unwrap_or_default(),
             access_list: value.access_list.unwrap_or_default(),
             // As it's exclusively for simulation, we can get away with this

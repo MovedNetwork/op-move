@@ -77,16 +77,13 @@ impl NormalizedEthTransaction {
     ///
     /// Therefore, the returned value should be max priority fee per gas, also known as "tip" for
     /// validator.
-    pub fn tip_per_gas(&self, base_fee: U256) -> U256 {
-        let extra_fee = self
-            .max_fee_per_gas
-            .checked_sub(base_fee)
-            .unwrap_or(U256::ZERO);
+    pub fn tip_per_gas(&self, base_fee: u64) -> u128 {
+        let extra_fee = self.max_fee_per_gas.saturating_sub(base_fee.into());
         self.max_priority_fee_per_gas.min(extra_fee)
     }
 
-    pub fn effective_gas_price(&self, base_fee: U256) -> U256 {
-        self.tip_per_gas(base_fee) + base_fee
+    pub fn effective_gas_price(&self, base_fee: u64) -> u128 {
+        self.tip_per_gas(base_fee).saturating_add(base_fee.into())
     }
 }
 
@@ -129,11 +126,11 @@ impl<T: AsRef<[u8]>> From<T> for L1GasFeeInput {
 #[derive(Debug, Clone)]
 pub struct L2GasFeeInput {
     pub gas_limit: u64,
-    pub effective_gas_price: U256,
+    pub effective_gas_price: u128,
 }
 
 impl L2GasFeeInput {
-    pub fn new(gas_limit: u64, effective_gas_price: U256) -> Self {
+    pub fn new(gas_limit: u64, effective_gas_price: u128) -> Self {
         Self {
             gas_limit,
             effective_gas_price,
@@ -141,8 +138,8 @@ impl L2GasFeeInput {
     }
 }
 
-impl From<(u64, U256)> for L2GasFeeInput {
-    fn from(value: (u64, U256)) -> Self {
+impl From<(u64, u128)> for L2GasFeeInput {
+    fn from(value: (u64, u128)) -> Self {
         Self {
             gas_limit: value.0,
             effective_gas_price: value.1,
@@ -218,8 +215,7 @@ pub struct UmiGasFee {
 
 impl L2GasFee for UmiGasFee {
     fn l2_fee(&self, input: L2GasFeeInput) -> U256 {
-        input
-            .effective_gas_price
+        U256::from(input.effective_gas_price)
             .saturating_mul(U256::from(input.gas_limit))
             .saturating_mul(self.gas_fee_multiplier)
     }

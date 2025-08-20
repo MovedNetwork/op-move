@@ -39,7 +39,7 @@ fn test_initiate_withdrawal() {
     let withdraw_amount = U256::from(1_000);
     let l2_parser = address!("4200000000000000000000000000000000000016");
     // Transfering an amount to L2ToL1MessageParser triggers the withdrawal method via `receive() payable`
-    let outcome = ctx.transfer(l2_parser, withdraw_amount, 0, u64::MAX, U256::ZERO);
+    let outcome = ctx.transfer(l2_parser, withdraw_amount, 0, u64::MAX, 0);
 
     // Topic signature of MessagePassed event. The signature is generated with the command below:
     // cast sig-event "MessagePassed(uint256 indexed nonce, address indexed sender, address indexed target, uint256 value, uint256 gasLimit, bytes data, bytes32 withdrawalHash)"
@@ -119,13 +119,13 @@ fn test_eoa_base_token_transfer() {
     let receiver = ALT_EVM_ADDRESS;
     let transfer_amount = mint_amount.saturating_add(U256::from(1));
     // Still need to set gas limit for proper functioning of the gas meter
-    let outcome = ctx.transfer(receiver, transfer_amount, 0, u64::MAX, U256::ZERO);
+    let outcome = ctx.transfer(receiver, transfer_amount, 0, u64::MAX, 0);
     assert!(outcome.unwrap().vm_outcome.is_err());
 
     // Should work with proper transfer
     let transfer_amount = mint_amount.wrapping_shr(1);
     // Still need to set gas limit for proper functioning of the gas meter
-    let outcome = ctx.transfer(receiver, transfer_amount, 0, u64::MAX, U256::ZERO);
+    let outcome = ctx.transfer(receiver, transfer_amount, 0, u64::MAX, 0);
     assert!(outcome.unwrap().vm_outcome.is_ok());
 
     let sender_balance = ctx.get_balance(sender);

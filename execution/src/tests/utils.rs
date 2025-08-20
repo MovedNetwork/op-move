@@ -46,7 +46,7 @@ pub struct TestTransaction {
     /// L2 gas limit associated with the transaction
     pub l2_gas_limit: u64,
     /// L2 gas price associated with the transaction
-    pub l2_gas_price: U256,
+    pub l2_gas_price: u128,
     /// Base token state for the transaction
     pub base_token: TestBaseToken,
 }
@@ -66,7 +66,7 @@ impl TestTransaction {
             l1_cost: 0,
             base_token: TestBaseToken::Empty,
             l2_gas_limit: gas_limit,
-            l2_gas_price: U256::ZERO,
+            l2_gas_price: 0,
         }
     }
 
@@ -82,7 +82,7 @@ impl TestTransaction {
         l1_cost: u64,
         base_token: UmiBaseTokenAccounts,
         l2_gas_limit: u64,
-        l2_gas_price: U256,
+        l2_gas_price: u128,
     ) {
         self.l1_cost = l1_cost;
         self.base_token = TestBaseToken::Umi(base_token);
@@ -195,7 +195,7 @@ impl TestContext {
         amount: U256,
         l1_cost: u64,
         l2_gas_limit: u64,
-        l2_gas_price: U256,
+        l2_gas_price: u64,
     ) -> umi_shared::error::Result<TransactionExecutionOutcome> {
         let tx = create_transaction_with_value(
             &mut self.signer,
@@ -208,7 +208,7 @@ impl TestContext {
         let treasury_address = AccountAddress::ONE;
         let base_token = UmiBaseTokenAccounts::new(treasury_address);
         let mut transaction = TestTransaction::new(tx);
-        transaction.with_cost_and_token(l1_cost, base_token, l2_gas_limit, l2_gas_price);
+        transaction.with_cost_and_token(l1_cost, base_token, l2_gas_limit, l2_gas_price.into());
         let outcome = self.execute_tx(&transaction)?;
         self.state.apply(outcome.changes.move_vm.clone()).unwrap();
         self.evm_storage.apply(outcome.changes.evm.clone()).unwrap();
@@ -259,7 +259,7 @@ impl TestContext {
         module_id: &ModuleId,
         function: &str,
         args: impl IntoIterator<Item = &'a MoveValue>,
-        gas_price: U256,
+        gas_price: u128,
         gas_limit: u64,
     ) -> TransactionExecutionOutcome {
         let args = args

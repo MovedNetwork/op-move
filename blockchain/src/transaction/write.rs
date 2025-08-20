@@ -15,12 +15,12 @@ pub struct ExtendedTransaction {
     pub block_number: u64,
     pub block_hash: B256,
     pub transaction_index: u64,
-    pub effective_gas_price: U256,
+    pub effective_gas_price: u128,
 }
 
 impl ExtendedTransaction {
     pub fn new(
-        effective_gas_price: U256,
+        effective_gas_price: u128,
         inner: NormalizedExtendedTxEnvelope,
         block_number: u64,
         block_hash: B256,

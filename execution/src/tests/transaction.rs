@@ -148,3 +148,41 @@ fn test_out_of_gas() {
     let err = ctx.execute_tx(&transaction).unwrap_err();
     assert_eq!(err.to_string(), "Insufficient intrinsic gas");
 }
+
+#[test]
+fn test_invalid_gas_price() {
+    let mut ctx = TestContext::new();
+    let module_id = ctx.deploy_contract("natives");
+
+    // Use a transaction to call a function but give too large a gas price
+    let entry_fn = TransactionData::EntryFunction(EntryFunction::new(
+        module_id,
+        Identifier::new("hashing").unwrap(),
+        Vec::new(),
+        vec![],
+    ));
+    // Intentionally set the gas price too high.
+    let gas_price = u128::from(u64::MAX) + 1;
+    let mut tx = TxEip1559 {
+        chain_id: ctx.genesis_config.chain_id,
+        nonce: ctx.signer.nonce,
+        gas_limit: 30_000,
+        max_fee_per_gas: gas_price,
+        max_priority_fee_per_gas: gas_price,
+        to: TxKind::Call(EVM_ADDRESS),
+        value: Default::default(),
+        access_list: Default::default(),
+        input: entry_fn.to_bytes().unwrap().into(),
+    };
+    let signature = ctx.signer.inner.sign_transaction_sync(&mut tx).unwrap();
+    let signed_tx = TxEnvelope::Eip1559(tx.into_signed(signature));
+    let umi_tx: UmiTxEnvelope = signed_tx.try_into().unwrap();
+    let normalized_tx: NormalizedEthTransaction = umi_tx.try_into().unwrap();
+    let signed_tx = NormalizedExtendedTxEnvelope::Canonical(normalized_tx);
+
+    let transaction = TestTransaction::new(signed_tx);
+    let err = ctx.execute_tx(&transaction).unwrap_err();
+    let expected_error =
+        format!("Given gas price {gas_price} is too high. Must be less than u64::MAX.");
+    assert_eq!(err.to_string(), expected_error);
+}

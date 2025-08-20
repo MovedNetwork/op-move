@@ -160,13 +160,9 @@ pub(super) fn execute_deposited_transaction<
         evm_changes.storage,
     );
 
+    // L2 gas price is set to 0 since deposit transactions are only
+    // executed by the system and therefore do not consume any user gas.
     Ok(TransactionExecutionOutcome::new(
-        vm_outcome,
-        changes,
-        gas_used,
-        // No L2 gas for deposited txs
-        U256::ZERO,
-        logs,
-        None,
+        vm_outcome, changes, gas_used, 0, logs, None,
     ))
 }

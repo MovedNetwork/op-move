@@ -144,6 +144,14 @@ pub(super) fn execute_canonical_transaction<
 
     let tx_data = TransactionData::parse_from(input.tx)?;
 
+    let gas_unit_price = input
+        .l2_input
+        .effective_gas_price
+        .try_into()
+        .map(FeePerGasUnit::new)
+        .map_err(|_| {
+            InvalidTransactionCause::InvalidGasPrice(input.l2_input.effective_gas_price)
+        })?;
     let umi_vm = UmiVm::new(input.genesis_config);
     let module_bytes_storage = ResolverBasedModuleBytesStorage::new(&cached_resolver);
     let code_storage = module_bytes_storage.as_unsync_code_storage(&umi_vm);
@@ -155,7 +163,7 @@ pub(super) fn execute_canonical_transaction<
         input.genesis_config,
         input.block_header,
         tx_data.script_hash(),
-    );
+    )?;
     let eth_transfers_logger = EthTransfersLogger::default();
     let mut session = create_vm_session(
         &vm,
@@ -303,7 +311,6 @@ pub(super) fn execute_canonical_transaction<
         .squash(deploy_changes)
         .expect("Module deploy changes must merge with other session changes");
 
-    let gas_unit_price = FeePerGasUnit::new(input.l2_input.effective_gas_price.saturating_to());
     let vm_outcome = vm_outcome.and_then(|_| {
         charge_io_gas(
             &cached_resolver.borrow_cache(),

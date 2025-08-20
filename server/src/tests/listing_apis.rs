@@ -180,7 +180,7 @@ async fn test_mv_list_resources() -> anyhow::Result<()> {
     .await
 }
 
-async fn deploy_counter_contract(
+pub async fn deploy_counter_contract(
     ctx: &mut TestContext<'static>,
     signer: &PrivateKeySigner,
 ) -> TransactionReceipt {
@@ -202,7 +202,7 @@ async fn deploy_counter_contract(
     ctx.execute_transaction(signed_tx).await.unwrap()
 }
 
-async fn call_counter_publish(
+pub async fn call_counter_publish(
     ctx: &mut TestContext<'static>,
     signer: &PrivateKeySigner,
 ) -> TransactionReceipt {

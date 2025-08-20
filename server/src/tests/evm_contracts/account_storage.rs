@@ -114,6 +114,58 @@ async fn test_get_storage_at_evm_contract() -> anyhow::Result<()> {
     .await
 }
 
+#[tokio::test]
+async fn test_derive_evm_contract_address() -> anyhow::Result<()> {
+    // Test to check that the address of an EVM contract can be predicted
+    // using the return value from `eth_getTransactionCount` if the EVM-specific
+    // API endpoint is used.
+    TestContext::run(|mut ctx| async move {
+        let chain_id = ctx.genesis_config.chain_id;
+        let mut signer = Signer::random(chain_id);
+
+        // 1. Send some Move-only transactions
+        crate::tests::listing_apis::deploy_counter_contract(&mut ctx, &signer.sk).await;
+        crate::tests::listing_apis::call_counter_publish(&mut ctx, &signer.sk).await;
+
+        // Check the account nonce has changed and set the signer accordingly.
+        assert_eq!(ctx.get_nonce(signer.address()).await.unwrap(), 2);
+        signer.nonce = 2;
+
+        // 2. Switch to EVM endpoint
+        ctx.with_path("/evm");
+
+        // Here the account nonce is still 2 because the EVM is aware of Move nonce.
+        assert_eq!(ctx.get_nonce(signer.address()).await.unwrap(), 2);
+
+        // 3. Deploy EVM contract with nonce = 2
+        check_deployed_address(&mut signer, &mut ctx).await;
+
+        // 4. Deploy EVM contract with nonce = 3
+        check_deployed_address(&mut signer, &mut ctx).await;
+
+        // 5. Deploy EVM contract with nonce = 4
+        check_deployed_address(&mut signer, &mut ctx).await;
+
+        ctx.shutdown().await;
+        Ok(())
+    })
+    .await
+}
+
+// Confirms the EVM contract address can be predicted using `eth_getTransactionCount`.
+async fn check_deployed_address(signer: &mut Signer, ctx: &mut TestContext<'static>) -> Address {
+    let signer_address = signer.address();
+    let nonce = ctx.get_nonce(signer_address).await.unwrap();
+    signer.nonce = nonce;
+    let expected_contract_address = signer.address().create(nonce);
+    let tx = signer.deploy(evm_contract::BYTE_CODE);
+    let receipt = ctx.execute_transaction(tx).await.unwrap();
+    assert!(receipt.inner.inner.is_success());
+    let contract_address = receipt.inner.contract_address.unwrap();
+    assert_eq!(contract_address, expected_contract_address);
+    expected_contract_address
+}
+
 fn get_logged_height(receipt: &TransactionReceipt) -> U256 {
     let log = receipt.inner.inner.logs().first().unwrap();
     let AccountStorageEvents::TheHeight(height) =

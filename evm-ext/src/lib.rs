@@ -7,9 +7,10 @@ pub use self::{
         evm_transact_with_native,
     },
     state_changes::{
-        Changes, extract_evm_changes, extract_evm_changes_from_native, genesis_state_changes,
+        Changes, extract_evm_changes, extract_evm_changes_from_native, extract_evm_nonces,
+        genesis_state_changes,
     },
-    type_utils::extract_evm_result,
+    type_utils::{ACCOUNT_MODULE_NAME, ACCOUNT_RESOURCE_NAME, extract_evm_result},
 };
 
 use {

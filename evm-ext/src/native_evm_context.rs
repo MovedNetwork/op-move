@@ -6,6 +6,7 @@ use {
     crate::{
         events::EthTransferLog,
         state::{self, BlockHashLookup, StorageTrieRepository},
+        type_utils::get_move_account_nonce,
     },
     alloy::primitives::map::HashMap,
     aptos_types::vm_status::StatusCode,
@@ -22,6 +23,7 @@ use {
         state::{Account, AccountInfo, Bytecode},
     },
     std::fmt,
+    umi_shared::primitives::ToMoveAddress,
 };
 
 pub const FRAMEWORK_ADDRESS: AccountAddress = AccountAddress::ONE;
@@ -128,7 +130,26 @@ impl<'a> ResolverBackedDB<'a> {
             state::Account::try_deserialize(&bytes)
                 .expect("EVM account info must deserialize correctly.")
         });
-        Ok(value)
+
+        let move_address = address.to_move_address();
+        let maybe_nonce = get_move_account_nonce(&move_address, self.resolver);
+        let account = match (value, maybe_nonce) {
+            (Some(mut account), Some(nonce)) => {
+                account.inner.nonce = nonce;
+                Some(account)
+            }
+            (Some(account), None) => Some(account),
+            (None, Some(nonce)) => {
+                let inner = alloy::consensus::TrieAccount {
+                    nonce,
+                    ..Default::default()
+                };
+                Some(state::Account { inner })
+            }
+            (None, None) => None,
+        };
+
+        Ok(account)
     }
 }
 

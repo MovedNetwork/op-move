@@ -10,7 +10,9 @@ use {
     move_vm_types::{gas::UnmeteredGasMeter, resolver::MoveResolver},
     std::sync::Arc,
     umi_evm_ext::state::InMemoryStorageTrieRepository,
-    umi_execution::{check_nonce, create_vm_session, mint_eth, session_id::SessionId},
+    umi_execution::{
+        check_nonce, create_vm_session, increment_account_nonce, mint_eth, session_id::SessionId,
+    },
     umi_genesis::{CreateMoveVm, UmiVm, config::GenesisConfig},
     umi_shared::primitives::{B256, U256},
     umi_state::{Changes, InMemoryState, InMemoryTrieDb, ResolverBasedModuleBytesStorage, State},
@@ -245,6 +247,14 @@ fn inc_one_nonce(old_nonce: u64, state: &mut impl State, addr: AccountAddress) -
 
     check_nonce(
         old_nonce,
+        &addr,
+        &mut session,
+        &mut traversal_context,
+        &mut gas_meter,
+        &code_storage,
+    )
+    .unwrap();
+    increment_account_nonce(
         &addr,
         &mut session,
         &mut traversal_context,

@@ -8,7 +8,7 @@ use {
             execute_evm_contract, execute_script,
         },
         gas::{new_gas_meter, total_gas_used},
-        nonces::check_nonce,
+        nonces::{check_nonce, nonce_epilogue},
         resolver_cache::{CachedResolver, ResolverCache},
         session_id::SessionId,
         transaction::{
@@ -297,6 +297,7 @@ pub(super) fn execute_canonical_transaction<
     });
 
     let (mut user_changes, mut extensions) = session.finish_with_extensions(&code_storage)?;
+    let evm_nonces = umi_evm_ext::extract_evm_nonces(&extensions);
     let evm_changes = umi_evm_ext::extract_evm_changes(&extensions)?;
     let table_changes = crate::table_changes::extract_table_changes(
         &mut extensions,
@@ -347,6 +348,14 @@ pub(super) fn execute_canonical_transaction<
                     EthToken::RefundAlwaysSucceeds,
                 )
             })?;
+
+        nonce_epilogue(
+            &sender_move_address,
+            evm_nonces,
+            &mut refund_session,
+            &mut traversal_context,
+            &code_storage,
+        )?;
 
         let (changes, mut extensions) = refund_session.finish_with_extensions(&code_storage)?;
         let refund_events = extensions.remove::<NativeEventContext>().into_events();

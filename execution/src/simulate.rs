@@ -88,7 +88,7 @@ pub fn call_transaction(
     block_hash_lookup: &impl BlockHashLookup,
 ) -> umi_shared::error::Result<Vec<u8>> {
     let mut tx = NormalizedEthTransaction::from(request.clone());
-    if request.from.is_some() && request.nonce.is_none() {
+    if request.nonce.is_none() {
         tx.nonce = quick_get_nonce(&tx.signer.to_move_address(), state, storage_trie);
     }
     let tx_data = TransactionData::parse_from(&tx)?;

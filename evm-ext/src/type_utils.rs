@@ -1,13 +1,19 @@
 use {
     super::{EVM_NATIVE_ADDRESS, EVM_NATIVE_MODULE, EvmNativeOutcome},
+    crate::FRAMEWORK_ADDRESS,
     alloy::hex::ToHexExt,
     aptos_types::vm_status::StatusCode,
     move_binary_format::errors::PartialVMError,
     move_core_types::{
-        account_address::AccountAddress, identifier::Identifier, language_storage::StructTag,
+        account_address::AccountAddress,
+        ident_str,
+        identifier::{IdentStr, Identifier},
+        language_storage::StructTag,
+        value::{MoveStructLayout, MoveTypeLayout},
     },
     move_vm_runtime::session::SerializedReturnValues,
     move_vm_types::{
+        resolver::MoveResolver,
         value_serde::ValueSerDeContext,
         values::{Struct, Value, Vector},
     },
@@ -16,10 +22,50 @@ use {
         primitives::{Address, B256, KECCAK_EMPTY, Log},
         state::AccountInfo,
     },
+    std::sync::LazyLock,
     umi_shared::primitives::{ToEthAddress, ToMoveAddress, ToMoveU256},
 };
 
+pub const ACCOUNT_MODULE_NAME: &IdentStr = ident_str!("account");
+pub const ACCOUNT_RESOURCE_NAME: &IdentStr = ident_str!("Account");
 pub const ACCOUNT_INFO_PREFIX: &str = "Account_";
+
+static ACCOUNT_STRUCT_TAG: LazyLock<StructTag> = LazyLock::new(|| StructTag {
+    address: FRAMEWORK_ADDRESS,
+    module: ACCOUNT_MODULE_NAME.into(),
+    name: ACCOUNT_RESOURCE_NAME.into(),
+    type_args: Vec::new(),
+});
+static ACCOUNT_LAYOUT: LazyLock<MoveTypeLayout> = LazyLock::new(|| {
+    let id_layout = MoveTypeLayout::Struct(MoveStructLayout::Runtime(vec![
+        MoveTypeLayout::U64,
+        MoveTypeLayout::Address,
+    ]));
+
+    let guid_layout = MoveTypeLayout::Struct(MoveStructLayout::Runtime(vec![id_layout]));
+
+    let event_handle_layout = MoveTypeLayout::Struct(MoveStructLayout::Runtime(vec![
+        MoveTypeLayout::U64,
+        guid_layout,
+    ]));
+
+    let capbablilty_offer_layout =
+        MoveTypeLayout::Struct(MoveStructLayout::Runtime(vec![MoveTypeLayout::Struct(
+            MoveStructLayout::Runtime(vec![MoveTypeLayout::Vector(Box::new(
+                MoveTypeLayout::Address,
+            ))]),
+        )]));
+
+    MoveTypeLayout::Struct(MoveStructLayout::Runtime(vec![
+        crate::CODE_LAYOUT.clone(),
+        MoveTypeLayout::U64,
+        MoveTypeLayout::U64,
+        event_handle_layout.clone(),
+        event_handle_layout,
+        capbablilty_offer_layout.clone(),
+        capbablilty_offer_layout,
+    ]))
+});
 
 pub fn account_info_struct_tag(address: &Address) -> StructTag {
     let name = format!("{ACCOUNT_INFO_PREFIX}{}", address.encode_hex());
@@ -41,6 +87,39 @@ pub fn code_hash_struct_tag(code_hash: &B256) -> StructTag {
         name,
         type_args: Vec::new(),
     }
+}
+
+pub fn get_move_account_nonce(
+    address: &AccountAddress,
+    resolver: &dyn MoveResolver,
+) -> Option<u64> {
+    let tag: &StructTag = &ACCOUNT_STRUCT_TAG;
+    let metadata = resolver.get_module_metadata(&tag.module_id());
+    let bytes = resolver
+        .get_resource_bytes_with_metadata_and_layout(address, tag, &metadata, Some(&ACCOUNT_LAYOUT))
+        .ok()?
+        .0?;
+
+    let value = ValueSerDeContext::new()
+        .deserialize(&bytes, &ACCOUNT_LAYOUT)
+        .expect("Account resource layout is known");
+
+    let mut fields = value
+        .value_as::<Struct>()
+        .expect("Account resource is a struct")
+        .unpack()
+        .expect("Can get account fields");
+
+    // Skip first field
+    let _ = fields.next();
+
+    let nonce: u64 = fields
+        .next()
+        .expect("Account has at least two fields")
+        .value_as()
+        .expect("Second field is u64");
+
+    Some(nonce)
 }
 
 pub fn get_account_code_hash(info: &AccountInfo) -> B256 {

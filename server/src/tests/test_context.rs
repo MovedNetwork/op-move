@@ -250,7 +250,7 @@ impl TestContext<'static> {
         &self,
         request: &serde_json::Value,
     ) -> anyhow::Result<T> {
-        let server = crate::server_filter(&self.queue, &self.reader, "1234", &allow::auth, None);
+        let server = crate::server_filter(&self.queue, &self.reader, &allow::auth, None);
 
         let response = warp::test::request()
             .method("POST")

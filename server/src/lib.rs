@@ -1,7 +1,7 @@
 use {
-    crate::mirror::MirrorLog,
     alloy::consensus::{proofs::state_root_unhashed, EMPTY_OMMER_ROOT_HASH, EMPTY_ROOT_HASH},
     jsonwebtoken::{DecodingKey, Validation},
+    serde::Serialize,
     std::{
         future::Future,
         net::{Ipv4Addr, SocketAddr, SocketAddrV4},
@@ -11,6 +11,7 @@ use {
     tracing::level_filters::LevelFilter,
     tracing_subscriber::{fmt::format::FmtSpan, EnvFilter},
     umi_api::{
+        jsonrpc::JsonRpcResponse,
         method_name::MethodName,
         request::{RequestModifiers, SerializationKind},
     },
@@ -38,13 +39,18 @@ use {
 
 mod allow;
 mod dependency;
-mod mirror;
 #[cfg(test)]
 mod tests;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 struct Claims {
     iat: u64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ServerLog<'a> {
+    pub request: &'a serde_json::Value,
+    pub op_move_response: &'a JsonRpcResponse,
 }
 
 pub fn defaults() -> DefaultLayer {
@@ -140,15 +146,8 @@ pub async fn run(args: Config) {
         |queue, reader| {
             tokio::spawn(async move {
                 tokio::join!(
-                    serve(args.http.addr, &queue, &reader, "9545", &allow::http, None),
-                    serve(
-                        args.auth.addr,
-                        &queue,
-                        &reader,
-                        "9551",
-                        &allow::auth,
-                        Some(jwt)
-                    ),
+                    serve(args.http.addr, &queue, &reader, &allow::http, None),
+                    serve(args.auth.addr, &queue, &reader, &allow::auth, Some(jwt)),
                 );
             })
         },
@@ -163,7 +162,6 @@ pub async fn run(args: Config) {
 pub fn server_filter(
     queue: &CommandQueue,
     reader: &ApplicationReader<'static, dependency::ReaderDependency>,
-    port: &'static str,
     is_allowed: &'static (impl Fn(&MethodName) -> bool + Send + Sync),
     jwt: Option<DecodingKey>,
 ) -> impl Filter<Extract = impl Reply> + Clone {
@@ -189,7 +187,6 @@ pub fn server_filter(
                     queue,
                     serialization_tag,
                     request,
-                    port,
                     is_allowed,
                     &StatePayloadId,
                     reader,
@@ -203,11 +200,10 @@ fn serve(
     addr: SocketAddr,
     queue: &CommandQueue,
     reader: &ApplicationReader<'static, dependency::ReaderDependency>,
-    port: &'static str,
     is_allowed: &'static (impl Fn(&MethodName) -> bool + Send + Sync),
     jwt: Option<DecodingKey>,
 ) -> impl Future<Output = ()> {
-    let route = server_filter(queue, reader, port, is_allowed, jwt);
+    let route = server_filter(queue, reader, is_allowed, jwt);
     warp::serve(route)
         .bind_with_graceful_shutdown(addr, queue.shutdown_listener())
         .1
@@ -369,7 +365,6 @@ async fn handle_request<'reader>(
     queue: CommandQueue,
     serialization_tag: SerializationKind,
     request: serde_json::Value,
-    port: &str,
     is_allowed: &impl Fn(&MethodName) -> bool,
     payload_id: &impl NewPayloadId,
     app: ApplicationReader<'reader, impl Dependencies<'reader>>,
@@ -377,10 +372,9 @@ async fn handle_request<'reader>(
     let modifiers = RequestModifiers::new(is_allowed, payload_id, serialization_tag);
     let op_move_response =
         umi_api::request::handle(request.clone(), queue.clone(), modifiers, app).await;
-    let log = MirrorLog {
+    let log = ServerLog {
         request: &request,
         op_move_response: &op_move_response,
-        port,
     };
     serde_json::to_string(&log)
         .map(|json| tracing::info!("{json}"))

@@ -180,6 +180,8 @@ pub fn nonce_epilogue<MS: ModuleStorage>(
             &mut gas_meter,
             module_storage,
         ) {
+            // Note: `expected != given` because they come from the
+            // incorrect nonce error.
             if expected < given {
                 // If the Move nonce is lower than the EVM nonce then we
                 // must increment the Move nonce accordingly.
@@ -197,7 +199,8 @@ pub fn nonce_epilogue<MS: ModuleStorage>(
                 // It is impossible for the EVM nonce to be lower than
                 // the Move nonce because the EVM reads the Move nonce
                 // to fill the account info.
-                unreachable!("Move nonce <= EVM nonce");
+                // I.e. there is an invariant that `Move nonce <= EVM nonce`.
+                unreachable!("Impossible: EVM nonce < Move nonce");
             }
         }
     }

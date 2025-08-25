@@ -101,7 +101,8 @@ pub fn extract_evm_nonces(extensions: &NativeContextExtensions) -> HashMap<Addre
     let mut result = HashMap::new();
     for state in &evm_native_ctx.state_changes {
         for (address, account) in state {
-            // See comment below about why these accounts should be skipped
+            // See comment in `extract_evm_changes_from_native` about why
+            // these accounts should be skipped.
             if !account.is_touched() || account.is_selfdestructed() {
                 continue;
             }

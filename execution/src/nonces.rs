@@ -1,5 +1,6 @@
 use {
     crate::session_id::SessionId,
+    alloy::primitives::Address,
     aptos_table_natives::TableResolver,
     move_core_types::{
         account_address::AccountAddress, ident_str, identifier::IdentStr,
@@ -15,13 +16,17 @@ use {
         resolver::MoveResolver,
         value_serde::ValueSerDeContext,
     },
+    std::collections::HashMap,
     umi_evm_ext::state::StorageTrieRepository,
     umi_genesis::{CreateMoveVm, FRAMEWORK_ADDRESS, UmiVm},
-    umi_shared::error::{Error, InvalidTransactionCause, NonceChecking},
+    umi_shared::{
+        error::{Error, InvalidTransactionCause, NonceChecking},
+        primitives::ToMoveAddress,
+    },
     umi_state::ResolverBasedModuleBytesStorage,
 };
 
-const ACCOUNT_MODULE_NAME: &IdentStr = ident_str!("account");
+const ACCOUNT_MODULE_NAME: &IdentStr = umi_evm_ext::ACCOUNT_MODULE_NAME;
 const CREATE_ACCOUNT_FUNCTION_NAME: &IdentStr = ident_str!("create_account_if_does_not_exist");
 const GET_NONCE_FUNCTION_NAME: &IdentStr = ident_str!("get_sequence_number");
 const INCREMENT_NONCE_FUNCTION_NAME: &IdentStr = ident_str!("increment_sequence_number");
@@ -105,6 +110,19 @@ pub fn check_nonce<G: GasMeter, MS: ModuleStorage>(
         Err(InvalidTransactionCause::ExhaustedAccount)?;
     }
 
+    Ok(())
+}
+
+pub fn increment_account_nonce<G: GasMeter, MS: ModuleStorage>(
+    signer: &AccountAddress,
+    session: &mut Session,
+    traversal_context: &mut TraversalContext,
+    gas_meter: &mut G,
+    module_storage: &MS,
+) -> Result<(), Error> {
+    let account_module_id = ModuleId::new(FRAMEWORK_ADDRESS, ACCOUNT_MODULE_NAME.into());
+    let addr_arg = bcs::to_bytes(signer).expect("address can serialize");
+
     session
         .execute_function_bypass_visibility(
             &account_module_id,
@@ -122,6 +140,70 @@ pub fn check_nonce<G: GasMeter, MS: ModuleStorage>(
                 Error::nonce_invariant_violation(NonceChecking::IncrementNonceAlwaysSucceeds)
             }
         })?;
+
+    Ok(())
+}
+
+pub fn nonce_epilogue<MS: ModuleStorage>(
+    signer: &AccountAddress,
+    evm_nonces: HashMap<Address, u64>,
+    session: &mut Session,
+    traversal_context: &mut TraversalContext,
+    module_storage: &MS,
+) -> Result<(), Error> {
+    // These actions are unmetered because they happen after we have
+    // already charged for gas.
+    let mut gas_meter = UnmeteredGasMeter;
+
+    // The signer nonce must be incremented once regardless
+    // of what is in the EVM. This prevents replaying the
+    // current transaction.
+    increment_account_nonce(
+        signer,
+        session,
+        traversal_context,
+        &mut gas_meter,
+        module_storage,
+    )?;
+
+    for (address, nonce) in evm_nonces {
+        let address = address.to_move_address();
+        // If the Move nonce does not match the EVM nonce then we need to update
+        if let Err(Error::InvalidTransaction(InvalidTransactionCause::IncorrectNonce {
+            expected,
+            given,
+        })) = check_nonce(
+            nonce,
+            &address,
+            session,
+            traversal_context,
+            &mut gas_meter,
+            module_storage,
+        ) {
+            // Note: `expected != given` because they come from the
+            // incorrect nonce error.
+            if expected < given {
+                // If the Move nonce is lower than the EVM nonce then we
+                // must increment the Move nonce accordingly.
+                let diff = given - expected;
+                for _ in 0..diff {
+                    increment_account_nonce(
+                        &address,
+                        session,
+                        traversal_context,
+                        &mut gas_meter,
+                        module_storage,
+                    )?;
+                }
+            } else {
+                // It is impossible for the EVM nonce to be lower than
+                // the Move nonce because the EVM reads the Move nonce
+                // to fill the account info.
+                // I.e. there is an invariant that `Move nonce <= EVM nonce`.
+                unreachable!("Impossible: EVM nonce < Move nonce");
+            }
+        }
+    }
 
     Ok(())
 }

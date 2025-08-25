@@ -5,7 +5,7 @@ pub use {
         CreateEcotoneL1GasFee, CreateL1GasFee, CreateL2GasFee, CreateUmiL2GasFee, EcotoneGasFee,
         L1GasFee, L1GasFeeInput, L2GasFee, L2GasFeeInput, UmiGasFee,
     },
-    nonces::{check_nonce, quick_get_nonce},
+    nonces::{check_nonce, increment_account_nonce, quick_get_nonce},
 };
 
 use {

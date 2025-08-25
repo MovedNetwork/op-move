@@ -128,6 +128,17 @@ impl TestContext<'static> {
         Ok(tx_hash)
     }
 
+    pub async fn get_nonce(&self, address: Address) -> anyhow::Result<u64> {
+        let request = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 10,
+            "method": "eth_getTransactionCount",
+            "params": [address]
+        });
+        let result: U256 = self.handle_request(&request).await?;
+        Ok(result.saturating_to())
+    }
+
     pub async fn get_transaction_receipt(
         &self,
         tx_hash: B256,

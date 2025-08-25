@@ -16,6 +16,7 @@ use {
         primitives::{Address, KECCAK_EMPTY, U256},
         state::{Account, AccountInfo, AccountStatus, EvmStorageSlot},
     },
+    std::collections::HashMap,
 };
 
 #[derive(Debug, Clone)]
@@ -93,6 +94,22 @@ pub fn genesis_state_changes(
 pub fn extract_evm_changes(extensions: &NativeContextExtensions) -> Result<Changes, Error> {
     let evm_native_ctx = extensions.get::<NativeEVMContext>();
     extract_evm_changes_from_native(evm_native_ctx)
+}
+
+pub fn extract_evm_nonces(extensions: &NativeContextExtensions) -> HashMap<Address, u64> {
+    let evm_native_ctx = extensions.get::<NativeEVMContext>();
+    let mut result = HashMap::new();
+    for state in &evm_native_ctx.state_changes {
+        for (address, account) in state {
+            // See comment in `extract_evm_changes_from_native` about why
+            // these accounts should be skipped.
+            if !account.is_touched() || account.is_selfdestructed() {
+                continue;
+            }
+            result.insert(*address, account.info.nonce);
+        }
+    }
+    result
 }
 
 pub fn extract_evm_changes_from_native(

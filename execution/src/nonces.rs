@@ -168,7 +168,7 @@ pub fn nonce_epilogue<MS: ModuleStorage>(
 
     for (address, nonce) in evm_nonces {
         let address = address.to_move_address();
-        // If the Move noce does not match the EVM nonce then we need to update
+        // If the Move nonce does not match the EVM nonce then we need to update
         if let Err(Error::InvalidTransaction(InvalidTransactionCause::IncorrectNonce {
             expected,
             given,
@@ -182,7 +182,7 @@ pub fn nonce_epilogue<MS: ModuleStorage>(
         ) {
             if expected < given {
                 // If the Move nonce is lower than the EVM nonce then we
-                // must increament the Move nonce accordingly.
+                // must increment the Move nonce accordingly.
                 let diff = given - expected;
                 for _ in 0..diff {
                     increment_account_nonce(

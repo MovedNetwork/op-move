@@ -49,7 +49,7 @@ static ACCOUNT_LAYOUT: LazyLock<MoveTypeLayout> = LazyLock::new(|| {
         guid_layout,
     ]));
 
-    let capbablilty_offer_layout =
+    let capability_offer_layout =
         MoveTypeLayout::Struct(MoveStructLayout::Runtime(vec![MoveTypeLayout::Struct(
             MoveStructLayout::Runtime(vec![MoveTypeLayout::Vector(Box::new(
                 MoveTypeLayout::Address,
@@ -62,8 +62,8 @@ static ACCOUNT_LAYOUT: LazyLock<MoveTypeLayout> = LazyLock::new(|| {
         MoveTypeLayout::U64,
         event_handle_layout.clone(),
         event_handle_layout,
-        capbablilty_offer_layout.clone(),
-        capbablilty_offer_layout,
+        capability_offer_layout.clone(),
+        capability_offer_layout,
     ]))
 });
 

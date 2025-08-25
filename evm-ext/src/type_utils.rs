@@ -110,11 +110,8 @@ pub fn get_move_account_nonce(
         .unpack()
         .expect("Can get account fields");
 
-    // Skip first field
-    let _ = fields.next();
-
     let nonce: u64 = fields
-        .next()
+        .nth(1)
         .expect("Account has at least two fields")
         .value_as()
         .expect("Second field is u64");

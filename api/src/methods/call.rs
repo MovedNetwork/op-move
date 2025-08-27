@@ -2,6 +2,7 @@ use {
     crate::{json_utils::parse_params_2, jsonrpc::JsonRpcError, request::SerializationKind},
     alloy::{
         eips::BlockNumberOrTag,
+        primitives::Bytes,
         rpc::types::{TransactionInput, TransactionRequest},
     },
     umi_app::{ApplicationReader, Dependencies},
@@ -25,7 +26,7 @@ pub async fn execute<'reader>(
         }
     }
 
-    let response = app.call(transaction, block_number)?;
+    let response = Bytes::from(app.call(transaction, block_number)?);
 
     Ok(serde_json::to_value(response).expect("Must be able to JSON-serialize response"))
 }

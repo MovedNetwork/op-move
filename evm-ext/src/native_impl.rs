@@ -310,8 +310,6 @@ fn construct_tx_env(
         // transaction
         nonce: 0,
         chain_id: None,
-        // TODO: could maybe construct something based on the values that
-        // have already been accessed in `context.traversal_context()`.
         access_list: AccessList::default(),
         gas_priority_fee: None,
         blob_hashes: Vec::new(),

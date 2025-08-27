@@ -92,7 +92,7 @@ pub fn defaults() -> DefaultLayer {
                 .into(),
             ),
         }),
-        max_buffered_commands: Some(1_000), // TODO: think about channel size bound
+        max_buffered_commands: Some(1_000),
     })
 }
 

@@ -99,6 +99,11 @@ where
         }
         GetPayloadV3 => get_payload::execute_v3(request, app).await,
         NewPayloadV3 => new_payload::execute_v3(request, app).await,
+        // Despite having a new field in V4 (execution requests), it's always empty and `op-geth`
+        // itself falls back to V3 here
+        GetPayloadV4 => get_payload::execute_v3(request, app).await,
+        NewPayloadV4 => new_payload::execute_v4(request, app).await,
+
         SendRawTransaction => {
             send_raw_transaction::execute(request, queue, serialization_tag).await
         }

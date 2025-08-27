@@ -112,6 +112,7 @@ where
         GetBlockByNumber => get_block_by_number::execute(request, app).await,
         GetModule => get_module::execute(request, app).await,
         GetResource => get_resource::execute(request, app).await,
+        GetTableItem => get_table_item::execute(request, app).await,
         BlockNumber => block_number::execute(request, app).await,
         FeeHistory => fee_history::execute(request, app).await,
         EstimateGas => estimate_gas::execute(request, app, serialization_tag).await,

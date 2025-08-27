@@ -47,6 +47,29 @@ pub fn create_move_counter_contract_bytecode(address: Address) -> Vec<u8> {
     set_module_address(bytecode, address)
 }
 
+// Ensure the self-address of the module to deploy matches the given address
+pub fn set_module_address(bytecode: Vec<u8>, address: Address) -> Vec<u8> {
+    let payload: ScriptOrDeployment = bcs::from_bytes(&bytecode).unwrap();
+    if let ScriptOrDeployment::ModuleBundle(bundle) = payload {
+        // Update the self-address for all modules in the bundle
+        let mut updated = Vec::new();
+        for module in bundle.into_iter() {
+            let mut code = module.into_inner();
+            let mut compiled = CompiledModule::deserialize(&code).unwrap();
+            let self_module_index = compiled.self_module_handle_idx.0 as usize;
+            let self_address_index = compiled.module_handles[self_module_index].address.0 as usize;
+            compiled.address_identifiers[self_address_index] = address.to_move_address();
+            code.clear();
+            compiled.serialize(&mut code).unwrap();
+            updated.push(code);
+        }
+        let module_bundle = ModuleBundle::new(updated);
+        bcs::to_bytes(&ScriptOrDeployment::ModuleBundle(module_bundle)).unwrap()
+    } else {
+        bytecode
+    }
+}
+
 #[tokio::test]
 async fn test_on_ethereum() -> Result<()> {
     dotenvy::dotenv().expect(".env file not found");
@@ -165,29 +188,6 @@ async fn deploy_move_counter() -> Result<()> {
     assert!(receipt.status(), "Transaction should succeed");
 
     Ok(())
-}
-
-// Ensure the self-address of the module to deploy matches the given address
-fn set_module_address(bytecode: Vec<u8>, address: Address) -> Vec<u8> {
-    let payload: ScriptOrDeployment = bcs::from_bytes(&bytecode).unwrap();
-    if let ScriptOrDeployment::ModuleBundle(bundle) = payload {
-        // Update the self-address for all modules in the bundle
-        let mut updated = Vec::new();
-        for module in bundle.into_iter() {
-            let mut code = module.into_inner();
-            let mut compiled = CompiledModule::deserialize(&code).unwrap();
-            let self_module_index = compiled.self_module_handle_idx.0 as usize;
-            let self_address_index = compiled.module_handles[self_module_index].address.0 as usize;
-            compiled.address_identifiers[self_address_index] = address.to_move_address();
-            code.clear();
-            compiled.serialize(&mut code).unwrap();
-            updated.push(code);
-        }
-        let module_bundle = ModuleBundle::new(updated);
-        bcs::to_bytes(&ScriptOrDeployment::ModuleBundle(module_bundle)).unwrap()
-    } else {
-        bytecode
-    }
 }
 
 async fn l1_send_ethers(

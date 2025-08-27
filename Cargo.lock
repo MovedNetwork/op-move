@@ -12938,8 +12938,10 @@ version = "0.1.0"
 dependencies = [
  "alloy",
  "alloy-trie",
+ "aptos-api-types",
  "bcs 0.1.3",
  "move-core-types 0.0.4 (git+https://github.com/aptos-labs/aptos-core?tag=aptos-node-v1.27.2)",
+ "move-table-extension",
  "op-alloy",
  "serde",
  "serde_json",
@@ -12962,7 +12964,9 @@ version = "0.1.0"
 dependencies = [
  "alloy",
  "alloy-trie",
+ "aptos-api-types",
  "move-core-types 0.0.4 (git+https://github.com/aptos-labs/aptos-core?tag=aptos-node-v1.27.2)",
+ "move-table-extension",
  "move-vm-runtime",
  "move-vm-types 0.1.0 (git+https://github.com/aptos-labs/aptos-core?tag=aptos-node-v1.27.2)",
  "op-alloy",
@@ -12983,6 +12987,7 @@ name = "umi-blockchain"
 version = "0.1.0"
 dependencies = [
  "alloy",
+ "anyhow",
  "aptos-api-types",
  "aptos-types",
  "bcs 0.1.3",
@@ -12998,6 +13003,7 @@ dependencies = [
  "move-vm-types 0.1.0 (git+https://github.com/aptos-labs/aptos-core?tag=aptos-node-v1.27.2)",
  "op-alloy",
  "serde",
+ "serde_json",
  "sha2 0.10.9",
  "test-case",
  "tokio",

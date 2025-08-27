@@ -11,12 +11,16 @@ use {
     std::future::Future,
     umi_api::{
         jsonrpc::JsonRpcResponse,
-        schema::{ForkchoiceUpdatedResponseV1, GetBlockResponse, GetPayloadResponseV3},
+        schema::{
+            mv::{TableHandle, TableItemRequest},
+            ForkchoiceUpdatedResponseV1, GetBlockResponse, GetPayloadResponseV3,
+        },
     },
     umi_app::{ApplicationReader, CommandQueue},
     umi_blockchain::{
         block::{Block, BlockHash, ExtendedBlock, Header},
         receipt::TransactionReceipt,
+        state::MoveResourceResponse,
     },
     umi_execution::U256,
     umi_genesis::config::GenesisConfig,
@@ -214,6 +218,47 @@ impl TestContext<'static> {
                     "after": after,
                     "limit": limit,
                 },
+                block,
+            ]
+        });
+        let result = self.handle_request(&request).await?;
+        Ok(result)
+    }
+
+    pub async fn mv_get_resource(
+        &self,
+        address: Address,
+        resource: &StructTag,
+        block: BlockNumberOrTag,
+    ) -> anyhow::Result<MoveResourceResponse> {
+        let resource_str = format!("0x{}", resource.to_canonical_string());
+        let request = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 12,
+            "method": "mv_getResource",
+            "params": [
+                address,
+                resource_str,
+                block,
+            ]
+        });
+        let result = self.handle_request(&request).await?;
+        Ok(result)
+    }
+
+    pub async fn mv_get_table_item(
+        &self,
+        handle: &TableHandle,
+        request: TableItemRequest,
+        block: BlockNumberOrTag,
+    ) -> anyhow::Result<serde_json::Value> {
+        let request = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 12,
+            "method": "mv_getTableItem",
+            "params": [
+                handle.0,
+                request,
                 block,
             ]
         });

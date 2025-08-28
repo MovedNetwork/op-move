@@ -8,14 +8,19 @@ use {
         },
         rpc::types::{FeeHistory, TransactionRequest},
     },
+    aptos_api_types::TableItemRequest,
     move_core_types::{
         account_address::AccountAddress, identifier::Identifier, language_storage::StructTag,
     },
+    move_table_extension::TableHandle,
     umi_blockchain::{
         block::{BaseGasFee, BlockQueries, BlockResponse, Eip1559GasFee},
         payload::{MaybePayloadResponse, PayloadId, PayloadQueries, PayloadResponse},
         receipt::{ReceiptQueries, TransactionReceipt},
-        state::{MoveModuleResponse, MoveResourceResponse, ProofResponse, StateQueries},
+        state::{
+            MoveModuleResponse, MoveResourceResponse, MoveValueResponse, ProofResponse,
+            StateQueries,
+        },
         transaction::{TransactionQueries, TransactionResponse},
     },
     umi_evm_ext::HeaderForExecution,
@@ -99,6 +104,17 @@ impl<'app, D: Dependencies<'app>> ApplicationReader<'app, D> {
         self.state_queries
             .move_resource_at(address, resource_name, self.resolve_height(height)?)?
             .ok_or_else(|| Error::User(UserError::MissingResource(resource_name.to_string())))
+    }
+
+    pub fn move_table_item_by_height(
+        &self,
+        handle: &TableHandle,
+        request: TableItemRequest,
+        height: BlockNumberOrTag,
+    ) -> Result<MoveValueResponse> {
+        self.state_queries
+            .table_item_at(handle, request, self.resolve_height(height)?)?
+            .ok_or_else(|| UserError::MissingTableItem.into())
     }
 
     pub fn storage(&self, address: Address, index: U256, height: BlockNumberOrTag) -> Result<U256> {

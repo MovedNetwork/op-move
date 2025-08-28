@@ -18,7 +18,9 @@ workspace = true
 [dependencies]
 alloy.workspace = true
 alloy-trie.workspace = true
+aptos-api-types.workspace = true
 move-core-types.workspace = true
+move-table-extension.workspace = true
 move-vm-runtime.workspace = true
 move-vm-types.workspace = true
 umi-blockchain.workspace = true

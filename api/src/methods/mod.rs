@@ -16,6 +16,7 @@ pub mod get_payload;
 pub mod get_proof;
 pub mod get_resource;
 pub mod get_storage_at;
+pub mod get_table_item;
 pub mod get_transaction_by_hash;
 pub mod get_transaction_receipt;
 pub mod list_modules;

@@ -13,6 +13,7 @@ workspace = true
 
 [dependencies]
 alloy.workspace = true
+anyhow.workspace = true
 aptos-types.workspace = true
 aptos-api-types.workspace = true
 bcs.workspace = true
@@ -32,6 +33,7 @@ umi-shared.workspace = true
 umi-state.workspace = true
 op-alloy.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 tokio.workspace = true
 sha2.workspace = true
 evmap.workspace = true

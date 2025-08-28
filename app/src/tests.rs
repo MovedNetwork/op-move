@@ -308,6 +308,7 @@ fn test_build_block_hash() {
         parent_beacon_block_root: Default::default(),
         transactions: Vec::new(),
         gas_limit: U64::from(0x1c9c380),
+        eip1559_params: Some(U64::from_be_slice(&hex!("0x000000fa00000006"))),
         no_tx_pool: None,
     };
 

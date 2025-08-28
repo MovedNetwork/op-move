@@ -35,8 +35,8 @@ macro_rules! impl_shared {
 
         fn base_gas_fee() -> Self::BaseGasFee {
             umi_blockchain::block::Eip1559GasFee::new(
-                crate::EIP1559_ELASTICITY_MULTIPLIER,
-                crate::EIP1559_BASE_FEE_MAX_CHANGE_DENOMINATOR,
+                umi_blockchain::block::DEFAULT_EIP1559_ELASTICITY_MULTIPLIER,
+                umi_blockchain::block::DEFAULT_EIP1559_BASE_FEE_MAX_CHANGE_DENOMINATOR,
             )
         }
 

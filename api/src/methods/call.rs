@@ -127,7 +127,7 @@ mod tests {
 
             state_channel.reserve_many(10).await.unwrap();
 
-            let expected_response = serde_json::json!([1, 1, 0]);
+            let expected_response: serde_json::Value = serde_json::from_str(r#""0x010100""#).unwrap();
             let actual_response = execute(request, &reader, SerializationKind::Bcs).await.unwrap();
 
             assert_eq!(actual_response, expected_response);

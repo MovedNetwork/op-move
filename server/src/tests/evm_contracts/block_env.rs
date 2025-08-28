@@ -11,6 +11,7 @@ use {
         sol_types::{SolCall, SolEventInterface},
     },
     umi_blockchain::receipt::TransactionReceipt,
+    umi_shared::primitives::ToMoveAddress,
 };
 
 mod evm_contract {
@@ -73,10 +74,7 @@ async fn test_block_env_evm_contract() -> anyhow::Result<()> {
             .eth_call(request, BlockNumberOrTag::Latest)
             .await
             .unwrap();
-        assert_eq!(
-            response,
-            [[0_u8; 12].as_slice(), sender.0.as_slice()].concat()
-        );
+        assert_eq!(response, sender.0.to_move_address().to_string());
 
         // 3.a check the block number as a transaction
         let tx = call_contract(
@@ -98,12 +96,12 @@ async fn test_block_env_evm_contract() -> anyhow::Result<()> {
             .eth_call(request.clone(), BlockNumberOrTag::Latest)
             .await
             .unwrap();
-        assert_eq!(U256::from_be_slice(&latest_response), U256::from(3));
+        assert_eq!(latest_response, format!("0x{:064x}", 3));
         let response = ctx
             .eth_call(request.clone(), BlockNumberOrTag::Number(2))
             .await
             .unwrap();
-        assert_eq!(U256::from_be_slice(&response), U256::from(2));
+        assert_eq!(response, format!("0x{:064x}", 2));
 
         // 4.a check the block timestamp as a transaction
         let tx = call_contract(
@@ -121,19 +119,13 @@ async fn test_block_env_evm_contract() -> anyhow::Result<()> {
             .eth_call(request.clone(), BlockNumberOrTag::Latest)
             .await
             .unwrap();
-        assert_eq!(
-            U256::from_be_slice(&latest_response),
-            U256::from(ctx.timestamp)
-        );
+        assert_eq!(latest_response, format!("0x{:064x}", ctx.timestamp));
         let response = ctx
             .eth_call(request.clone(), BlockNumberOrTag::Number(3))
             .await
             .unwrap();
         // The timestamp is incremented by 1 in each test, so the previous block has timestamp - 1.
-        assert_eq!(
-            U256::from_be_slice(&response),
-            U256::from(ctx.timestamp - 1)
-        );
+        assert_eq!(response, format!("0x{:064x}", ctx.timestamp - 1));
 
         // 5.a check the block hash as a transaction
         let evm_input = getBlockhashCall::new((U256::from(3),)).abi_encode();
@@ -148,7 +140,7 @@ async fn test_block_env_evm_contract() -> anyhow::Result<()> {
             .eth_call(request, BlockNumberOrTag::Latest)
             .await
             .unwrap();
-        assert_eq!(response, block_hash_3.to_vec());
+        assert_eq!(response, format!("0x{:064x}", block_hash_3));
 
         // 6.a check the chain id as a transaction
         let tx = call_contract(
@@ -166,7 +158,7 @@ async fn test_block_env_evm_contract() -> anyhow::Result<()> {
             .eth_call(request, BlockNumberOrTag::Latest)
             .await
             .unwrap();
-        assert_eq!(U256::from_be_slice(&response), logged_chain_id);
+        assert_eq!(response, format!("0x{:064x}", logged_chain_id));
 
         ctx.shutdown().await;
 

@@ -159,7 +159,7 @@ impl TestContext<'static> {
         &self,
         tx: TransactionRequest,
         block: BlockNumberOrTag,
-    ) -> anyhow::Result<Vec<u8>> {
+    ) -> anyhow::Result<String> {
         let request = serde_json::json!({
             "jsonrpc": "2.0",
             "id": 11,

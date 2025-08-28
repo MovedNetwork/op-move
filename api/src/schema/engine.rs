@@ -61,9 +61,6 @@ pub struct PayloadAttributesV3 {
     pub parent_beacon_block_root: B256,
     pub transactions: Vec<Bytes>,
     pub gas_limit: U64,
-    // TODO: (#201) allowed to be non-null only post-Holocene:
-    // <https://specs.optimism.io/protocol/holocene/exec-engine.html#dynamic-eip-1559-parameters>.
-    // Currently not propagated.
     pub eip1559_params: Option<U64>,
     pub no_tx_pool: Option<bool>,
 }
@@ -284,6 +281,7 @@ impl From<PayloadAttributesV3> for Payload {
             parent_beacon_block_root: value.parent_beacon_block_root,
             transactions: value.transactions,
             gas_limit: value.gas_limit,
+            eip1559_params: value.eip1559_params,
             no_tx_pool: value.no_tx_pool,
         }
     }

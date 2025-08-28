@@ -3,7 +3,7 @@ use {
     serde::Deserialize,
     std::{fmt::Debug, net::SocketAddr, path::Path},
     thiserror::Error,
-    umi_shared::primitives::{Address, MoveAddress, B256},
+    umi_shared::primitives::{MoveAddress, B256},
 };
 
 #[derive(PartialEq, Debug, Clone)]
@@ -41,14 +41,6 @@ pub struct Genesis {
     pub treasury: MoveAddress,
     pub l2_contract_genesis: Box<Path>,
     pub token_list: Box<Path>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BridgedToken {
-    pub name: String,
-    pub symbol: String,
-    pub decimals: u8,
-    pub ethereum_address: Address,
 }
 
 impl Default for Database {

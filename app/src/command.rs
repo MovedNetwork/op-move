@@ -100,6 +100,10 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
                 UnrecoverableAppFailure
             })?
             .expect("Block repository is non-empty (must always at least contain genesis)");
+        #[cfg(feature = "op-upgrade")]
+        attributes.eip1559_params.iter().for_each(|&params| {
+            self.gas_fee.set_parameters_from_attrs(params);
+        });
         let base_fee = self.gas_fee.base_fee_per_gas(
             parent.block.header.gas_limit,
             parent.block.header.gas_used,
@@ -141,6 +145,8 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
             base_fee_per_gas: Some(base_fee),
             blob_gas_used: Some(0),
             excess_blob_gas: Some(0),
+            #[cfg(feature = "op-upgrade")]
+            extra_data: self.gas_fee.encode_parameters_for_header(),
             ..Default::default()
         }
         .with_payload_attributes(attributes)

@@ -59,6 +59,10 @@ impl Error {
     pub const fn state_key_invariant_violation() -> Self {
         Self::InvariantViolation(InvariantViolation::StateKey)
     }
+
+    pub const fn extra_data_invariant_violation() -> Self {
+        Self::InvariantViolation(InvariantViolation::ExtraData)
+    }
 }
 
 impl<T> From<T> for Error
@@ -178,6 +182,8 @@ pub enum InvariantViolation {
     DatabaseState,
     #[error("At least genesis block should exist")]
     GenesisBlock,
+    #[error("Block header extra data should be exactly 9 bytes long")]
+    ExtraData,
 }
 
 #[derive(Debug, Error)]

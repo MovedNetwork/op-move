@@ -1,6 +1,12 @@
 //! This module is concerned about calculating fees charged for gas usage.
 
-use std::cmp::Ordering;
+use {
+    alloy::primitives::{Bytes, U64},
+    std::cmp::Ordering,
+};
+
+pub const DEFAULT_EIP1559_ELASTICITY_MULTIPLIER: u64 = 6;
+pub const DEFAULT_EIP1559_BASE_FEE_MAX_CHANGE_DENOMINATOR: u128 = 250;
 
 /// Determines amount of fees charged per gas used in transaction execution.
 ///
@@ -16,6 +22,9 @@ pub trait BaseGasFee {
         parent_gas_used: u64,
         parent_base_fee_per_gas: u64,
     ) -> u64;
+
+    fn set_parameters_from_attrs(&mut self, header_extra_data: U64);
+    fn encode_parameters_for_header(&self) -> Bytes;
 }
 
 /// Calculates base fee per gas according to the Ethereum model based on EIP-1559.
@@ -58,10 +67,13 @@ impl Eip1559GasFee {
     /// # Panics
     /// If either `elasticity_multiplier` or `base_fee_max_change_denominator` is zero.
     pub fn new(elasticity_multiplier: u64, base_fee_max_change_denominator: u128) -> Self {
-        assert!(elasticity_multiplier > 0, "{elasticity_multiplier} > 0");
+        assert!(
+            elasticity_multiplier > 0,
+            "Supplied `elasticity_multiplier` was 0"
+        );
         assert!(
             base_fee_max_change_denominator > 0,
-            "{base_fee_max_change_denominator} > 0"
+            "Supplied `base_fee_max_change_denominator` was 0"
         );
 
         Self {
@@ -103,6 +115,33 @@ impl BaseGasFee for Eip1559GasFee {
             Ordering::Equal => parent_base_fee_per_gas,
         };
         result.try_into().unwrap_or(u64::MAX)
+    }
+
+    fn set_parameters_from_attrs(&mut self, eip1559_params: U64) {
+        let denom = eip1559_params.wrapping_shr(32).saturating_to::<u32>();
+        let elasticity = (eip1559_params.bitand(U64::from(0xFFFF_FFFFu64))).saturating_to::<u32>();
+
+        if elasticity != 0 {
+            assert!(
+                denom != 0,
+                "Holocene gas parameters should only have a 0 denominator if elasticity is also 0"
+            );
+        }
+
+        self.elasticity_multiplier = elasticity as u64;
+        self.base_fee_max_change_denominator = denom as u128;
+    }
+
+    fn encode_parameters_for_header(&self) -> Bytes {
+        let mut out = Vec::with_capacity(9);
+
+        // Header `extra_data` should be prepended with a 0 version byte
+        out.extend_from_slice(&[0u8]);
+
+        out.extend_from_slice(&(self.base_fee_max_change_denominator as u32).to_be_bytes());
+        out.extend_from_slice(&(self.elasticity_multiplier as u32).to_be_bytes());
+
+        out.into()
     }
 }
 

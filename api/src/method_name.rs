@@ -5,6 +5,8 @@ pub enum MethodName {
     ForkChoiceUpdatedV3,
     GetPayloadV3,
     NewPayloadV3,
+    GetPayloadV4,
+    NewPayloadV4,
     SendRawTransaction,
     ChainId,
     GetBalance,
@@ -37,7 +39,11 @@ impl MethodName {
     pub fn is_engine_api(&self) -> bool {
         matches!(
             self,
-            Self::ForkChoiceUpdatedV3 | Self::GetPayloadV3 | Self::NewPayloadV3
+            Self::ForkChoiceUpdatedV3
+                | Self::GetPayloadV3
+                | Self::NewPayloadV3
+                | Self::GetPayloadV4
+                | Self::NewPayloadV4
         )
     }
 }
@@ -50,6 +56,8 @@ impl FromStr for MethodName {
             "engine_forkchoiceUpdatedV3" => Self::ForkChoiceUpdatedV3,
             "engine_getPayloadV3" => Self::GetPayloadV3,
             "engine_newPayloadV3" => Self::NewPayloadV3,
+            "engine_getPayloadV4" => Self::GetPayloadV4,
+            "engine_newPayloadV4" => Self::NewPayloadV4,
 
             "eth_chainId" => Self::ChainId,
             "eth_getBalance" => Self::GetBalance,

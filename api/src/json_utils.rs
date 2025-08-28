@@ -66,3 +66,25 @@ where
         _ => Err(JsonRpcError::too_many_params_error(request)),
     }
 }
+
+pub fn parse_params_4<T1, T2, T3, T4>(
+    request: serde_json::Value,
+) -> Result<(T1, T2, T3, T4), JsonRpcError>
+where
+    T1: DeserializeOwned,
+    T2: DeserializeOwned,
+    T3: DeserializeOwned,
+    T4: DeserializeOwned,
+{
+    let params = get_params_list(&request);
+    match params {
+        [] | [_] | [_, _] | [_, _, _] => Err(JsonRpcError::not_enough_params_error(request)),
+        [a, b, c, d] => Ok((
+            deserialize(a)?,
+            deserialize(b)?,
+            deserialize(c)?,
+            deserialize(d)?,
+        )),
+        _ => Err(JsonRpcError::too_many_params_error(request)),
+    }
+}

@@ -4,6 +4,10 @@ edition.workspace = true
 name = "umi-api"
 version.workspace = true
 
+[features]
+default = []
+op-upgrade = []
+
 [lints]
 workspace = true
 

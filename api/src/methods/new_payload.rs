@@ -1,12 +1,12 @@
 use {
     crate::{
-        json_utils::parse_params_3,
+        json_utils::{parse_params_3, parse_params_4},
         jsonrpc::JsonRpcError,
         schema::{ExecutionPayloadV3, GetPayloadResponseV3, PayloadStatusV1, Status},
     },
     alloy::{
         consensus::{EMPTY_OMMER_ROOT_HASH, Header, constants::EMPTY_WITHDRAWALS},
-        primitives::{B64, Bloom, U64, U256},
+        primitives::{B64, Bloom, Bytes, U64, U256},
     },
     umi_app::{ApplicationReader, Dependencies},
     umi_shared::primitives::B256,
@@ -18,20 +18,43 @@ pub async fn execute_v3<'reader>(
 ) -> Result<serde_json::Value, JsonRpcError> {
     let (execution_payload, expected_blob_versioned_hashes, parent_beacon_block_root) =
         parse_params_3(request)?;
-    let response = inner_execute_v3(
+    let response = inner_execute(
         execution_payload,
         expected_blob_versioned_hashes,
         parent_beacon_block_root,
+        None,
         app,
     )
     .await?;
     Ok(serde_json::to_value(response).expect("Must be able to JSON-serialize response"))
 }
 
-async fn inner_execute_v3<'reader>(
+pub async fn execute_v4<'reader>(
+    request: serde_json::Value,
+    app: &ApplicationReader<'reader, impl Dependencies<'reader>>,
+) -> Result<serde_json::Value, JsonRpcError> {
+    let (
+        execution_payload,
+        expected_blob_versioned_hashes,
+        parent_beacon_block_root,
+        execution_requests,
+    ) = parse_params_4(request)?;
+    let response = inner_execute(
+        execution_payload,
+        expected_blob_versioned_hashes,
+        parent_beacon_block_root,
+        Some(execution_requests),
+        app,
+    )
+    .await?;
+    Ok(serde_json::to_value(response).expect("Must be able to JSON-serialize response"))
+}
+
+async fn inner_execute<'reader>(
     execution_payload: ExecutionPayloadV3,
     expected_blob_versioned_hashes: Vec<B256>,
     parent_beacon_block_root: B256,
+    execution_requests: Option<Vec<Bytes>>,
     app: &ApplicationReader<'reader, impl Dependencies<'reader>>,
 ) -> Result<PayloadStatusV1, JsonRpcError> {
     // Spec: https://github.com/ethereum/execution-apis/blob/main/src/engine/cancun.md#specification
@@ -47,10 +70,12 @@ async fn inner_execute_v3<'reader>(
         .payload_by_block_hash(execution_payload.block_hash)
         .map(GetPayloadResponseV3::from)?;
 
-    if let Err(status) = validate_payload_format(&execution_payload, expected_blob_versioned_hashes)
-        .and_then(|_| {
-            validate_known_payload(&execution_payload, parent_beacon_block_root, response)
-        })
+    if let Err(status) = validate_payload_format(
+        &execution_payload,
+        expected_blob_versioned_hashes,
+        execution_requests,
+    )
+    .and_then(|_| validate_known_payload(&execution_payload, parent_beacon_block_root, response))
     {
         return Ok(status);
     };
@@ -64,9 +89,10 @@ async fn inner_execute_v3<'reader>(
 fn validate_payload_format(
     execution_payload: &ExecutionPayloadV3,
     expected_blob_versioned_hashes: Vec<B256>,
+    execution_requests: Option<Vec<Bytes>>,
 ) -> Result<(), PayloadStatusV1> {
     // Anything EIP-4844 related is disabled in Optimism (<https://specs.optimism.io/protocol/exec-engine.html#ecotone-disable-blob-transactions>)
-    // and Umi, as we have chosen to reject this tx kind at the API border. Thus for v3 engine API
+    // and Umi, as we have chosen to reject this tx kind at the API border. Thus for Engine API
     // all the values should be 0.
     if execution_payload.excess_blob_gas != U64::ZERO
         || execution_payload.blob_gas_used != U64::ZERO
@@ -93,7 +119,15 @@ fn validate_payload_format(
         });
     }
 
-    // TODO: (#201) should contain eip1559params post OP stack Holocene upgrade
+    if execution_requests.is_some_and(|req| !req.is_empty()) {
+        return Err(PayloadStatusV1 {
+            status: Status::Invalid,
+            latest_valid_hash: None,
+            validation_error: Some("OP stack requires execution requests to be empty".into()),
+        });
+    }
+
+    #[cfg(not(feature = "op-upgrade"))]
     if execution_payload.block_number != U64::ZERO && !execution_payload.extra_data.is_empty() {
         return Err(PayloadStatusV1 {
             status: Status::Invalid,

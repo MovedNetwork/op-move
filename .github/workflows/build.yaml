@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # Make sure CI fails on all warnings, including Clippy lints
-      RUSTFLAGS: "-Dwarnings --cfg tokio_unstable"
+      RUSTFLAGS: "-Dwarnings --cfg tokio_unstable --all-features"
       CARGO_TERM_COLOR: always
     steps:
       - uses: actions/checkout@v4

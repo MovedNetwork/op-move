@@ -1,7 +1,3 @@
-# Add build image
-FROM ghcr.io/uminetwork/optimism:latest AS optimism
-
-# Switch to clean image
 FROM alpine:3.21.2
 WORKDIR /volume
 

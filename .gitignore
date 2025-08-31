@@ -18,6 +18,9 @@ server/*.log
 # Docker mounted volumes
 docker/volumes
 
+# Docker buildx cache directory
+.buildx-cache
+
 # Optimism cloned repository
 server/src/tests/optimism
 

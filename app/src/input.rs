@@ -2,7 +2,7 @@ use {
     alloy::{primitives::Bloom, rlp::Decodable},
     op_alloy::consensus::OpTxEnvelope,
     umi_blockchain::{
-        block::Header,
+        block::{BaseFeeParameters, Header},
         payload::{NewPayloadIdInput, PayloadId},
     },
     umi_execution::transaction::{NormalizedEthTransaction, NormalizedExtendedTxEnvelope},
@@ -33,7 +33,7 @@ pub struct PayloadForExecution {
     pub parent_beacon_block_root: B256,
     pub transactions: Vec<NormalizedExtendedTxEnvelope>,
     pub gas_limit: U64,
-    pub eip1559_params: Option<U64>,
+    pub eip1559_params: Option<BaseFeeParameters>,
     pub no_tx_pool: Option<bool>,
 }
 
@@ -49,6 +49,24 @@ impl TryFrom<Payload> for PayloadForExecution {
             transactions.push(op_tx.try_into()?);
         }
 
+        let parsed_params = value
+            .eip1559_params
+            .map(|params| {
+                // The first [0, 4) bytes are base fee denominator
+                let denominator = params.wrapping_shr(32).saturating_to::<u32>();
+                // The bottom 4 bytes reserved for elasticity
+                let elasticity = (params.bitand(U64::from(0xFFFF_FFFFu64))).saturating_to::<u32>();
+
+                if elasticity != 0 && denominator == 0 {
+                    return Err(Self::Error::fee_denom_invariant_violation());
+                }
+                Ok(BaseFeeParameters {
+                    denominator,
+                    elasticity,
+                })
+            })
+            .transpose()?;
+
         Ok(Self {
             timestamp: value.timestamp,
             prev_randao: value.prev_randao,
@@ -57,7 +75,7 @@ impl TryFrom<Payload> for PayloadForExecution {
             parent_beacon_block_root: value.parent_beacon_block_root,
             transactions,
             gas_limit: value.gas_limit,
-            eip1559_params: value.eip1559_params,
+            eip1559_params: parsed_params,
             no_tx_pool: value.no_tx_pool,
         })
     }

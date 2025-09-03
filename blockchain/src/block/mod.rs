@@ -19,7 +19,7 @@ mod write;
 
 pub use {
     gas::{
-        BaseGasFee, DEFAULT_EIP1559_BASE_FEE_MAX_CHANGE_DENOMINATOR,
+        BaseFeeParameters, BaseGasFee, DEFAULT_EIP1559_BASE_FEE_MAX_CHANGE_DENOMINATOR,
         DEFAULT_EIP1559_ELASTICITY_MULTIPLIER, Eip1559GasFee,
     },
     hash::{BlockHash, UmiBlockHash},

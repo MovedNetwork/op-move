@@ -468,7 +468,7 @@ impl<'app, D: Dependencies<'app>> ApplicationReader<'app, D> {
             );
             #[cfg(feature = "op-upgrade")]
             {
-                use alloy::primitives::U64;
+                use umi_blockchain::block::BaseFeeParameters;
 
                 // OP uses this field for dynamic EIP-1559 parameters only. The format is
                 // <https://specs.optimism.io/protocol/holocene/exec-engine.html#eip-1559-parameters-in-block-header>
@@ -476,14 +476,25 @@ impl<'app, D: Dependencies<'app>> ApplicationReader<'app, D> {
                     return Err(Error::extra_data_invariant_violation());
                 };
 
-                // As during block build the parameters are read via attributes as a U64, we
-                // have to do some conversions to read it from the block header, most importantly
-                // skipping the version byte
-                let extra_data_slice = extra_data.slice(1..9);
-                let mut arr = [0u8; 8];
-                arr.copy_from_slice(&extra_data_slice);
-                let params = U64::from_be_bytes(arr);
-                gas_fee.set_parameters_from_attrs(params);
+                // As during block build the parameters are parsed from a byte-encoded field
+                // in payload attributes, we have to do some conversions to read it from the
+                // block header, most importantly skipping the version byte that is present
+                // in the header, but absent from the attributes
+                let mut buf = [0u8; 4];
+                buf.copy_from_slice(&extra_data.slice(1..5));
+                let denominator = u32::from_be_bytes(buf);
+                buf.copy_from_slice(&extra_data.slice(5..9));
+                let elasticity = u32::from_be_bytes(buf);
+
+                if elasticity != 0 && denominator == 0 {
+                    return Err(Error::fee_denom_invariant_violation());
+                }
+
+                let params = BaseFeeParameters {
+                    denominator,
+                    elasticity,
+                };
+                gas_fee.set_parameters_from_attrs(&params);
             }
             let next_block_base_fee = gas_fee.base_fee_per_gas(
                 gas_limit,

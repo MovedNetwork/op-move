@@ -101,9 +101,9 @@ impl<'app, D: Dependencies<'app>> Application<'app, D> {
             })?
             .expect("Block repository is non-empty (must always at least contain genesis)");
         #[cfg(feature = "op-upgrade")]
-        attributes.eip1559_params.iter().for_each(|&params| {
+        if let Some(params) = &attributes.eip1559_params {
             self.gas_fee.set_parameters_from_attrs(params);
-        });
+        }
         let base_fee = self.gas_fee.base_fee_per_gas(
             parent.block.header.gas_limit,
             parent.block.header.gas_used,

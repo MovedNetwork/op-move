@@ -1,12 +1,15 @@
 //! This module is concerned about calculating fees charged for gas usage.
 
-use {
-    alloy::primitives::{Bytes, U64},
-    std::cmp::Ordering,
-};
+use {alloy::primitives::Bytes, std::cmp::Ordering};
 
 pub const DEFAULT_EIP1559_ELASTICITY_MULTIPLIER: u32 = 6;
 pub const DEFAULT_EIP1559_BASE_FEE_MAX_CHANGE_DENOMINATOR: u32 = 250;
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct BaseFeeParameters {
+    pub denominator: u32,
+    pub elasticity: u32,
+}
 
 /// Determines amount of fees charged per gas used in transaction execution.
 ///
@@ -23,7 +26,7 @@ pub trait BaseGasFee {
         parent_base_fee_per_gas: u64,
     ) -> u64;
 
-    fn set_parameters_from_attrs(&mut self, header_extra_data: U64);
+    fn set_parameters_from_attrs(&mut self, params: &BaseFeeParameters);
     fn encode_parameters_for_header(&self) -> Bytes;
 }
 
@@ -112,19 +115,14 @@ impl BaseGasFee for Eip1559GasFee {
         }
     }
 
-    fn set_parameters_from_attrs(&mut self, eip1559_params: U64) {
-        let denom = eip1559_params.wrapping_shr(32).saturating_to::<u32>();
-        let elasticity = (eip1559_params.bitand(U64::from(0xFFFF_FFFFu64))).saturating_to::<u32>();
-
-        if elasticity != 0 {
-            assert!(
-                denom != 0,
-                "Holocene gas parameters should only have a 0 denominator if elasticity is also 0"
-            );
+    fn set_parameters_from_attrs(&mut self, eip1559_params: &BaseFeeParameters) {
+        if eip1559_params.denominator == 0 && eip1559_params.elasticity == 0 {
+            self.base_fee_max_change_denominator = DEFAULT_EIP1559_BASE_FEE_MAX_CHANGE_DENOMINATOR;
+            self.elasticity_multiplier = DEFAULT_EIP1559_ELASTICITY_MULTIPLIER;
+        } else {
+            self.base_fee_max_change_denominator = eip1559_params.denominator;
+            self.elasticity_multiplier = eip1559_params.elasticity;
         }
-
-        self.elasticity_multiplier = elasticity;
-        self.base_fee_max_change_denominator = denom;
     }
 
     fn encode_parameters_for_header(&self) -> Bytes {
@@ -144,8 +142,8 @@ impl BaseGasFee for Eip1559GasFee {
 mod test_doubles {
     use super::*;
 
-    const ELASTICITY_MULTIPLIER: u64 = 2;
-    const BASE_FEE_MAX_CHANGE_DENOMINATOR: u128 = 8;
+    const ELASTICITY_MULTIPLIER: u32 = 2;
+    const BASE_FEE_MAX_CHANGE_DENOMINATOR: u32 = 8;
 
     impl Default for Eip1559GasFee {
         fn default() -> Self {

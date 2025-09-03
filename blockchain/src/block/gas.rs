@@ -5,8 +5,8 @@ use {
     std::cmp::Ordering,
 };
 
-pub const DEFAULT_EIP1559_ELASTICITY_MULTIPLIER: u64 = 6;
-pub const DEFAULT_EIP1559_BASE_FEE_MAX_CHANGE_DENOMINATOR: u128 = 250;
+pub const DEFAULT_EIP1559_ELASTICITY_MULTIPLIER: u32 = 6;
+pub const DEFAULT_EIP1559_BASE_FEE_MAX_CHANGE_DENOMINATOR: u32 = 250;
 
 /// Determines amount of fees charged per gas used in transaction execution.
 ///
@@ -51,14 +51,14 @@ pub struct Eip1559GasFee {
     /// * The greater the value the smaller the target gas.
     /// * This value has to be greater than zero.
     /// * A value of 1 makes the target the same as the limit.
-    elasticity_multiplier: u64,
+    elasticity_multiplier: u32,
     /// Reduces the difference between block's base fee per gas and its parent. Some properties can
     /// be observed:
     ///
     /// * The greater the value the smaller the increase or decrease of the base fee per gas.
     /// * This value has to be greater than zero.
     /// * A value of 1 makes the greatest fee increases or decreases.
-    base_fee_max_change_denominator: u128,
+    base_fee_max_change_denominator: u32,
 }
 
 impl Eip1559GasFee {
@@ -66,7 +66,7 @@ impl Eip1559GasFee {
     ///
     /// # Panics
     /// If either `elasticity_multiplier` or `base_fee_max_change_denominator` is zero.
-    pub fn new(elasticity_multiplier: u64, base_fee_max_change_denominator: u128) -> Self {
+    pub fn new(elasticity_multiplier: u32, base_fee_max_change_denominator: u32) -> Self {
         assert!(
             elasticity_multiplier > 0,
             "Supplied `elasticity_multiplier` was 0"
@@ -90,31 +90,26 @@ impl BaseGasFee for Eip1559GasFee {
         parent_gas_used: u64,
         parent_base_fee_per_gas: u64,
     ) -> u64 {
-        // Bump up to 128 bits for calculation to avoid overflows.
-        let parent_base_fee_per_gas: u128 = parent_base_fee_per_gas.into();
-        let gas_target = parent_gas_limit / self.elasticity_multiplier;
+        let gas_target = parent_gas_limit / self.elasticity_multiplier as u64;
 
-        let result = match parent_gas_used.cmp(&gas_target) {
+        match parent_gas_used.cmp(&gas_target) {
             Ordering::Greater => {
-                let delta = (parent_base_fee_per_gas
-                    .saturating_mul(u128::from(parent_gas_used - gas_target))
-                    / u128::from(gas_target)
-                    / self.base_fee_max_change_denominator)
+                let delta = (parent_base_fee_per_gas.saturating_mul(parent_gas_used - gas_target)
+                    / gas_target
+                    / self.base_fee_max_change_denominator as u64)
                     .max(1);
 
                 parent_base_fee_per_gas.saturating_add(delta)
             }
             Ordering::Less => {
-                let delta = parent_base_fee_per_gas
-                    .saturating_mul(u128::from(gas_target - parent_gas_used))
-                    / u128::from(gas_target)
-                    / self.base_fee_max_change_denominator;
+                let delta = parent_base_fee_per_gas.saturating_mul(gas_target - parent_gas_used)
+                    / gas_target
+                    / self.base_fee_max_change_denominator as u64;
 
                 parent_base_fee_per_gas.saturating_sub(delta)
             }
             Ordering::Equal => parent_base_fee_per_gas,
-        };
-        result.try_into().unwrap_or(u64::MAX)
+        }
     }
 
     fn set_parameters_from_attrs(&mut self, eip1559_params: U64) {
@@ -128,8 +123,8 @@ impl BaseGasFee for Eip1559GasFee {
             );
         }
 
-        self.elasticity_multiplier = elasticity as u64;
-        self.base_fee_max_change_denominator = denom as u128;
+        self.elasticity_multiplier = elasticity;
+        self.base_fee_max_change_denominator = denom;
     }
 
     fn encode_parameters_for_header(&self) -> Bytes {
@@ -138,8 +133,8 @@ impl BaseGasFee for Eip1559GasFee {
         // Header `extra_data` should be prepended with a 0 version byte
         out.extend_from_slice(&[0u8]);
 
-        out.extend_from_slice(&(self.base_fee_max_change_denominator as u32).to_be_bytes());
-        out.extend_from_slice(&(self.elasticity_multiplier as u32).to_be_bytes());
+        out.extend_from_slice(&(self.base_fee_max_change_denominator).to_be_bytes());
+        out.extend_from_slice(&(self.elasticity_multiplier).to_be_bytes());
 
         out.into()
     }

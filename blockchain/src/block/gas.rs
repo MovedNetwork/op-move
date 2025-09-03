@@ -1,10 +1,14 @@
 //! This module is concerned about calculating fees charged for gas usage.
 
-use {alloy::primitives::Bytes, std::cmp::Ordering};
+use std::cmp::Ordering;
+
+#[cfg(feature = "op-upgrade")]
+use alloy::primitives::Bytes;
 
 pub const DEFAULT_EIP1559_ELASTICITY_MULTIPLIER: u32 = 6;
 pub const DEFAULT_EIP1559_BASE_FEE_MAX_CHANGE_DENOMINATOR: u32 = 250;
 
+#[cfg(feature = "op-upgrade")]
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct BaseFeeParameters {
     pub denominator: u32,
@@ -26,7 +30,9 @@ pub trait BaseGasFee {
         parent_base_fee_per_gas: u64,
     ) -> u64;
 
+    #[cfg(feature = "op-upgrade")]
     fn set_parameters_from_attrs(&mut self, params: &BaseFeeParameters);
+    #[cfg(feature = "op-upgrade")]
     fn encode_parameters_for_header(&self) -> Bytes;
 }
 
@@ -115,6 +121,7 @@ impl BaseGasFee for Eip1559GasFee {
         }
     }
 
+    #[cfg(feature = "op-upgrade")]
     fn set_parameters_from_attrs(&mut self, eip1559_params: &BaseFeeParameters) {
         if eip1559_params.denominator == 0 && eip1559_params.elasticity == 0 {
             self.base_fee_max_change_denominator = DEFAULT_EIP1559_BASE_FEE_MAX_CHANGE_DENOMINATOR;
@@ -125,6 +132,7 @@ impl BaseGasFee for Eip1559GasFee {
         }
     }
 
+    #[cfg(feature = "op-upgrade")]
     fn encode_parameters_for_header(&self) -> Bytes {
         let mut out = Vec::with_capacity(9);
 

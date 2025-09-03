@@ -281,6 +281,7 @@ impl From<PayloadAttributesV3> for Payload {
             parent_beacon_block_root: value.parent_beacon_block_root,
             transactions: value.transactions,
             gas_limit: value.gas_limit,
+            #[cfg(feature = "op-upgrade")]
             eip1559_params: value.eip1559_params,
             no_tx_pool: value.no_tx_pool,
         }

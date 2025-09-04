@@ -146,6 +146,8 @@ async fn deploy_tables_contract(
     ctx.execute_transaction(signed_tx).await.unwrap()
 }
 
+/// A compiled version of the same tables contract used in execution tests.
+/// See `execution/src/tests/res/tables` for source code.
 fn create_move_tables_contract_bytecode(address: Address) -> Vec<u8> {
     let bytecode_hex = std::fs::read_to_string("src/tests/res/tables.hex").unwrap();
     let bytecode = hex::decode(bytecode_hex.trim()).unwrap();

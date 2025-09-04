@@ -115,7 +115,7 @@ impl<'a, V: CompiledModuleView> UmiMoveConverter<'a, V> {
 
             Ok(MoveValue::Vector(vals))
         } else {
-            Err(incorrect_type_layout(()).into())
+            Err(UserError::IncorrectTypeLayout.into())
         }
     }
 
@@ -128,17 +128,19 @@ impl<'a, V: CompiledModuleView> UmiMoveConverter<'a, V> {
             if let MoveStructLayout::WithTypes { type_, fields } = layout {
                 (type_, fields)
             } else {
-                return Err(incorrect_type_layout(()).into());
+                return Err(UserError::IncorrectTypeLayout.into());
             };
         if MoveValueResponse::is_utf8_string(struct_tag) {
-            let string = value.as_str().ok_or_else(|| incorrect_type_layout(()))?;
+            let string = value
+                .as_str()
+                .ok_or_else(|| UserError::IncorrectTypeLayout)?;
             return Ok(aptos_api_types::new_vm_utf8_string(string));
         }
 
         let mut field_values = if let serde_json::Value::Object(fields) = value {
             fields
         } else {
-            return Err(incorrect_type_layout(()).into());
+            return Err(UserError::IncorrectTypeLayout.into());
         };
         let fields = field_layouts
             .iter()
@@ -146,7 +148,7 @@ impl<'a, V: CompiledModuleView> UmiMoveConverter<'a, V> {
                 let name = field_layout.name.as_str();
                 let value = field_values
                     .remove(name)
-                    .ok_or_else(|| incorrect_type_layout(()))?;
+                    .ok_or_else(|| UserError::IncorrectTypeLayout)?;
                 let move_value = self.try_into_vm_value_from_layout(&field_layout.layout, value)?;
                 Ok(move_value)
             })

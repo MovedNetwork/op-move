@@ -1,10 +1,14 @@
 use {
-    crate::state::{MoveModule, MoveModuleResponse, MoveResourceResponse},
+    crate::state::{
+        MoveModule, MoveModuleResponse, MoveResourceResponse, MoveValueResponse,
+        read::convert::UmiMoveConverter,
+    },
     alloy::{
         consensus::constants::KECCAK_EMPTY,
         primitives::keccak256,
         rpc::types::{EIP1186AccountProofResponse, EIP1186StorageProof},
     },
+    aptos_api_types::TableItemRequest,
     eth_trie::{DB, EthTrie, Trie},
     move_binary_format::{CompiledModule, errors::PartialVMError},
     move_bytecode_utils::compiled_module_viewer::CompiledModuleView,
@@ -14,8 +18,7 @@ use {
         language_storage::{ModuleId, StructTag},
         vm_status::StatusCode,
     },
-    move_resource_viewer::MoveValueAnnotator,
-    move_table_extension::TableResolver,
+    move_table_extension::{TableHandle, TableResolver},
     move_vm_types::{
         resolver::{ModuleResolver, MoveResolver, ResourceResolver},
         value_serde::ValueSerDeContext,
@@ -28,7 +31,10 @@ use {
         type_utils::{account_info_struct_tag, code_hash_struct_tag},
     },
     umi_execution::{quick_get_eth_balance, quick_get_nonce},
-    umi_shared::primitives::{Address, B256, Bytes, KeyHashable, ToEthAddress, U256},
+    umi_shared::{
+        error::UserError,
+        primitives::{Address, B256, Bytes, KeyHashable, ToEthAddress, U256},
+    },
     umi_state::nodes::TreeKey,
 };
 
@@ -183,7 +189,7 @@ pub trait StateQueries {
         account: AccountAddress,
         name: &str,
         height: BlockHeight,
-    ) -> Result<Option<MoveResourceResponse>, state::Error> {
+    ) -> Result<Option<MoveResourceResponse>, umi_shared::error::Error> {
         let Ok(struct_tag) = StructTag::from_str(name) else {
             return Ok(None);
         };
@@ -200,15 +206,43 @@ pub trait StateQueries {
             return Ok(None);
         };
 
-        let annotator = MoveValueAnnotator::new(resolver);
+        let converter = UmiMoveConverter::new(&resolver);
+        let response = converter.view_resource(&struct_tag, &bytes)?;
 
-        Ok(Some(
-            annotator
-                .view_resource(&struct_tag, &bytes)
-                .expect("Serialization should be compatible")
-                .try_into()
-                .expect("Serialization should be compatible"),
-        ))
+        Ok(Some(response))
+    }
+
+    fn table_item_at(
+        &self,
+        handle: &TableHandle,
+        request: TableItemRequest,
+        height: BlockHeight,
+    ) -> Result<Option<MoveValueResponse>, umi_shared::error::Error> {
+        let key_type = request
+            .key_type
+            .try_into()
+            .map_err(|_| UserError::IncorrectTypeLayout)?;
+
+        let value_type = request
+            .value_type
+            .try_into()
+            .map_err(|_| UserError::IncorrectTypeLayout)?;
+
+        let resolver = self.resolver_at(height)?;
+        let converter = UmiMoveConverter::new(&resolver);
+
+        let key = converter.try_into_vm_value(&key_type, request.key)?;
+        let key_bytes = key.undecorate().simple_serialize().unwrap_or_default();
+
+        let Some(bytes) =
+            resolver.resolve_table_entry_bytes_with_layout(handle, &key_bytes, None)?
+        else {
+            return Ok(None);
+        };
+
+        let response = converter.view_value(&value_type, &bytes)?;
+
+        Ok(Some(response))
     }
 
     /// Queries the blockchain state version corresponding with block `height` for the value of a

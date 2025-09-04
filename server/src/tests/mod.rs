@@ -3,6 +3,7 @@ mod get_proof;
 mod integration;
 mod listing_apis;
 mod payload;
+mod table_api;
 mod test_context;
 
 use {

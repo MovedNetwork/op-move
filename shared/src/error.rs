@@ -105,6 +105,12 @@ pub enum UserError {
     MissingModule(String),
     #[error("Missing resource requested: {0}")]
     MissingResource(String),
+    #[error("Missing requested table item")]
+    MissingTableItem,
+    #[error("Could not decode resource with given type layout")]
+    IncorrectTypeLayout,
+    #[error("Failed to represent move value as JSON")]
+    MoveToJsonConversionFailed,
 }
 
 /// The error caused by invalid transaction input parameter.

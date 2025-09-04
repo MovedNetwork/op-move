@@ -15,6 +15,7 @@ pub enum MethodName {
     GetBlockByNumber,
     GetModule,
     GetResource,
+    GetTableItem,
     GetStorageAt,
     GetTransactionByHash,
     GetNonce,
@@ -83,6 +84,7 @@ impl FromStr for MethodName {
             "mv_getResource" => Self::GetResource,
             "mv_listModules" => Self::ListModules,
             "mv_listResources" => Self::ListResources,
+            "mv_getTableItem" => Self::GetTableItem,
 
             other => {
                 return Err(JsonRpcError::invalid_method(other));

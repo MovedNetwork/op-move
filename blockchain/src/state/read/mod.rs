@@ -1,3 +1,4 @@
+mod convert;
 mod eth_trie;
 mod in_memory;
 mod model;

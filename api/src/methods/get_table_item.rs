@@ -4,8 +4,10 @@ use {
     umi_app::{ApplicationReader, Dependencies},
 };
 
-/// Fetches `resource` by name that belongs to the `account` in the blockchain state corresponding
+/// Fetches value from a Move table by key and `table_address` in the blockchain state corresponding
 /// with the block `number`.
+/// The `table_address` (handle) can be found by looking at the resource corresponding to the table
+/// on the relevant account.
 ///
 /// # Arguments
 /// * `table_address`: A "0x" prefixed, 32-byte long, hex encoded number that represents a table

@@ -14,7 +14,11 @@ use {
     },
     move_table_extension::TableHandle,
     umi_blockchain::{
-        block::{BaseGasFee, BlockQueries, BlockResponse, Eip1559GasFee},
+        block::{
+            BaseGasFee, BlockQueries, BlockResponse,
+            DEFAULT_EIP1559_BASE_FEE_MAX_CHANGE_DENOMINATOR, DEFAULT_EIP1559_ELASTICITY_MULTIPLIER,
+            Eip1559GasFee,
+        },
         payload::{MaybePayloadResponse, PayloadId, PayloadQueries, PayloadResponse},
         receipt::{ReceiptQueries, TransactionReceipt},
         state::{
@@ -462,6 +466,10 @@ impl<'app, D: Dependencies<'app>> ApplicationReader<'app, D> {
             gas_used: block_gas_used,
             base_fee_per_gas,
             parent_hash,
+            #[cfg(feature = "op-upgrade")]
+            extra_data,
+            #[cfg(not(feature = "op-upgrade"))]
+                extra_data: _,
             ..
         } = curr_block.0.header.inner;
 
@@ -469,9 +477,41 @@ impl<'app, D: Dependencies<'app>> ApplicationReader<'app, D> {
         // so that we also account for the range ending with the latest block. This comes before
         // the remaining calculation as we're iterating in reverse
         if matches!(block_id, BlockNumberOrHash::Number(_)) {
-            // Reusing the parameters from the prod config
-            // TODO: pass a constant
-            let gas_fee = Eip1559GasFee::new(6, 250);
+            #[cfg_attr(not(feature = "op-upgrade"), allow(unused_mut))]
+            let mut gas_fee = Eip1559GasFee::new(
+                DEFAULT_EIP1559_ELASTICITY_MULTIPLIER,
+                DEFAULT_EIP1559_BASE_FEE_MAX_CHANGE_DENOMINATOR,
+            );
+            #[cfg(feature = "op-upgrade")]
+            {
+                use umi_blockchain::block::BaseFeeParameters;
+
+                // OP uses this field for dynamic EIP-1559 parameters only. The format is
+                // <https://specs.optimism.io/protocol/holocene/exec-engine.html#eip-1559-parameters-in-block-header>
+                if extra_data.len() != 9 {
+                    return Err(Error::extra_data_invariant_violation());
+                };
+
+                // As during block build the parameters are parsed from a byte-encoded field
+                // in payload attributes, we have to do some conversions to read it from the
+                // block header, most importantly skipping the version byte that is present
+                // in the header, but absent from the attributes
+                let mut buf = [0u8; 4];
+                buf.copy_from_slice(&extra_data.slice(1..5));
+                let denominator = u32::from_be_bytes(buf);
+                buf.copy_from_slice(&extra_data.slice(5..9));
+                let elasticity = u32::from_be_bytes(buf);
+
+                if elasticity != 0 && denominator == 0 {
+                    return Err(Error::fee_denom_invariant_violation());
+                }
+
+                let params = BaseFeeParameters {
+                    denominator,
+                    elasticity,
+                };
+                gas_fee.set_parameters_from_attrs(&params);
+            }
             let next_block_base_fee = gas_fee.base_fee_per_gas(
                 gas_limit,
                 block_gas_used,

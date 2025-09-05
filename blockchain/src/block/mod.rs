@@ -18,9 +18,15 @@ mod read;
 mod write;
 
 pub use {
-    gas::{BaseGasFee, Eip1559GasFee},
+    gas::{
+        BaseGasFee, DEFAULT_EIP1559_BASE_FEE_MAX_CHANGE_DENOMINATOR,
+        DEFAULT_EIP1559_ELASTICITY_MULTIPLIER, Eip1559GasFee,
+    },
     hash::{BlockHash, UmiBlockHash},
     in_memory::{BlockMemory, ReadBlockMemory},
     read::{BlockQueries, BlockResponse, in_memory::InMemoryBlockQueries},
     write::{Block, BlockRepository, ExtendedBlock, Header, in_memory::InMemoryBlockRepository},
 };
+
+#[cfg(feature = "op-upgrade")]
+pub use gas::BaseFeeParameters;

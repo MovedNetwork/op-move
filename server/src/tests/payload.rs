@@ -35,7 +35,7 @@ async fn test_sending_the_same_payload_twice_produces_one_block() -> anyhow::Res
                 }
             ]
         });
-        let payload_id = PayloadId::new(268041640064641444);
+        let payload_id = PayloadId::new(265076798596094429);
         let expected_response = ForkchoiceUpdatedResponseV1 {
             payload_status: PayloadStatusV1 {
                 status: Status::Valid,

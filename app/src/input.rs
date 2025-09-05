@@ -18,6 +18,8 @@ pub struct Payload {
     pub parent_beacon_block_root: B256,
     pub transactions: Vec<Bytes>,
     pub gas_limit: U64,
+    #[cfg(feature = "op-upgrade")]
+    pub eip1559_params: Option<U64>,
     pub no_tx_pool: Option<bool>,
 }
 
@@ -32,6 +34,8 @@ pub struct PayloadForExecution {
     pub parent_beacon_block_root: B256,
     pub transactions: Vec<NormalizedExtendedTxEnvelope>,
     pub gas_limit: U64,
+    #[cfg(feature = "op-upgrade")]
+    pub eip1559_params: Option<umi_blockchain::block::BaseFeeParameters>,
     pub no_tx_pool: Option<bool>,
 }
 
@@ -47,6 +51,25 @@ impl TryFrom<Payload> for PayloadForExecution {
             transactions.push(op_tx.try_into()?);
         }
 
+        #[cfg(feature = "op-upgrade")]
+        let parsed_params = value
+            .eip1559_params
+            .map(|params| {
+                // The first [0, 4) bytes are base fee denominator
+                let denominator = params.wrapping_shr(32).saturating_to::<u32>();
+                // The bottom 4 bytes reserved for elasticity
+                let elasticity = (params.bitand(U64::from(0xFFFF_FFFFu64))).saturating_to::<u32>();
+
+                if elasticity != 0 && denominator == 0 {
+                    return Err(Self::Error::fee_denom_invariant_violation());
+                }
+                Ok(umi_blockchain::block::BaseFeeParameters {
+                    denominator,
+                    elasticity,
+                })
+            })
+            .transpose()?;
+
         Ok(Self {
             timestamp: value.timestamp,
             prev_randao: value.prev_randao,
@@ -55,6 +78,8 @@ impl TryFrom<Payload> for PayloadForExecution {
             parent_beacon_block_root: value.parent_beacon_block_root,
             transactions,
             gas_limit: value.gas_limit,
+            #[cfg(feature = "op-upgrade")]
+            eip1559_params: parsed_params,
             no_tx_pool: value.no_tx_pool,
         })
     }
@@ -107,11 +132,13 @@ pub trait ToPayloadIdInput<'a> {
 
 impl<'a> ToPayloadIdInput<'a> for PayloadForExecution {
     fn to_payload_id_input(&'a self, head: &'a B256) -> NewPayloadIdInput<'a> {
-        NewPayloadIdInput::new_v3(
+        #[cfg_attr(not(feature = "op-upgrade"), allow(unused_mut))]
+        let mut input = NewPayloadIdInput::new_v3(
             head,
             self.timestamp.into_limbs()[0],
             &self.prev_randao,
             &self.suggested_fee_recipient,
+            self.gas_limit.into_limbs()[0],
         )
         .with_beacon_root(&self.parent_beacon_block_root)
         .with_withdrawals(
@@ -120,6 +147,15 @@ impl<'a> ToPayloadIdInput<'a> for PayloadForExecution {
                 .map(ToWithdrawal::to_withdrawal)
                 .collect::<Vec<_>>(),
         )
+        .with_transaction_hashes(self.transactions.iter().map(|tx| tx.tx_hash()));
+        #[cfg(feature = "op-upgrade")]
+        {
+            if let Some(eip1559_params) = &self.eip1559_params {
+                input = input.with_eip1559_params(eip1559_params);
+            }
+        }
+
+        input
     }
 }
 
